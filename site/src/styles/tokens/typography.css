@@ -1,0 +1,41 @@
+/* ============================================================
+   TaxiWay — Typography tokens
+   Family vars are theme-driven (see colors.css --tw-font-*).
+   These aliases + scale are theme-agnostic.
+   ============================================================ */
+:root {
+  /* Family aliases (resolve to the active theme's fonts) */
+  --font-display: var(--tw-font-display);
+  --font-body:    var(--tw-font-body);
+  --font-mono:    var(--tw-font-mono);
+  --font-logo:    var(--tw-font-logo);
+
+  /* Type scale (rem, 16px base) */
+  --text-2xs: 0.6875rem;  /* 11px — micro labels */
+  --text-xs:  0.75rem;    /* 12px */
+  --text-sm:  0.875rem;   /* 14px */
+  --text-base:1rem;       /* 16px */
+  --text-md:  1.0625rem;  /* 17px */
+  --text-lg:  1.125rem;   /* 18px */
+  --text-xl:  1.75rem;    /* 28px */
+  --text-2xl: 2.125rem;   /* 34px */
+  --text-3xl: 3.25rem;    /* 52px */
+
+  /* Weights */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* Line heights */
+  --leading-tight: 1.06;
+  --leading-snug: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.62;
+
+  /* Letter spacing */
+  --tracking-tight: -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.04em;
+  --tracking-label: 0.16em;  /* mono eyebrow / control labels */
+}

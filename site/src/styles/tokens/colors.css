@@ -1,0 +1,140 @@
+/* ============================================================
+   TaxiWay — Color tokens · DUAL THEME (light/dark twins)
+   Two declinations share ONE semantic API (--tw-*) AND one
+   structure — same typography, radius, layout. Only colors
+   differ, so a single site can flip between them with a switch.
+     • Instrument  (default, :root)          — warm cream (light)
+     • Signal      ([data-theme="signal"])   — deep space (dark)
+   Console surfaces (code, terminals, CTA, console buttons) stay
+   DARK in BOTH themes — code keeps the control-room identity and
+   always contrasts on the cream page.
+   ============================================================ */
+
+:root {
+  /* ---- Raw brand palette (shared, for docs) ---- */
+  --c-slate:        #1F2A2E;
+  --c-beacon-amber: #FFB000;
+  --c-amber-glow:   #E07A2D;
+  --c-burnt:        #C0602A;
+  --c-olive:        #8A826A;
+  --c-teal-warm:    #3C8A88;
+  --c-panel-cream:  #F2E6C9;
+  --c-paper:        #EDE4CE;
+  --c-warm-paper:   #FBF6EC;
+  --c-ink-900:      #0B1A22;
+  --c-ink-800:      #12242E;
+  --c-ink-850:      #0E1E27;
+  --c-signal-amber: #F5A02A;
+  --c-teal-bright:  #3FBECB;
+
+  /* ============ SEMANTIC · Instrument (light) ============ */
+  /* warm golden-cream grounds (matches the hero illustration) */
+  --tw-bg:            #FBE8BE;
+  --tw-surface:       #FDF2D6;
+  --tw-surface-2:     #F1DEB0;
+
+  /* console block — stays DARK on the cream page (Signal ink) */
+  --tw-surface-inv:   #1C3742;
+
+  /* slate ink text */
+  --tw-text:          #23303A;
+  --tw-text-2:        #3C4852;
+  --tw-muted:         #5F6156;
+  --tw-faint:         #8C7F5E;
+
+  /* warm-tan borders */
+  --tw-border:        #E4CF9C;
+  --tw-border-strong: #D2B87E;
+
+  /* accents — Signal amber fills (dark text on amber) match the dark
+     theme; text-level accents use deeper, cream-safe inks */
+  --tw-accent:        #F5A02A; /* fill (buttons, node icons) */
+  --tw-accent-hover:  #E08E1E;
+  --tw-accent-text:   #201203; /* text ON amber fills */
+  --tw-accent-ink:    #B4560F; /* deeper amber — amber TEXT on cream */
+  --tw-accent-2:      #1F7C79; /* darkened teal — links & teal TEXT on cream */
+  --tw-accent-2-hover:#17605E;
+  --tw-accent-2-bright:#3FBECB; /* bright teal — glows & decoration only */
+  --tw-eyebrow:       #1F7C79;
+
+  /* code / console — dark in light mode (standard practice) */
+  --tw-code-bg:       #0E1E27;
+  --tw-code-border:   rgba(255,255,255,0.08);
+  --tw-code-text:     #C2D2D4;
+
+  --tw-nav-bg:        rgba(251,232,190,.86);
+  --tw-cta-bg:        linear-gradient(160deg,#123039,#0B1A22);
+  --tw-cta-text:      #EAF1F2;
+  --tw-cta-muted:     #90A6AE;
+
+  /* status */
+  --tw-go:            #1F7C79;
+  --tw-hold:          #B4560F;
+  --tw-off:           #8C7F5E;
+
+  /* glow — keep the bright brand hues */
+  --tw-glow-amber:    0 0 22px rgba(245,160,42,.40);
+  --tw-glow-accent2:  0 0 20px rgba(63,190,203,.35);
+
+  --tw-shadow-sm: 0 1px 2px rgba(80,60,30,.06);
+  --tw-shadow-md: 0 8px 24px rgba(90,68,30,.10);
+  --tw-shadow-lg: 0 22px 55px rgba(78,58,24,.18);
+
+  --tw-radius: 12px;
+
+  /* typography — identical to Signal (structural twin) */
+  --tw-font-display: 'Space Grotesk', system-ui, sans-serif;
+  --tw-font-body:    'Space Grotesk', system-ui, sans-serif;
+  --tw-font-mono:    'JetBrains Mono', ui-monospace, monospace;
+  --tw-font-logo:    'Quicksand', system-ui, sans-serif;
+}
+
+/* ================= SEMANTIC · Signal (dark) ================= */
+[data-theme="signal"] {
+  --tw-bg:            #0B1A22;
+  --tw-surface:       #12242E;
+  --tw-surface-2:     #0E1E27;
+  --tw-surface-inv:   #123039;
+  --tw-text:          #EAF1F2;
+  --tw-text-2:        #C4D2D4;
+  --tw-muted:         #90A6AE;
+  --tw-faint:         #5F757E;
+  --tw-border:        rgba(255,255,255,0.09);
+  --tw-border-strong: rgba(255,255,255,0.16);
+
+  --tw-accent:        #F5A02A;
+  --tw-accent-hover:  #FFB24A;
+  --tw-accent-text:   #201203;
+  --tw-accent-ink:    #F5A02A; /* amber reads fine on dark */
+  --tw-accent-2:      #3FBECB;
+  --tw-accent-2-hover:#5FD3DE;
+  --tw-accent-2-bright:#3FBECB;
+  --tw-eyebrow:       #3FBECB;
+
+  --tw-code-bg:       #0E1E27;
+  --tw-code-border:   rgba(255,255,255,0.08);
+  --tw-code-text:     #C2D2D4;
+
+  --tw-nav-bg:        rgba(11,26,34,.82);
+  --tw-cta-bg:        linear-gradient(160deg,#123039,#0B1A22);
+  --tw-cta-text:      #EAF1F2;
+  --tw-cta-muted:     #90A6AE;
+
+  --tw-go:            #3FBECB;
+  --tw-hold:          #F5A02A;
+  --tw-off:           #5F757E;
+
+  --tw-glow-amber:    0 0 22px rgba(245,160,42,.45);
+  --tw-glow-accent2:  0 0 20px rgba(63,190,203,.40);
+
+  --tw-shadow-sm: 0 1px 2px rgba(0,0,0,.3);
+  --tw-shadow-md: 0 10px 28px rgba(0,0,0,.35);
+  --tw-shadow-lg: 0 24px 60px rgba(0,0,0,.5);
+
+  --tw-radius: 12px;
+
+  --tw-font-display: 'Space Grotesk', system-ui, sans-serif;
+  --tw-font-body:    'Space Grotesk', system-ui, sans-serif;
+  --tw-font-mono:    'JetBrains Mono', ui-monospace, monospace;
+  --tw-font-logo:    'Quicksand', system-ui, sans-serif;
+}

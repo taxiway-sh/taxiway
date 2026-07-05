@@ -1,0 +1,15 @@
+name: claude-code
+description: Anthropic Claude Code CLI — AI-powered coding assistant
+docs_url: https://docs.anthropic.com/en/docs/claude-code
+agents:
+  - claude-code
+settings:
+  - name: model
+    description: Full Claude Code model name passed with --model and resolved by LiteLLM.
+    default: claude-opus-4-8
+    examples:
+      - claude-opus-4-8
+      - claude-sonnet-4-6
+      - claude-haiku-4-5-20251001
+    phases:
+      - start

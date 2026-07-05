@@ -1,0 +1,112 @@
+taxiway record analysis prompt
+
+Lab: {{.Lab}}
+Recordings directory: {{.RecordingsDir}}
+{{if .Language}}
+Output language:
+- Write the final analysis in language code: {{.Language}}.
+- Translate prose and section headings naturally while preserving the report structure.
+{{end}}
+
+Analyze these Taxiway lab recording artifacts:
+{{range .Sessions}}- Name: {{.Name}}
+  State: {{.State}}
+  Cast: {{.CastPathHost}}
+  Lab cast path: {{.CastPath}}
+  Started: {{.StartedAt}}
+  Stopped: {{.StoppedAt}}
+  Shell command: {{.ShellCommand}}
+{{end}}
+How to analyze these recordings:
+- Treat each .cast file as an asciinema v2 JSONL artifact.
+- The first line is recording metadata.
+- Each following line is a JSON array: [relative_seconds, event_type, payload].
+- Analyze only output events where event_type == "o".
+- The payload may contain ANSI escape sequences, tmux redraws, cursor movement, and repeated screen snapshots.
+- Do not require `asciinema convert`; parse the JSONL directly when possible.
+- Strip ANSI/control sequences before extracting visible terminal text.
+- Prefer evidence from visible commands, command output, status summaries, error messages, warnings, merge/review messages, and final recaps.
+- Build the timeline from relative_seconds plus the recording Started timestamp above.
+- Distinguish observed terminal evidence from inference.
+
+Signal extraction priorities:
+1. User-entered shell commands.
+2. Agent/orchestrator status screens and recaps.
+3. Task/bead/convoy/merge state changes.
+4. Errors, warnings, failed commands, retries, and recoveries.
+5. Final verification or completion evidence.
+6. Environment diagnostics and setup checks.
+Ignore repeated tmux redraws unless the visible state changed.
+
+Runner note:
+--prompt-only is the intended mode when another agent will perform the analysis.
+Do not launch an external runner unless explicitly requested.
+
+{{if .FullDetail}}Produce a detailed analysis report:
+Required output format:
+# Analysis Report
+
+## Outcome
+Summarize the objective, outcome, and confidence level in 1-2 short paragraphs.
+
+## Timeline
+List only meaningful visible events, with approximate timestamps when useful.
+
+## Key Evidence
+Group the strongest terminal evidence by topic. Keep bullets short.
+
+## Failures and Recovery
+Explain important failures, retries, workarounds, and recoveries.
+
+## Verification
+State what was verified, what was not verified, and what remains uncertain.
+
+## Follow-ups
+List concrete follow-up actions.
+
+Formatting rules:
+- Preserve the report structure above. When an output language is requested, translate the section headings naturally.
+- Do not prefix every evidence bullet with `Observed:`; the section heading already establishes evidence.
+- Use `Inference:` only for bullets that are not directly supported by visible terminal evidence.
+- Do not mention internal recording parsing mechanics such as asciinema JSONL, event types, ANSI stripping, tmux redraw handling, or successful .cast parsing in the final report unless a recording artifact is corrupted or prevents analysis.
+- Do not treat successful .cast parsing as user-facing verification evidence.
+
+1. A concise session summary.
+2. A timeline of important visible events.
+3. The apparent task objective and whether the session progressed toward it.
+4. Notable commands, decisions, failures, retries, and recoveries.
+5. Evidence of orchestrator behavior, coordination quality, or missing coordination.
+6. Environment, tooling, or setup issues visible in the terminal session.
+7. Reproducibility notes.
+8. Follow-up recommendations.
+{{else}}Produce an executive summary:
+Required output format:
+# Analysis Summary
+
+## Outcome
+Summarize the apparent objective and outcome in 1-2 short paragraphs.
+
+## Key Evidence
+List the highest-signal evidence as short bullets. Include commands, status summaries, errors, and final recaps only when they matter.
+
+## Failures and Recovery
+Summarize major failures, retries, and recoveries. Write `None observed` if there were no meaningful failures.
+
+## Verification
+State what was verified and what remains unverified or inferred.
+
+## Follow-ups
+List 1-3 concrete follow-up actions.
+
+Formatting rules:
+- Preserve the report structure above. When an output language is requested, translate the section headings naturally.
+- Keep the response concise.
+- Keep bullets short; prefer one line per bullet.
+- Do not emit one long flat bullet list.
+- Distinguish observed terminal evidence from inference.
+- Do not prefix every evidence bullet with `Observed:`; the section heading already establishes evidence.
+- Use `Inference:` only for bullets that are not directly supported by visible terminal evidence.
+- Do not mention internal recording parsing mechanics such as asciinema JSONL, event types, ANSI stripping, tmux redraw handling, or successful .cast parsing in the final report unless a recording artifact is corrupted or prevents analysis.
+- Do not treat successful .cast parsing as user-facing verification evidence.
+- Do not produce a full event-by-event timeline unless it is essential to explain the outcome.
+{{end}}

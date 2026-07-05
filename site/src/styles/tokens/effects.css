@@ -1,0 +1,48 @@
+/* ============================================================
+   TaxiWay — Radii, borders, shadows, glow & motion tokens
+   ============================================================ */
+:root {
+  /* Corner radii — domes & capsules: soft, generous */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 28px;
+  --radius-dome: 40px;     /* dome-top panels */
+  --radius-pill: 999px;
+
+  /* Border widths */
+  --border-1: 1px;
+  --border-2: 2px;
+  --border-3: 3px;
+
+  /* Soft elevation shadows (warm-tinted, like cast light on paper) */
+  --shadow-sm: 0 1px 2px rgba(21, 36, 42, 0.08), 0 1px 1px rgba(21, 36, 42, 0.06);
+  --shadow-md: 0 4px 14px rgba(21, 36, 42, 0.10), 0 2px 4px rgba(21, 36, 42, 0.06);
+  --shadow-lg: 0 14px 40px rgba(21, 36, 42, 0.14), 0 4px 10px rgba(21, 36, 42, 0.08);
+  --shadow-console: 0 18px 50px rgba(8, 18, 22, 0.45), inset 0 1px 0 rgba(255,255,255,0.04);
+
+  /* Inset / bevel (beveled console buttons & inset paper) */
+  --bevel-raised: inset 0 1px 0 rgba(255, 255, 255, 0.65), inset 0 -2px 3px rgba(160, 140, 100, 0.22); /* @kind shadow */
+  --bevel-inset: inset 0 2px 4px rgba(120, 100, 70, 0.25), inset 0 -1px 0 rgba(255,255,255,0.4);
+
+  /* Glow — the signature teal & amber light bloom */
+  --glow-teal: 0 0 0 1px rgba(52, 194, 196, 0.35), 0 0 16px rgba(95, 224, 217, 0.45), 0 0 36px rgba(52, 194, 196, 0.25);
+  --glow-teal-soft: 0 0 20px rgba(95, 224, 217, 0.35);
+  --glow-amber: 0 0 0 1px rgba(255, 122, 46, 0.4), 0 0 18px rgba(255, 122, 46, 0.5), 0 0 44px rgba(232, 95, 27, 0.3);
+  --glow-amber-soft: 0 0 22px rgba(255, 122, 46, 0.4);
+
+  /* Focus ring */
+  --focus-ring: 0 0 0 3px rgba(52, 194, 196, 0.45);
+
+  /* Motion — mechanical but smooth; a slight settle, never bouncy */
+  --ease-standard: cubic-bezier(0.4, 0.0, 0.2, 1); /* @kind other */
+  --ease-settle: cubic-bezier(0.2, 0.8, 0.2, 1); /* @kind other */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1); /* @kind other */
+  --dur-fast: 130ms; /* @kind other */
+  --dur-base: 220ms; /* @kind other */
+  --dur-slow: 420ms; /* @kind other */
+
+  /* Texture overlay (subtle paper grain via gradient noise stand-in) */
+  --grain-opacity: 0.05; /* @kind other */
+}

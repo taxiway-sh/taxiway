@@ -1,0 +1,35 @@
+models:
+  - name: gpt-5.5
+    provider: chatgpt
+    upstream: gpt-5.5
+    api: responses
+
+  - name: gpt-5.4
+    provider: chatgpt
+    upstream: gpt-5.4
+    api: responses
+
+  - name: gpt-5.4-mini
+    provider: chatgpt
+    upstream: gpt-5.4-mini
+    api: responses
+
+  - name: gpt-5.3-codex-spark
+    provider: chatgpt
+    upstream: gpt-5.3-codex-spark
+    api: responses
+
+  - name: claude-opus-4-8
+    provider: anthropic
+    upstream: claude-opus-4-8
+    forward_client_headers: true
+
+  - name: claude-sonnet-4-6
+    provider: anthropic
+    upstream: claude-sonnet-4-6
+    forward_client_headers: true
+
+  - name: claude-haiku-4-5-20251001
+    provider: anthropic
+    upstream: claude-haiku-4-5-20251001
+    forward_client_headers: true

@@ -1,0 +1,364 @@
+/* Docs shell: sidebar + prose + "On this page" TOC, on the --tw-* tokens. */
+.tw-docs-shell {
+  max-width: var(--container-wide);
+  margin: 0 auto;
+  padding: var(--space-7) var(--space-5) var(--space-9);
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr) 200px;
+  gap: var(--space-7);
+  align-items: start;
+}
+
+/* Right-hand "On this page" TOC — a navigation aid; it just disappears when
+   the layout gets narrow (it is not folded into the mobile drawer). */
+.tw-docs-toc {
+  position: sticky;
+  top: var(--nav-offset);
+  align-self: start;
+  max-height: calc(100vh - var(--nav-offset));
+  overflow-y: auto;
+  font-family: var(--font-mono);
+}
+.tw-docs-toc-h {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tw-faint);
+  margin: 0 0 14px;
+}
+.tw-docs-toc a {
+  display: block;
+  font-size: 12.5px;
+  color: var(--tw-muted);
+  padding: 6px 0 6px 12px;
+  border-left: 2px solid transparent;
+  text-decoration: none;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+.tw-docs-toc a:hover,
+.tw-docs-toc a.is-active { color: var(--tw-accent-2); border-left-color: var(--tw-accent-2); text-decoration: none; }
+/* Drop the TOC (and its column) once there isn't room for three columns. */
+@media (max-width: 1080px) {
+  .tw-docs-shell { grid-template-columns: 232px minmax(0, 1fr); }
+  .tw-docs-toc { display: none; }
+}
+
+.tw-docs-nav {
+  position: sticky;
+  top: var(--nav-offset);
+  align-self: start;
+  /* Own the viewport height and scroll internally, so a long nav is reachable
+     without scrolling the whole article. */
+  max-height: calc(100vh - var(--nav-offset));
+  overflow-y: auto;
+  padding-right: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+.tw-docs-nav-h {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tw-faint);
+  margin: 0 0 8px;
+}
+/* The section containing the current page is highlighted, matching how the
+   Overview index link turns amber when active. */
+.tw-docs-nav-h.is-active { color: var(--tw-accent-ink); }
+.tw-docs-nav ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.tw-docs-nav a {
+  display: block;
+  font-size: var(--text-sm);
+  color: var(--tw-muted);
+  text-decoration: none;
+  padding: 7px 12px;
+  border-radius: var(--tw-radius);
+  border-left: 3px solid transparent;
+}
+.tw-docs-nav a:hover { color: var(--tw-text); background: var(--tw-surface-2); text-decoration: none; }
+.tw-docs-nav a.is-active {
+  color: var(--tw-text);
+  font-weight: 600;
+  border-left-color: var(--tw-accent);
+  background: var(--tw-surface);
+}
+/* Index entry: a clickable link styled as a section heading (peer of the
+   REFERENCE / GUIDES / ... labels), not a sub-item. */
+.tw-docs-nav a.tw-docs-nav-section-link {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tw-muted);
+  padding: 0;
+  border-left: none;
+  border-radius: 0;
+}
+.tw-docs-nav a.tw-docs-nav-section-link:hover { color: var(--tw-text); background: none; text-decoration: none; }
+.tw-docs-nav a.tw-docs-nav-section-link.is-active {
+  color: var(--tw-accent-ink);
+  font-weight: 700;
+  background: none;
+}
+
+/* Markdown body */
+.tw-prose { max-width: 760px; color: var(--tw-text-2); line-height: 1.65; }
+.tw-prose h1 { font-size: 2.625rem; margin: 0 0 var(--space-5); }
+.tw-prose h2 { font-size: var(--text-xl); margin: var(--space-7) 0 var(--space-3); }
+.tw-prose h3 { font-size: var(--text-lg); margin: var(--space-6) 0 var(--space-2); }
+/* Offset anchored headings so the sticky navbar doesn't cover them. */
+.tw-prose h1, .tw-prose h2, .tw-prose h3, .tw-prose h4 { scroll-margin-top: var(--nav-offset); }
+/* Section heading anchor-link icon (right of the heading). */
+.tw-prose .tw-heading-anchor {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 10px;
+  color: var(--tw-faint);
+  opacity: 0.35;
+  vertical-align: middle;
+  transition: opacity 0.12s ease, color 0.12s ease;
+}
+.tw-prose .tw-heading:hover .tw-heading-anchor { opacity: 1; }
+.tw-prose .tw-heading-anchor:hover { color: var(--tw-accent-2); }
+.tw-prose p, .tw-prose ul, .tw-prose ol { margin: 0 0 var(--space-4); }
+.tw-prose ul, .tw-prose ol { padding-left: 1.4em; }
+.tw-prose li { margin: 4px 0; }
+.tw-prose a { color: var(--tw-accent-2); }
+.tw-prose code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--tw-surface-2);
+  border: 1px solid var(--tw-border);
+  color: var(--tw-accent-ink);
+  padding: 0.1em 0.4em;
+  border-radius: 5px;
+  /* Long path/identifier tokens wrap instead of overflowing narrow screens. */
+  overflow-wrap: break-word;
+}
+/* Block code keeps its formatting and scrolls (see .tw-prose pre). */
+.tw-prose pre code { overflow-wrap: normal; }
+.tw-prose pre {
+  background: var(--tw-code-bg);
+  border: 1px solid var(--tw-code-border);
+  border-radius: var(--tw-radius);
+  padding: var(--space-4);
+  overflow-x: auto;
+  margin: 0 0 var(--space-5);
+}
+.tw-prose pre code {
+  background: none;
+  border: none;
+  color: var(--tw-code-text);
+  padding: 0;
+  font-size: var(--text-sm);
+}
+
+/* Mermaid diagrams (rendered client-side into an SVG) */
+.tw-prose .tw-mermaid { margin: 0 0 var(--space-6); text-align: center; overflow-x: auto; }
+.tw-prose .tw-mermaid svg { max-width: 100%; height: auto; }
+
+/* Fenced code block — DS-style window: a title bar (window dots + Copy) over
+   the code body. */
+.tw-codeblock {
+  margin: 22px 0;
+  border-radius: var(--tw-radius);
+  overflow: hidden;
+  background: var(--tw-code-bg);
+  border: 1px solid var(--tw-code-border);
+  box-shadow: var(--tw-shadow-md);
+}
+.tw-codeblock-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--tw-code-border);
+}
+.tw-codeblock-dots { display: inline-flex; gap: 6px; }
+.tw-codeblock-dots i { width: 9px; height: 9px; border-radius: 50%; display: block; }
+.tw-codeblock-dots i:nth-child(1) { background: var(--tw-accent); }
+.tw-codeblock-dots i:nth-child(2) { background: #E2A437; }
+.tw-codeblock-dots i:nth-child(3) { background: var(--tw-accent-2-bright); }
+.tw-codeblock-copy {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tw-code-text);
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  border-radius: 6px;
+  padding: 4px 9px;
+  cursor: pointer;
+  transition: color 0.12s ease, background 0.12s ease;
+}
+.tw-codeblock-copy:hover,
+.tw-codeblock-copy:focus-visible { color: #EAF1F2; background: rgba(255, 255, 255, 0.16); }
+.tw-codeblock pre {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  padding: 15px 18px;
+  line-height: 1.7;
+  overflow-x: auto;
+}
+.tw-codeblock pre code { font-size: 13.5px; }
+/* Tables — DS style: a mono uppercase header on --tw-surface-2, rows split by a
+   single top border (no full cell grid), all wrapped in a bordered rounded card
+   (.tw-tablewrap) so the table reads as a contained element, per the DS. */
+.tw-tablewrap {
+  margin: var(--space-5) 0;
+  border: 1px solid var(--tw-border);
+  border-radius: var(--tw-radius);
+  overflow-x: auto;   /* wide tables scroll inside the card; corners stay clipped */
+  overflow-y: hidden;
+}
+.tw-prose table { width: 100%; border-collapse: collapse; margin: 0; font-size: 14px; }
+.tw-prose th {
+  text-align: left;
+  background: var(--tw-surface-2);
+  color: var(--tw-text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--tw-border);
+}
+.tw-prose td { padding: 11px 16px; border-top: 1px solid var(--tw-border); color: var(--tw-text-2); }
+.tw-prose blockquote {
+  margin: var(--space-5) 0;
+  padding: 4px 0 4px var(--space-4);
+  border-left: 3px solid var(--tw-border-strong);
+  color: var(--tw-muted);
+  line-height: 1.6;
+}
+
+/* Previous / next pager at the foot of each doc page. */
+.tw-docs-pager {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-top: var(--space-9);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--tw-border);
+}
+.tw-pager-link {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 48%;
+  min-width: 160px;
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--tw-border);
+  border-radius: var(--tw-radius);
+  background: var(--tw-surface);
+  box-shadow: var(--tw-shadow-sm);
+  text-decoration: none;
+  transition: border-color var(--dur-fast) var(--ease-standard),
+              box-shadow var(--dur-base) var(--ease-standard);
+}
+.tw-pager-link:hover { border-color: var(--tw-border-strong); box-shadow: var(--tw-shadow-md); text-decoration: none; }
+.tw-pager-next { align-items: flex-end; text-align: right; }
+.tw-pager-label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+.tw-pager-dir, .tw-pager-sep { color: var(--tw-faint); }
+.tw-pager-cat { color: var(--tw-accent-2); }
+.tw-pager-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--text-md);
+  color: var(--tw-text);
+}
+@media (max-width: 560px) {
+  .tw-docs-pager { flex-direction: column; }
+  .tw-pager-link { max-width: none; }
+  .tw-pager-next { align-items: flex-start; text-align: left; }
+}
+
+/* Drawer toggle — a floating action button, reachable anywhere while
+   scrolling (mobile only). It stays visible as a real toggle: a panel icon
+   to open, a close icon to dismiss. */
+.tw-docs-drawer-toggle { display: none; }
+.tw-docs-backdrop { display: none; }
+
+@media (max-width: 920px) {
+  /* Single column; the sidebar leaves the flow and becomes an off-canvas
+     drawer so it no longer stacks above the content. */
+  .tw-docs-shell { grid-template-columns: minmax(0, 1fr); }
+  .tw-docs-drawer-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    left: var(--space-5);
+    bottom: var(--space-5);
+    z-index: 58;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    /* Teal (the secondary accent), so it doesn't read as the amber CTA. Reads
+       on both themes: dark teal on cream, bright teal on the dark ground. */
+    color: #fff;
+    background: var(--tw-accent-2);
+    border: 1px solid var(--tw-accent-2);
+    border-radius: var(--radius-pill);
+    box-shadow: var(--tw-shadow-lg);
+    cursor: pointer;
+    transition: transform var(--dur-fast) var(--ease-standard),
+                box-shadow var(--dur-base) var(--ease-standard);
+  }
+  .tw-docs-drawer-toggle:active { transform: translateY(1px) scale(0.97); }
+  .tw-docs-drawer-toggle:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+  .tw-docs-nav {
+    position: fixed;
+    top: var(--nav-height);
+    left: 0;
+    z-index: 55;
+    width: min(300px, 84vw);
+    height: calc(100dvh - var(--nav-height));
+    max-height: none;
+    padding: var(--space-6) var(--space-5);
+    padding-right: var(--space-5);
+    overflow-y: auto;
+    background: var(--tw-bg);
+    border-right: 1px solid var(--tw-border);
+    box-shadow: var(--tw-shadow-lg);
+    transform: translateX(-104%);
+    /* Hidden from tab order / AT when closed; visibility change is delayed so
+       the slide-out stays visible, then flips immediately on open. */
+    visibility: hidden;
+    transition: transform var(--dur-base) var(--ease-settle),
+                visibility 0s linear var(--dur-base);
+  }
+  .tw-docs-nav.is-open {
+    transform: translateX(0);
+    visibility: visible;
+    transition: transform var(--dur-base) var(--ease-settle), visibility 0s;
+  }
+  .tw-docs-backdrop {
+    display: block;
+    position: fixed;
+    inset: var(--nav-height) 0 0 0;
+    z-index: 54;
+    background: rgba(11, 26, 34, 0.42);
+    backdrop-filter: blur(1px);
+  }
+  /* The wrapper (.tw-tablewrap) already scrolls wide tables; keep the table a
+     normal table element so its columns lay out correctly. */
+  .tw-prose table { min-width: max-content; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tw-docs-nav { transition: none; }
+}

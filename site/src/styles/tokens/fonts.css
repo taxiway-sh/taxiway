@@ -1,0 +1,11 @@
+/* ============================================================
+   TaxiWay — Webfonts (Google Fonts CDN)
+   Both declinations share one type system (structural twins):
+     Display / Body : Space Grotesk
+     Logo wordmark  : Quicksand
+     Mono           : JetBrains Mono (labels, code, readouts)
+   NOTE: served from Google Fonts CDN. For offline/production,
+   self-host the .woff2 files and swap these @import lines for
+   @font-face rules.
+   ============================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Quicksand:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');

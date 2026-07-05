@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Taxiway — isolated labs for agent orchestrators</title>
+<!-- Theme: light is the default (:root). Set data-theme=signal BEFORE the
+     first paint from the stored choice / OS preference so a dark visitor
+     never sees a flash of the light theme. -->
+<script>
+  (function () {
+    try {
+      var t = localStorage.getItem('tw-theme')
+        || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'signal' : 'light');
+      document.documentElement.dataset.theme = t;
+    } catch (e) {}
+  })();
+</script>
+<!-- Fonts are linked here (not @import'd from CSS) so the browser discovers
+     them on first paint; buried in a nested CSS @import they load late and the
+     fallback→webfont swap makes the whole page reflow on a cold load.
+     Both themes are structural twins on Space Grotesk / Quicksand / JetBrains Mono. -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Quicksand:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="icon" href="/icon.png?v=20260704" />
+</head>
+<body>
+<div id="root"></div>
+<script type="module" src="/src/main.jsx"></script>
+</body>
+</html>

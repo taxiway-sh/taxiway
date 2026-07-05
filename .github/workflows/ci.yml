@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  core-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build
+        run: go build ./...
+
+      - name: Test
+        run: make test-unit
+
+      - name: Test scripts
+        run: make test-scripts
+
+      - name: Lint (gofmt)
+        run: |
+          out=$(find . -name '*.go' -not -path './vendor/*' -not -name 'provision.go' | xargs gofmt -l)
+          if [ -n "$out" ]; then
+            echo "gofmt: files need formatting:"
+            echo "$out"
+            exit 1
+          fi
+          echo "gofmt: OK"
+
+      - name: Lint scripts
+        run: make lint-scripts

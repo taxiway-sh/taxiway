@@ -1,0 +1,18 @@
+name: claude-code
+command: claude
+litellm:
+  providers:
+    - anthropic
+auth:
+  default_mode: subscription
+  modes:
+    subscription:
+      scope: lab
+      description: Uses Claude Code OAuth credentials inside the lab and forwards them through LiteLLM.
+      credential_file:
+        host_path: ~/.claude/.credentials.json
+        lab_path: ~/.claude/.credentials.json
+        mode: "0600"
+    api-key:
+      scope: litellm
+      description: Uses provider API keys configured in LiteLLM; labs only receive the LiteLLM gateway key.

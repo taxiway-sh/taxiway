@@ -1,0 +1,49 @@
+# Generated from infra/lima/agent-lab.yaml.tmpl — do not edit directly.
+# Rendered by the Lima driver at lab creation time; written to
+# <state-dir>/<lab>/agent-lab.yaml before passing to limactl start.
+
+images:
+  - location: "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img"
+    arch: "x86_64"
+  - location: "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-arm64.img"
+    arch: "aarch64"
+
+cpus: 4
+memory: "8GiB"
+disk: "50GiB"
+
+# Cloisoned mounts: only what the lab needs, never the full home directory.
+# ro mounts hold runtime assets; writable mounts expose only host-visible lab artifacts.
+mounts:
+  - location: "{{.RepoDir}}/infra"
+    mountPoint: "/lab/infra"
+    writable: false
+  - location: "{{.RepoDir}}/agents"
+    mountPoint: "/lab/agents"
+    writable: false
+  - location: "{{.RepoDir}}/orchestrators/{{.Orch}}"
+    mountPoint: "/lab/orchestrators/{{.Orch}}"
+    writable: false
+  - location: "{{.GitDir}}"
+    mountPoint: "/lab/git"
+    writable: true
+  - location: "{{.RecordingsDir}}"
+    mountPoint: "/lab/recordings"
+    writable: true
+
+# Minimal provisioning; heavy lifting happens in infra/commands/bootstrap.sh.
+provision:
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -eux
+      apt-get update
+      apt-get install -y --no-install-recommends \
+        ca-certificates curl git make tmux jq unzip sudo
+      host_ip="$(getent hosts host.lima.internal | awk '{print $1; exit}')"
+      if [ -n "$host_ip" ]; then
+        sed -i '/[[:space:]]{{.LabHost}}$/d' /etc/hosts
+        printf '%s {{.LabHost}}\n' "$host_ip" >> /etc/hosts
+      fi
+      mkdir -p /lab/orchestrators /lab/work
+      chown -R "${LIMA_USER:-ubuntu}:${LIMA_USER:-ubuntu}" /lab/work /lab/git /lab/recordings 2>/dev/null || true

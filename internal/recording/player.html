@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{TITLE}}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3/dist/bundle/asciinema-player.css">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101214;
+      --panel: #181c20;
+      --line: #303842;
+      --text: #e8edf2;
+      --muted: #9ba7b4;
+      --accent: #4fb3ff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    main {
+      width: min(1400px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 24px 0;
+    }
+
+    header {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+
+    .meta {
+      margin-top: 4px;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    select,
+    button {
+      min-height: 34px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--text);
+      font: inherit;
+      font-size: 13px;
+      border-radius: 6px;
+    }
+
+    select {
+      min-width: min(520px, 100%);
+      padding: 0 10px;
+    }
+
+    button {
+      padding: 0 12px;
+      cursor: pointer;
+    }
+
+    button:hover,
+    select:hover {
+      border-color: var(--accent);
+    }
+
+    #player {
+      border: 1px solid var(--line);
+      background: #000;
+      min-height: 360px;
+    }
+
+    #status {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 760px) {
+      header {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .controls {
+        justify-content: flex-start;
+      }
+
+      select,
+      button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>{{TITLE}}</h1>
+        <div class="meta">Serving local .cast files from this recordings directory</div>
+      </div>
+      <div class="controls">
+        <select id="recording" aria-label="Recording"></select>
+        <button id="reload" type="button">Reload</button>
+      </div>
+    </header>
+
+    <div id="player"></div>
+    <div id="status"></div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/asciinema-player@3/dist/bundle/asciinema-player.min.js"></script>
+  <script>
+    const recordingSelect = document.getElementById("recording");
+    const reloadButton = document.getElementById("reload");
+    const playerTarget = document.getElementById("player");
+    const statusTarget = document.getElementById("status");
+
+    let player = null;
+    let recordings = [];
+
+    function basename(path) {
+      return String(path || "").split("/").filter(Boolean).pop() || "";
+    }
+
+    function castFileForSession(session) {
+      const fromHostPath = basename(session.cast_path_host);
+      if (fromHostPath) {
+        return fromHostPath;
+      }
+
+      if (session.id) {
+        return session.id + ".cast";
+      }
+
+      return "";
+    }
+
+    function labelForSession(session, file) {
+      const state = session.state ? " [" + session.state + "]" : "";
+      return (session.name || session.id || file) + state;
+    }
+
+    function setStatus(message) {
+      statusTarget.textContent = message;
+    }
+
+    async function loadManifest() {
+      const response = await fetch("recordings.json", { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error("recordings.json returned HTTP " + response.status);
+      }
+
+      const manifest = await response.json();
+      recordings = (manifest.sessions || [])
+        .map((session) => {
+          const file = castFileForSession(session);
+          return { session, file, label: labelForSession(session, file) };
+        })
+        .filter((recording) => recording.file);
+
+      recordingSelect.replaceChildren();
+
+      for (const recording of recordings) {
+        const option = document.createElement("option");
+        option.value = recording.file;
+        option.textContent = recording.label;
+        recordingSelect.append(option);
+      }
+
+      if (recordings.length === 0) {
+        throw new Error("No .cast file could be resolved from recordings.json");
+      }
+    }
+
+    function loadPlayer(file) {
+      if (player) {
+        player.dispose();
+        player = null;
+      }
+
+      playerTarget.replaceChildren();
+      player = AsciinemaPlayer.create(file, playerTarget, {
+        autoPlay: false,
+        controls: true,
+        fit: "width"
+      });
+
+      setStatus("Loaded " + file);
+    }
+
+    async function boot() {
+      try {
+        setStatus("Loading recordings.json...");
+        await loadManifest();
+        loadPlayer(recordingSelect.value);
+      } catch (error) {
+        console.error(error);
+        setStatus("Unable to load player: " + error.message);
+      }
+    }
+
+    recordingSelect.addEventListener("change", () => loadPlayer(recordingSelect.value));
+    reloadButton.addEventListener("click", boot);
+
+    boot();
+  </script>
+</body>
+</html>

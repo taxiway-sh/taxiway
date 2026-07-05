@@ -1,0 +1,60 @@
+{
+  "type": "town-settings",
+  "version": 1,
+  "default_agent": "claude-sonnet",
+  "agents": {
+    "claude-haiku": {
+      "provider": "claude",
+      "command": "claude",
+      "args": [
+        "--model",
+        "haiku",
+        "--dangerously-skip-permissions"
+      ]
+    },
+    "claude-opus": {
+      "provider": "claude",
+      "command": "claude",
+      "args": [
+        "--model",
+        "opus",
+        "--dangerously-skip-permissions"
+      ]
+    },
+    "claude-sonnet": {
+      "provider": "claude",
+      "command": "claude",
+      "args": [
+        "--model",
+        "sonnet",
+        "--dangerously-skip-permissions"
+      ]
+    }
+  },
+  "role_agents": {
+    "boot": "claude-haiku",
+    "crew": "claude-sonnet",
+    "deacon": "claude-sonnet",
+    "dog": "claude-haiku",
+    "mayor": "claude-sonnet",
+    "polecat": "claude-sonnet",
+    "refinery": "claude-sonnet",
+    "witness": "claude-sonnet"
+  },
+  "role_effort": {
+    "boot": "low",
+    "crew": "medium",
+    "deacon": "low",
+    "dog": "low",
+    "mayor": "medium",
+    "polecat": "medium",
+    "refinery": "medium",
+    "witness": "medium"
+  },
+  "cost_tier": "budget",
+  "scheduler": {
+    "max_polecats": 6,
+    "batch_size": 2,
+    "spawn_delay": "10s"
+  }
+}

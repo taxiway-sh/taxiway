@@ -1,0 +1,14 @@
+name: codex
+command: codex
+litellm:
+  providers:
+    - chatgpt
+auth:
+  default_mode: subscription
+  modes:
+    subscription:
+      scope: litellm
+      description: Uses host Codex ChatGPT auth converted into LiteLLM auth before the observability stack starts.
+    api-key:
+      scope: litellm
+      description: Uses provider API keys configured in LiteLLM; labs only receive the LiteLLM gateway key.

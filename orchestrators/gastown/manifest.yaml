@@ -1,0 +1,30 @@
+name: gastown
+description: Gas Town HQ + workspace shell
+docs_url: https://gastownhall.ai
+agents:
+  - claude-code
+settings:
+  - name: version
+    description: Gastown version/tag to install from release archive
+    default: latest
+    examples:
+      - "1.1.0"
+      - latest
+    phases:
+      - install
+  - name: beads-version
+    description: Beads version/tag override; omitted uses the Gastown compatibility matrix
+    examples:
+      - "1.0.4"
+      - latest
+    phases:
+      - install
+  - name: model
+    description: Full Claude Code model name passed with --model and resolved by LiteLLM.
+    default: claude-opus-4-8
+    examples:
+      - claude-opus-4-8
+      - claude-sonnet-4-6
+      - claude-haiku-4-5-20251001
+    phases:
+      - start

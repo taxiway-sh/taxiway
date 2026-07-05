@@ -1,0 +1,21 @@
+# Go build output
+/taxiway
+
+# GoReleaser output
+/dist/
+/.release/
+
+# Local development environment
+/.lab-state/
+/.auth/
+/.proxy/
+/.observability/
+/.context-id
+
+# Local editor/agent/vault state
+.claude/
+.idea/
+.obsidian/
+
+# OS
+.DS_Store

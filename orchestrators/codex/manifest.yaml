@@ -1,0 +1,16 @@
+name: codex
+description: OpenAI Codex CLI — AI-powered coding agent
+docs_url: https://github.com/openai/codex
+agents:
+  - codex
+settings:
+  - name: model
+    description: Codex model name passed to the Codex CLI and resolved by LiteLLM.
+    default: gpt-5.5
+    examples:
+      - gpt-5.5
+      - gpt-5.4
+      - gpt-5.4-mini
+      - gpt-5.3-codex-spark
+    phases:
+      - start

@@ -1,0 +1,152 @@
+html, body { margin: 0; }
+body { background: var(--tw-bg); }
+.tw-page-bg { background-color: var(--tw-bg); }
+@media (max-width: 920px) {
+  /* minmax(0, …) so a wide child (long heading, nowrap command line) makes the
+     track scroll/wrap instead of stretching it past the viewport. */
+  .tw-hero-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .tw-feat-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important; }
+  .tw-pipe-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important; row-gap: 32px; }
+  .tw-track { display: none; }
+  .tw-stat-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important; }
+  .tw-footer-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important; }
+  .tw-navlinks { display: none !important; }
+}
+@media (max-width: 560px) {
+  .tw-feat-grid, .tw-stat-grid, .tw-footer-grid, .tw-pipe-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  /* Let the install one-liner fill the row; keep its type at full size while
+     there's room (clamp caps at --text-sm) and only shrink it on the
+     narrowest phones so it never forces horizontal overflow. Tighter side
+     padding buys a few chars so the command clears without going tiny. */
+  .tw-install-btn {
+    min-width: 0 !important;
+    width: 100%;
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+    font-size: clamp(11px, 3.1vw, var(--text-sm)) !important;
+  }
+  /* Install pill on phones: fill the row and keep the COPY label + feedback
+     visible. The command shrinks and, only as a last resort on the tiniest
+     screens, ellipsizes — tapping still copies the full command either way. */
+  .tw-install-pill { width: 100%; gap: 8px; }
+  .tw-install-pill code {
+    min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-size: clamp(10px, 2.9vw, 13px) !important;
+  }
+  .tw-install-cp { min-width: 0 !important; margin-left: auto; padding-left: 10px; }
+  /* The closing-CTA card's roomy padding starves the install button; trim it
+     and let the actions span the card on phones. */
+  .tw-cta-card { padding: var(--space-5) var(--space-4) !important; }
+  .tw-cta-actions { width: 100%; }
+}
+
+/* Mobile burger: hidden on desktop, revealed < 920px where nav links hide. */
+.tw-burger { display: none; }
+@media (max-width: 920px) {
+  .tw-burger { display: inline-flex !important; }
+}
+
+/* Hero watermark: the theme's illustrated scene sits behind the top of the
+   page; its flat edges match --tw-bg so the seam is invisible. */
+/* Hero watermark: two layered illustrations that cross-fade on theme switch.
+   Each layer's flat edges match its theme's --tw-bg so the seam stays invisible.
+   --tw-hop is the base opacity (1 desktop, faded on mobile so text stays legible). */
+.tw-herobg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-position: center bottom;
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: 0;
+  transition: opacity 180ms ease;
+  pointer-events: none;
+}
+.tw-herobg-light { background-image: url('/hero-scene.png?v=20260704'); opacity: var(--tw-hop, 1); }
+.tw-herobg-dark  { background-image: url('/hero-scene-dark.png?v=20260704'); }
+[data-theme="signal"] .tw-herobg-light { opacity: 0; }
+[data-theme="signal"] .tw-herobg-dark  { opacity: var(--tw-hop, 1); }
+@media (max-width: 920px) {
+  /* On small screens the art sits behind the text; fade it out. */
+  :root { --tw-hop: 0.22; }
+}
+
+/* Install pill (design-system style) — copy feedback with a little animation:
+   the label pops to "✓ copied" and the pill flashes a teal glow. */
+.tw-install-pill { transition: background 130ms ease; }
+.tw-install-pill:hover { background: color-mix(in srgb, var(--tw-code-bg) 90%, #fff); }
+.tw-install-pill[data-copied] { animation: tw-copy-glow 0.65s var(--ease-standard); }
+.tw-copy-pop { animation: tw-copy-pop 0.3s var(--ease-standard); transform-origin: right center; }
+@keyframes tw-copy-pop {
+  0% { transform: scale(0.55); opacity: 0; }
+  55% { transform: scale(1.18); }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes tw-copy-glow {
+  0% { box-shadow: 0 0 0 0 rgba(63, 190, 203, 0); border-color: var(--tw-code-border); }
+  35% { box-shadow: 0 0 16px 1px rgba(63, 190, 203, 0.5); border-color: rgba(63, 190, 203, 0.6); }
+  100% { box-shadow: 0 0 0 0 rgba(63, 190, 203, 0); border-color: var(--tw-code-border); }
+}
+
+/* Theme toggle — a round button holding a top-down beacon lens. Dimmed in the
+   light theme, lit amber with a glow in the dark (Signal) theme; appearance is
+   driven off [data-theme] so it always matches the active theme. */
+.tw-tt {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto; padding: 0;
+  border-radius: 999px; border: 1px solid var(--tw-border-strong);
+  background: var(--tw-surface); cursor: pointer; position: relative;
+  transition: background 0.2s ease, box-shadow 0.35s ease, border-color 0.35s ease, transform 0.12s ease;
+}
+.tw-tt:hover { background: var(--tw-surface-2); }
+.tw-tt:active { transform: scale(0.94); }
+.tw-tt:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.tw-tt-lens {
+  width: 22px; height: 22px; border-radius: 50%; position: relative;
+  background: radial-gradient(circle at 50% 42%, #FFD892 0%, #F5A02A 44%, #C0602A 74%, #6E4A22 100%);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.5), inset 0 0 0 2px rgba(0, 0, 0, 0.18);
+  transition: filter 0.35s ease, opacity 0.35s ease, box-shadow 0.35s ease;
+}
+.tw-tt-lens::after {
+  content: ''; position: absolute; inset: 32%; border-radius: 50%;
+  background: #FFF1CE; transition: box-shadow 0.35s ease;
+}
+:root .tw-tt-lens, [data-theme="light"] .tw-tt-lens { filter: saturate(0.5) brightness(0.72); opacity: 0.82; }
+[data-theme="signal"] .tw-tt { border-color: rgba(245, 160, 42, 0.7); box-shadow: 0 0 16px rgba(245, 160, 42, 0.5); }
+[data-theme="signal"] .tw-tt-lens { filter: none; opacity: 1; }
+[data-theme="signal"] .tw-tt-lens::after { box-shadow: 0 0 9px 2px rgba(255, 214, 130, 0.95); }
+
+/* Feature cards link to their docs section. A soft lift + shadow + a faint
+   amber ring on hover signals they're clickable (no arrow — it added little). */
+.tw-feat-card { transition: transform 0.16s var(--ease-standard), box-shadow 0.2s var(--ease-standard); }
+.tw-feat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--tw-shadow-md), 0 0 0 1px color-mix(in srgb, var(--tw-accent) 40%, transparent);
+}
+
+/* Trust strip sits over the hero art: a soft halo of the page background
+   behind the text keeps it readable without boxing it in. */
+.tw-trust span, .tw-trust a {
+  text-shadow: 0 1px 8px var(--tw-bg), 0 0 16px var(--tw-bg), 0 0 2px var(--tw-bg);
+}
+
+/* Supported-orchestrator links — design-system effects: muted at rest, teal
+   with a soft glow on hover. No underline (override the global a:hover rule). */
+.tw-orch-link {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--tw-muted);
+  text-decoration: none;
+  transition: color 0.15s var(--ease-standard), text-shadow 0.15s var(--ease-standard);
+}
+.tw-orch-link:hover {
+  color: var(--tw-accent-2);
+  text-decoration: none;
+  text-shadow: 0 0 16px color-mix(in srgb, var(--tw-accent-2-bright) 60%, transparent);
+}
+.tw-orch-link:focus-visible {
+  outline: none;
+  text-shadow: 0 0 16px color-mix(in srgb, var(--tw-accent-2-bright) 75%, transparent);
+}

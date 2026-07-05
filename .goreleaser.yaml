@@ -1,0 +1,70 @@
+version: 2
+
+project_name: taxiway
+
+before:
+  hooks:
+    - sh ./scripts/render-release-install.sh ./install.sh ./.release/install.sh {{ .Version }}
+
+builds:
+  - id: taxiway
+    main: ./cmd/taxiway
+    binary: taxiway
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/taxiway-sh/taxiway/internal/cli.Version={{ .Version }}
+      - -X github.com/taxiway-sh/taxiway/internal/cli.Commit={{ .Commit }}
+      - -X github.com/taxiway-sh/taxiway/internal/cli.BuildDate={{ .Date }}
+
+archives:
+  - id: taxiway
+    ids:
+      - taxiway
+    formats:
+      - tar.gz
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - src: infra/*
+      - src: agents/*
+      - src: orchestrators/*
+
+checksum:
+  name_template: checksums.txt
+
+release:
+  extra_files:
+    - glob: ./.release/install.sh
+      name_template: install.sh
+
+changelog:
+  abbrev: -1
+  format: "{{ .Message }}"
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]-]+\))??!?:.+$'
+      order: 0
+    - title: Fixes
+      regexp: '^.*?fix(\([[:word:]-]+\))??!?:.+$'
+      order: 1
+    - title: Cleanup
+      regexp: '^.*?(cleanup|remove|simplif|polish).*$'
+      order: 2
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^tests:'
+      - '^chore:'
+      - '^style:'
+      - '^refactor:'
+      - '^Merge pull request'
+      - '^Revert '

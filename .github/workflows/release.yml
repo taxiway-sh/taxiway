@@ -1,0 +1,96 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  core-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build
+        run: go build ./...
+
+      - name: Test
+        run: make test-unit
+
+      - name: Test scripts
+        run: make test-scripts
+
+      - name: Lint (gofmt)
+        run: |
+          out=$(find . -name '*.go' -not -path './vendor/*' -not -name 'provision.go' | xargs gofmt -l)
+          if [ -n "$out" ]; then
+            echo "gofmt: files need formatting:"
+            echo "$out"
+            exit 1
+          fi
+          echo "gofmt: OK"
+
+      - name: Lint scripts
+        run: make lint-scripts
+
+  end-to-end:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        orchestrator: [codex, claude-code, gastown]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Start Docker daemon
+        run: |
+          dockerd &>/var/log/dockerd.log &
+          timeout 30 sh -c 'until docker info >/dev/null 2>&1; do sleep 1; done'
+
+      - name: Run orchestrator up end-to-end test
+        run: make test-e2e-${{ matrix.orchestrator }}-up
+
+      - name: Run orchestrator prepare-run end-to-end test
+        run: make test-e2e-${{ matrix.orchestrator }}-prepare-run
+
+      - name: Run orchestrator phase-by-phase end-to-end test
+        run: make test-e2e-${{ matrix.orchestrator }}-phase-by-phase
+
+  goreleaser:
+    needs: [core-checks, end-to-end]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
