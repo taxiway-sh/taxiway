@@ -1,5 +1,11 @@
 html, body { margin: 0; }
-body { background: var(--tw-bg); }
+/* Stop iOS Safari from auto-inflating text (font boosting) — it enlarged some
+   table cells inconsistently on narrow screens while leaving others alone. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+/* Both html and body carry the themed background: iOS Safari tints the status
+   bar / overscroll area from the <html> background, so leaving it transparent
+   kept the top of the page in the old theme's colour after a toggle. */
+html, body { background: var(--tw-bg); }
 .tw-page-bg { background-color: var(--tw-bg); }
 @media (max-width: 920px) {
   /* minmax(0, …) so a wide child (long heading, nowrap command line) makes the
