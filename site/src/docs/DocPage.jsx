@@ -129,6 +129,10 @@ function DocPager({ current }) {
 function TableOfContents({ scope }) {
   const [items, setItems] = React.useState([]);
   const [active, setActive] = React.useState('');
+  // When the user jumps to a section (TOC click, in-page link, heading anchor),
+  // pin that item active until they scroll again — otherwise the scroll-spy
+  // would immediately re-pick a different item for sections near the bottom.
+  const pinRef = React.useRef({ id: null, until: 0 });
 
   React.useEffect(() => {
     const hs = Array.from(document.querySelectorAll('.tw-prose h2[id]'));
@@ -142,20 +146,74 @@ function TableOfContents({ scope }) {
   React.useEffect(() => {
     if (!items.length) return undefined;
     let raf = 0;
+    let currentHash = window.location.hash.slice(1);
     const update = () => {
       raf = 0;
-      const line = window.scrollY + 120;
-      let cur = items[0].id;
-      for (const it of items) {
+      // A pinned item (from a click / anchor jump) wins until the user scrolls.
+      if (pinRef.current.id) { setActive(pinRef.current.id); currentHash = pinRef.current.id; return; }
+      const scrollY = window.scrollY;
+      const maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+      // A section normally activates when its heading scrolls to 120px below the
+      // viewport top ("activation scroll" = headingTop - 120).
+      const tops = items.map((it) => {
         const el = document.getElementById(it.id);
-        if (el && el.getBoundingClientRect().top + window.scrollY <= line) cur = it.id;
+        return el ? el.getBoundingClientRect().top + scrollY : Infinity;
+      });
+      const acts = tops.map((t) => t - 120);
+      // Headings sitting past the furthest scroll position can never reach that
+      // line (short trailing sections and/or a tall viewport), so they'd all
+      // collapse onto the last pixel and be unreachable. Spread every such
+      // trailing heading evenly across the remaining scroll so each keeps its
+      // own highlight window.
+      const firstStuck = tops.findIndex((t) => t > maxScroll);
+      if (firstStuck !== -1) {
+        const start = firstStuck > 0 ? acts[firstStuck - 1] : 0;
+        const n = items.length - firstStuck;
+        for (let i = firstStuck; i < items.length; i++) {
+          acts[i] = start + ((maxScroll - start) * (i - firstStuck + 1)) / (n + 1);
+        }
+      }
+      // Default to nothing selected: above the first heading (reading the intro)
+      // no item is highlighted and no hash is added — it only kicks in once the
+      // reader scrolls onto a section.
+      let cur = '';
+      for (let i = 0; i < items.length; i++) {
+        if (scrollY >= acts[i]) cur = items[i].id;
       }
       setActive(cur);
+      // Reflect the section in view in the URL hash — like the landing page —
+      // via replaceState: no history spam, no scroll jump, and it bypasses
+      // react-router so it won't fight the router's own scroll handling.
+      if (cur !== currentHash) {
+        currentHash = cur;
+        window.history.replaceState(window.history.state, '', cur ? `#${cur}` : window.location.pathname + window.location.search);
+      }
     };
-    const onScroll = () => { if (!raf) raf = requestAnimationFrame(update); };
+    const onScroll = () => {
+      // Release the pin on the first real scroll after the jump has settled.
+      const pin = pinRef.current;
+      if (pin.id && Date.now() > pin.until) pinRef.current = { id: null, until: 0 };
+      if (!raf) raf = requestAnimationFrame(update);
+    };
     window.addEventListener('scroll', onScroll, { passive: true });
     update();
     return () => { window.removeEventListener('scroll', onScroll); if (raf) cancelAnimationFrame(raf); };
+  }, [items]);
+
+  // Pin the matching TOC item whenever the URL hash changes — covers in-page
+  // links and heading anchors, not just TOC clicks. The scroll listener above
+  // releases it once the reader scrolls away.
+  React.useEffect(() => {
+    if (!items.length) return undefined;
+    const pinFromHash = () => {
+      const id = decodeURIComponent((window.location.hash || '').slice(1));
+      if (id && items.some((it) => it.id === id)) {
+        pinRef.current = { id, until: Date.now() + 250 };
+        setActive(id);
+      }
+    };
+    window.addEventListener('hashchange', pinFromHash);
+    return () => window.removeEventListener('hashchange', pinFromHash);
   }, [items]);
 
   return (
@@ -164,7 +222,10 @@ function TableOfContents({ scope }) {
         <nav>
           <p className="tw-docs-toc-h">On this page</p>
           {items.map((it) => (
-            <a key={it.id} href={`#${it.id}`} className={it.id === active ? 'is-active' : undefined}>{it.text}</a>
+            <a key={it.id} href={`#${it.id}`}
+              className={it.id === active ? 'is-active' : undefined}
+              onClick={() => { pinRef.current = { id: it.id, until: Date.now() + 250 }; setActive(it.id); }}
+            >{it.text}</a>
           ))}
         </nav>
       )}

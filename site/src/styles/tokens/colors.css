@@ -11,6 +11,9 @@
    ============================================================ */
 
 :root {
+  /* Tell the UA its surfaces (iOS status bar / overscroll tint, scrollbars,
+     form controls) are light in this theme — dark is set on [data-theme=signal]. */
+  color-scheme: light;
   /* ---- Raw brand palette (shared, for docs) ---- */
   --c-slate:        #1F2A2E;
   --c-beacon-amber: #FFB000;
@@ -91,6 +94,8 @@
 
 /* ================= SEMANTIC · Signal (dark) ================= */
 [data-theme="signal"] {
+  /* Dark UA surfaces (iOS status bar / overscroll tint, scrollbars, controls). */
+  color-scheme: dark;
   --tw-bg:            #0B1A22;
   --tw-surface:       #12242E;
   --tw-surface-2:     #0E1E27;

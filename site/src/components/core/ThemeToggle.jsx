@@ -19,6 +19,11 @@ export function ThemeToggle({ size = 40, style = {}, ...rest }) {
 
   React.useEffect(() => {
     document.documentElement.dataset.theme = theme;
+    // Keep the iOS Safari status-bar / toolbar tint in sync with the theme's
+    // page background (--tw-bg) — otherwise the top of the page keeps the old
+    // theme's colour after a toggle.
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', theme === 'signal' ? '#0B1A22' : '#FBE8BE');
     try { localStorage.setItem('tw-theme', theme); } catch (e) {}
   }, [theme]);
 

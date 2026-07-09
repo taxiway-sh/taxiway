@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom';
 function NavBar() {
   const Icon = TWIcon;
   const [open, setOpen] = React.useState(false);
+  const headerRef = React.useRef(null);
   // Section anchors (they scroll within the landing) live on the left; Docs is
   // a route — it leaves the landing — so it sits on the right, with GitHub.
   const sectionLinks = [
@@ -34,12 +35,36 @@ function NavBar() {
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
+  // iOS Safari does not repaint a sticky element with backdrop-filter when the
+  // theme changes its translucent background — the blurred layer stays cached
+  // until a scroll forces a re-composite (the header keeps the old theme's
+  // colour). On every data-theme flip, briefly drop and restore the filter to
+  // force the compositor to re-render the header with the new colour.
+  React.useEffect(() => {
+    const root = document.documentElement;
+    const repaint = () => {
+      const el = headerRef.current;
+      if (!el) return;
+      el.style.backdropFilter = 'none';
+      el.style.webkitBackdropFilter = 'none';
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (!headerRef.current) return;
+        headerRef.current.style.backdropFilter = 'blur(10px)';
+        headerRef.current.style.webkitBackdropFilter = 'blur(10px)';
+      }));
+    };
+    const obs = new MutationObserver(repaint);
+    obs.observe(root, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => obs.disconnect();
+  }, []);
+
   return (
-    <header style={{
+    <header ref={headerRef} style={{
       position: 'sticky', top: 0, zIndex: 50,
       borderBottom: '1px solid var(--tw-border)',
       background: 'var(--tw-nav-bg)',
       backdropFilter: 'blur(10px)',
+      WebkitBackdropFilter: 'blur(10px)',
     }}>
       <nav style={{
         maxWidth: 'var(--container-wide)', margin: '0 auto',

@@ -4,6 +4,9 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Taxiway — isolated labs for agent orchestrators</title>
+<!-- Tints the iOS Safari status bar / toolbar. Kept in sync with the active
+     theme's page background (--tw-bg) by the script below and ThemeToggle. -->
+<meta name="theme-color" content="#FBE8BE" />
 <!-- Theme: light is the default (:root). Set data-theme=signal BEFORE the
      first paint from the stored choice / OS preference so a dark visitor
      never sees a flash of the light theme. -->
@@ -13,6 +16,8 @@
       var t = localStorage.getItem('tw-theme')
         || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'signal' : 'light');
       document.documentElement.dataset.theme = t;
+      var m = document.querySelector('meta[name="theme-color"]');
+      if (m) m.setAttribute('content', t === 'signal' ? '#0B1A22' : '#FBE8BE');
     } catch (e) {}
   })();
 </script>
