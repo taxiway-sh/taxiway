@@ -38,10 +38,12 @@ Kubernetes and heavyweight infrastructure are out of scope.
 
 ## GitHub
 
-- Repository: `taxiway-sh/taxiway`
+- Development repository: `manufacture-dev/taxiway` — this is where PRs and
+  issues actually live. Every `gh` command for PRs or issues must include
+  `--repo manufacture-dev/taxiway`.
+- Public releases mirror: `taxiway-sh/taxiway` — holds releases and
+  `install.sh` only. Do not target it for PR or issue operations.
 - Default branch: `main`
-- Every `gh` command for this repository must include
-  `--repo taxiway-sh/taxiway`.
 - Do not merge, publish, or force-push unless the user explicitly asks for it.
 
 ## Security
