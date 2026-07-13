@@ -9,8 +9,6 @@ version:
 - `infra/`
 - `agents/`
 - `orchestrators/`
-- `infra/observability/langfuse.compose.yml`
-- `infra/gateway/litellm/models.yaml`
 
 The installer replaces the runtime assets in `~/.taxiway/runtime/` and installs
 the binary to `$HOME/.local/bin` by default.
