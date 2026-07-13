@@ -78,22 +78,26 @@ make test-scripts
 | `make test-e2e` | `go test -tags=e2e ./...` | yes | yes |
 | `make test-e2e-only` | `go test -tags=e2e -run '^TestE2E_' ./...` | no | yes |
 | `make test-e2e-up` | Aggregate `taxiway up` tests for all orchestrators | no | yes |
+| `make test-e2e-prepare-run` | Aggregate prepare+run tests for all orchestrators | no | yes |
 | `make test-e2e-phase-by-phase` | Phase-by-phase lifecycle tests for all orchestrators | no | yes |
 | `make test-e2e-claude-code` | Claude Code orchestrator end-to-end tests | no | yes |
 | `make test-e2e-claude-code-up` | Claude Code `taxiway up` end-to-end test | no | yes |
+| `make test-e2e-claude-code-prepare-run` | Claude Code prepare+run end-to-end test | no | yes |
 | `make test-e2e-claude-code-phase-by-phase` | Claude Code phase-by-phase end-to-end test | no | yes |
 | `make test-e2e-codex` | Codex orchestrator end-to-end tests | no | yes |
 | `make test-e2e-codex-up` | Codex `taxiway up` end-to-end test | no | yes |
+| `make test-e2e-codex-prepare-run` | Codex prepare+run end-to-end test | no | yes |
 | `make test-e2e-codex-phase-by-phase` | Codex phase-by-phase end-to-end test | no | yes |
 | `make test-e2e-gastown` | Gas Town orchestrator end-to-end tests | no | yes |
 | `make test-e2e-gastown-up` | Gas Town `taxiway up` end-to-end test | no | yes |
+| `make test-e2e-gastown-prepare-run` | Gas Town prepare+run end-to-end test | no | yes |
 | `make test-e2e-gastown-phase-by-phase` | Gas Town phase-by-phase end-to-end test | no | yes |
 | `make test-scripts` | shell script tests under `tests/scripts/` | no | no |
 
 Use `make test-e2e` for the Go end-to-end gate. Use
 `make test-e2e-only` when you want only end-to-end test functions. Use the
 orchestrator-specific targets when debugging one integration locally. Use the
-`*-up` targets for the shorter up path before running the
+`*-up` targets first, then the `*-prepare-run` targets, before running the
 `*-phase-by-phase` targets.
 
 E2E targets use `E2E_TIMEOUT` as their Go test timeout. Override it locally
@@ -116,6 +120,7 @@ lab or requiring Docker. They run through `make test-scripts`:
 | `tests/scripts/infra/trace/test_events.sh` | `infra/trace/events.sh` event output, source fallback, and ignored trace env vars. |
 | `tests/scripts/infra/workspace/test_clone.sh` | `infra/workspace/clone.sh` URL rewriting, clone flow, ref checkout, and token handling. |
 | `tests/scripts/orchestrators/gastown/test_workspace.sh` | `orchestrators/gastown/workspace.sh` skip behavior, name validation, HQ initialization, rig registration, ref checkout, and crew workspace provisioning. |
+| `tests/scripts/orchestrators/gastown/test_start.sh` | `orchestrators/gastown/start.sh` start phase behavior and contract validation. |
 
 ## End-to-end Scope
 
@@ -165,9 +170,9 @@ The Docker-backed orchestrator end-to-end suite is intentionally not a PR
 merge gate because real installs make it too slow and sometimes dependent on
 external package availability. It runs from the `End-to-end` workflow on
 a daily schedule and through `workflow_dispatch`. That workflow runs a matrix
-with one job per orchestrator. Each job runs the `taxiway up` test
-for its orchestrator first, then runs that same orchestrator's phase-by-phase
-test. The orchestrator jobs run in parallel with `fail-fast` disabled.
+with one job per orchestrator. Each job runs the `taxiway up` test for its orchestrator first, then runs the
+corresponding `prepare-run` test, and finally runs that orchestrator's
+phase-by-phase test. The orchestrator jobs run in parallel with `fail-fast` disabled.
 
 ## Adding a new test
 
