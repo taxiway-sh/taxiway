@@ -62,6 +62,9 @@ Typical flow:
 
 ## Contributing
 
+See the [contribution guide](contributing/README.md) for setup and how work is tracked.
+
 - [Development](contributing/development.md)
 - [Testing](contributing/testing.md)
+- [Issues](contributing/issues.md)
 - [Release](contributing/release.md)

@@ -1,0 +1,40 @@
+name: Feature request
+description: Propose a new product capability that does not exist today
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for a genuinely new capability. If instead something existing is broken, fragile, or needs cleanup, use the bug report template.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What can't you do today, and why does it matter?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: The capability you want — what a user would be able to do.
+    validations:
+      required: true
+  - type: textarea
+    id: direction
+    attributes:
+      label: Proposed direction
+      description: Optional — a sketch of how it could work, kept open.
+    validations:
+      required: false
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope / non-goals
+      description: Optional — what this explicitly should and should not cover.
+    validations:
+      required: false
+  - type: markdown
+    attributes:
+      value: |
+        A maintainer will triage this: confirm it is a new capability, set a priority and area label, and link related work.
