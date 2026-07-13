@@ -1,0 +1,52 @@
+name: Bug report
+description: Report incorrect behavior, a fragility, or technical debt in the existing product
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. A `bug` is any remediation of the existing product — broken behavior, a fragility, refactoring, or technical debt. For a genuinely new capability, use the feature request template instead.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is wrong, and where. Include the user-facing symptom.
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Current behavior / reproduction
+      description: The command you ran and the output or logs that show the failure.
+      placeholder: |
+        $ taxiway up mylab
+        ...error output...
+      render: text
+    validations:
+      required: false
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should happen instead — the contract once fixed.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Taxiway version, driver, and OS.
+      placeholder: "taxiway 0.4.0 · driver docker · macOS 15"
+    validations:
+      required: false
+  - type: textarea
+    id: direction
+    attributes:
+      label: Proposed direction
+      description: Optional — if you have a fix idea, sketch it (kept open).
+    validations:
+      required: false
+  - type: markdown
+    attributes:
+      value: |
+        A maintainer will triage this: confirm the type, set a priority and area label, and link any related or duplicate issues.
