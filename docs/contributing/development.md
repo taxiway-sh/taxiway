@@ -61,8 +61,9 @@ make test-e2e
 Use `make test-e2e-only` to run only end-to-end tests.
 Use `make test-e2e-claude-code`, `make test-e2e-codex`, or
 `make test-e2e-gastown` to run one orchestrator integration.
-Use the `*-up` variants before the `*-phase-by-phase` variants when debugging
-the scheduled orchestrator end-to-end sequence locally.
+Use the `*-up` variants, followed by the `*-prepare-run` variants, before the
+`*-phase-by-phase` variants when debugging the scheduled orchestrator end-to-end
+sequence locally.
 Use `make test-scripts` to run shell script tests.
 
 See [Testing](testing.md) and [Drivers](../README.md#drivers).
