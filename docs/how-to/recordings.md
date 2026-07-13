@@ -46,8 +46,10 @@ to match your terminal.
 Stop the latest active recording:
 
 ```bash
-taxiway record stop mylab --latest
+taxiway record stop mylab
 ```
+
+Omit `--name` to stop the latest active recording.
 
 Or stop a recording by name:
 
