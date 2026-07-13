@@ -77,7 +77,7 @@ Desktop, or a GitHub Actions `ubuntu-latest` runner.
 Taxiway registers cleanup on exit, but a hard crash can leave containers behind:
 
 ```bash
-docker ps -a | grep "taxiway-end-to-end-" | awk '{print $1}' | xargs docker rm -f
+docker ps -a | grep "taxiway-e2e-" | awk '{print $1}' | xargs docker rm -f
 ```
 
 The matching volumes are named `taxiway-<container>-lab`.
