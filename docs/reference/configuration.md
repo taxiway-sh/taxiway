@@ -15,8 +15,6 @@ The runtime directory contains files needed to create labs:
 - `infra/`
 - `agents/`
 - `orchestrators/`
-- `infra/observability/langfuse.compose.yml`
-- `infra/gateway/litellm/models.yaml`
 
 Override it with `TAXIWAY_RUNTIME_DIR` when developing from a source checkout.
 
