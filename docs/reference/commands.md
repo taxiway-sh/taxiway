@@ -30,7 +30,7 @@ Run `taxiway help` or `taxiway help <command>` for the live CLI reference.
 | `taxiway list [<lab>]` / `taxiway ls [<lab>]` | List labs, or show one lab |
 | `taxiway record` | Manage lab recordings |
 | `taxiway record start <lab> [--name <name>]` | Start recording the lab shell |
-| `taxiway record stop <lab> [--name <name>] [--latest]` | Stop a running recording |
+| `taxiway record stop <lab> [--name <name>]` | Stop a running recording |
 | `taxiway record list [<lab>]` | List recordings for one lab, or all labs |
 | `taxiway record player <lab>` | Serve the browser player for lab recordings |
 | `taxiway record analyze <lab>` | Analyze stopped recordings with a local agent runner |
