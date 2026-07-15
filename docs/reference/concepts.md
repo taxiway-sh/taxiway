@@ -120,9 +120,6 @@ User state lives under:
 ~/.taxiway/observability
 ```
 
-The `~/.taxiway/auth` directory stores converted provider auth used by
-gateways.
-
 Source-checkout development can override runtime and lab state with `.envrc`.
 See [Development](../contributing/development.md).
 
