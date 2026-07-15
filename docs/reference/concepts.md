@@ -115,6 +115,7 @@ User state lives under:
 
 ```text
 ~/.taxiway/lab-state
+~/.taxiway/auth
 ~/.taxiway/proxy
 ~/.taxiway/observability
 ```
