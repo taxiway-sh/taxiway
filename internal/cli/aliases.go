@@ -334,7 +334,7 @@ func newInstallCmd(state *RootState) *cobra.Command {
 			}
 			return validateLabArg(a[0])
 		},
-		RunE: func(_ *cobra.Command, a []string) error {
+		RunE: func(cmd *cobra.Command, a []string) error {
 			ctx := context.Background()
 			id := idName(a[0])
 			ref, err := loadLabRef(ctx, state, id)
@@ -346,6 +346,9 @@ func newInstallCmd(state *RootState) *cobra.Command {
 			}
 			if ref.Orch == "" {
 				return fmt.Errorf("lab %q has no orchestrator type; re-create with: taxiway up %s --type <orch>", a[0], a[0])
+			}
+			if state.Flags.DryRun {
+				return planSinglePhase(ctx, cmd, state, ref, phases.PhaseInstall)
 			}
 			if err := runPhase(ctx, state, ref, phases.PhaseInstall); err != nil {
 				return err
@@ -373,7 +376,7 @@ func newVerifyCmd(state *RootState) *cobra.Command {
 			}
 			return validateLabArg(a[0])
 		},
-		RunE: func(_ *cobra.Command, a []string) error {
+		RunE: func(cmd *cobra.Command, a []string) error {
 			ctx := context.Background()
 			id := idName(a[0])
 			ref, err := loadLabRef(ctx, state, id)
@@ -385,6 +388,9 @@ func newVerifyCmd(state *RootState) *cobra.Command {
 			}
 			if ref.Orch == "" {
 				return fmt.Errorf("lab %q has no orchestrator type", a[0])
+			}
+			if state.Flags.DryRun {
+				return planSinglePhase(ctx, cmd, state, ref, phases.PhaseVerify)
 			}
 			env, err := buildBaseEnv(state.RepoDir, ref)
 			if err != nil {

@@ -4,13 +4,30 @@
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/../../infra/trace/events.sh" 2>/dev/null || true
-
-lab_emit_event phase start
+# shellcheck source=../../infra/commands/steps.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../infra/commands/steps.sh"
 
 log() { printf '\n\033[1;34m[codex-agent-install]\033[0m %s\n' "$*"; }
 
 VERSION="${CODEX_VERSION:-latest}"
 PKG="@openai/codex"
+
+if taxiway_is_plan; then
+  if taxiway_can_inspect && command -v bwrap >/dev/null 2>&1; then
+    log "bubblewrap already installed"
+  else
+    log "Installing bubblewrap (codex sandbox prerequisite)"
+  fi
+
+  if taxiway_can_inspect && command -v codex >/dev/null 2>&1; then
+    log "Checking the installed codex version before installing ${PKG}@${VERSION}"
+  else
+    log "Installing ${PKG}@${VERSION}"
+  fi
+  exit 0
+fi
+
+lab_emit_event phase start
 
 command -v npm >/dev/null 2>&1 || { echo "npm missing - run taxiway bootstrap first" >&2; exit 1; }
 

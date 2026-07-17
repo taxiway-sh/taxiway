@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,8 +27,8 @@ func buildAliasTestRoot(t *testing.T) (*cobra.Command, *RootState, *driver.MockD
 	for _, orch := range []string{"codex", "gastown"} {
 		dir := filepath.Join(tmp, "orchestrators", orch)
 		require.NoError(t, os.MkdirAll(dir, 0755))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "install.sh"), []byte("#!/bin/bash\necho install\n"), 0755))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "verify.sh"), []byte("#!/bin/bash\necho verify\n"), 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "install.sh"), []byte("#!/bin/bash\nif [[ \"$TAXIWAY_EXECUTION_MODE\" == plan ]]; then echo '["+orch+"-install] Installing "+orch+"'; exit 0; fi\necho install\n"), 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "verify.sh"), []byte("#!/bin/bash\nif [[ \"$TAXIWAY_EXECUTION_MODE\" == plan ]]; then echo '["+orch+"-verify] Verifying "+orch+"'; exit 0; fi\necho verify\n"), 0755))
 	}
 	// gastown has start.sh; codex does not in this test fixture (for TestStart_MissingScript).
 	require.NoError(t, os.WriteFile(
@@ -360,7 +361,7 @@ func TestFlatVerbs_ResetYes_PassesNonInteractiveEnv(t *testing.T) {
 	require.Equal(t, "1", mock.ExecEnvLog[len(mock.ExecEnvLog)-1]["LAB_RESET_YES"])
 }
 
-func TestFlatVerbs_DryRunDoesNotExecuteOrMarkPhases(t *testing.T) {
+func TestFlatVerbs_DryRunDoesNotMarkPhases(t *testing.T) {
 	tests := []struct {
 		name  string
 		phase phases.Phase
@@ -375,14 +376,40 @@ func TestFlatVerbs_DryRunDoesNotExecuteOrMarkPhases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			root, state, mock, stdout, stderr := buildAliasTestRoot(t)
+			root, state, _, stdout, stderr := buildAliasTestRoot(t)
 			id := createAliasLab(t, state, "gastown")
 			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
 
 			_, _, err := execAlias(t, root, stdout, stderr, tt.args...)
 			require.NoError(t, err)
-			require.Empty(t, mock.ExecLog, "dry-run must not execute phase commands")
 			require.False(t, phases.Done(stateDir, id, tt.phase), "dry-run must not mark phase %s", tt.phase)
+		})
+	}
+}
+
+func TestFlatVerbs_DryRunPlansInstallAndVerify(t *testing.T) {
+	tests := []struct {
+		command string
+		label   string
+		phase   phases.Phase
+	}{
+		{command: "install", label: "[gastown-install] Installing gastown", phase: phases.PhaseInstall},
+		{command: "verify", label: "[gastown-verify] Verifying gastown", phase: phases.PhaseVerify},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.command, func(t *testing.T) {
+			root, state, _, stdout, stderr := buildAliasTestRoot(t)
+			id := createAliasLab(t, state, "gastown")
+			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+
+			out, _, err := execAlias(t, root, stdout, stderr, tt.command, "gastown", "--dry-run")
+
+			require.NoError(t, err)
+			require.Contains(t, out, fmt.Sprintf("Dry-run for phase %q on lab %q", tt.phase, "gastown"))
+			require.Contains(t, out, tt.label)
+			require.Contains(t, out, "No changes were made.")
+			require.False(t, phases.Done(stateDir, id, tt.phase))
 		})
 	}
 }

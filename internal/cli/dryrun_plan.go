@@ -7,7 +7,17 @@ import (
 	"os"
 	"os/exec"
 	"sort"
+
+	"github.com/spf13/cobra"
+
+	"github.com/taxiway-sh/taxiway/internal/config"
+	"github.com/taxiway-sh/taxiway/internal/phases"
 )
+
+type phasePlanOptions struct {
+	InspectionAvailable bool
+	ClearProfile        bool
+}
 
 type dryRunPlan struct {
 	out      io.Writer
@@ -57,4 +67,83 @@ func execOfflinePlanScript(ctx context.Context, scriptPath string, stdout, stder
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	return cmd.Run()
+}
+
+func planSinglePhase(ctx context.Context, cmd *cobra.Command, state *RootState, ref config.LabRef, phase phases.Phase) error {
+	d, err := driverForRef(state, ref)
+	if err != nil {
+		return err
+	}
+	exists, err := d.Exists(ctx, idName(ref.Lab))
+	if err != nil {
+		return err
+	}
+
+	plan := newDryRunPlan(cmd.OutOrStdout(), "phase", string(phase), ref.Lab)
+	if err := planPhase(ctx, state, ref, phase, cmd.OutOrStdout(), cmd.ErrOrStderr(), phasePlanOptions{
+		InspectionAvailable: exists,
+	}); err != nil {
+		return err
+	}
+	plan.Finish()
+	return nil
+}
+
+func planPhase(ctx context.Context, state *RootState, ref config.LabRef, phase phases.Phase, stdout, stderr io.Writer, opts phasePlanOptions) error {
+	baseEnv, err := buildBaseEnv(ref)
+	if err != nil {
+		return err
+	}
+
+	switch phase {
+	case phases.PhaseBootstrap:
+		return planScript(ctx, state, ref, config.BootstrapScript(state.RepoDir), stdout, stderr, baseEnv, opts)
+	case phases.PhaseInstall:
+		script, err := config.InstallScript(state.RepoDir, ref.Orch)
+		if err != nil {
+			return err
+		}
+		if err := planScript(ctx, state, ref, script, stdout, stderr, baseEnv, opts); err != nil {
+			return err
+		}
+		return planAgentScripts(ctx, state, ref, "install.sh", stdout, stderr, baseEnv, opts)
+	case phases.PhaseVerify:
+		script, err := config.VerifyScript(state.RepoDir, ref.Orch)
+		if err != nil {
+			return err
+		}
+		if err := planScript(ctx, state, ref, script, stdout, stderr, baseEnv, opts); err != nil {
+			return err
+		}
+		return planAgentScripts(ctx, state, ref, "verify.sh", stdout, stderr, baseEnv, opts)
+	default:
+		return fmt.Errorf("phase %q does not have a semantic dry-run plan", phase)
+	}
+}
+
+func planScript(ctx context.Context, state *RootState, ref config.LabRef, script string, stdout, stderr io.Writer, env map[string]string, opts phasePlanOptions) error {
+	if opts.InspectionAvailable {
+		return execPlannableScriptToWithRef(ctx, state, ref, script, stdout, stderr, env)
+	}
+	return execOfflinePlanScript(ctx, script, stdout, stderr, env)
+}
+
+func planAgentScripts(ctx context.Context, state *RootState, ref config.LabRef, scriptName string, stdout, stderr io.Writer, baseEnv map[string]string, opts phasePlanOptions) error {
+	manifest, err := config.LoadOrchManifest(state.RepoDir, ref.Orch)
+	if err != nil {
+		return err
+	}
+	for _, agent := range manifestAgents(manifest) {
+		script, err := agentScript(state.RepoDir, agent, scriptName)
+		if err != nil {
+			return err
+		}
+		if script == "" {
+			return fmt.Errorf("agent %q has no agents/%s/%s", agent, agent, scriptName)
+		}
+		if err := planScript(ctx, state, ref, script, stdout, stderr, agentEnv(baseEnv, agent), opts); err != nil {
+			return fmt.Errorf("agent %q %s plan: %w", agent, scriptName, err)
+		}
+	}
+	return nil
 }
