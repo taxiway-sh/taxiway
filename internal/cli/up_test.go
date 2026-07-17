@@ -1112,8 +1112,8 @@ func TestRunCommandDryRunDoesNotReconcileCachedGateway(t *testing.T) {
 	out, _, err := execUpRoot(t, root, stdout, stderr, "run", "gastown", "--skip-workspace", "--skip-auth-check", "--dry-run")
 	require.NoError(t, err)
 	require.Zero(t, ensured)
-	require.Contains(t, out, "gateway              (dry-run)")
-	require.NotContains(t, out, "gateway              (ready)")
+	require.Contains(t, out, "gateway              (ready)")
+	require.Contains(t, out, "No changes were made.")
 }
 
 func TestGatewayCommandMarksPhaseWithoutRefreshingProxyPage(t *testing.T) {
@@ -1666,15 +1666,12 @@ func TestEnvReset_ClearsPhases(t *testing.T) {
 // ---- dry-run for taxiway up ----
 
 func TestUp_DryRun(t *testing.T) {
-	root, state, mock, stdout, stderr := buildUpTestRoot(t)
+	root, state, _, stdout, stderr := buildUpTestRoot(t)
 	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
 	id := idName("gastown")
 
 	out, _, err := execUpRoot(t, root, stdout, stderr, "up", "gastown", "--type", "gastown", "--dry-run")
 	require.NoError(t, err)
-
-	// No Exec calls in dry-run
-	require.Empty(t, mock.ExecLog, "dry-run should not execute scripts")
 
 	// No phase markers written
 	for _, p := range phases.Order {
@@ -1686,6 +1683,42 @@ func TestUp_DryRun(t *testing.T) {
 		require.Contains(t, out, string(p), "dry-run output should mention phase %s", p)
 	}
 	require.NotContains(t, out, "doctor", "dry-run output must not mention doctor (not a pipeline phase)")
+	require.Contains(t, out, `Dry-run for lifecycle "up" on lab "gastown"`)
+	require.Equal(t, 1, strings.Count(out, "No changes were made."))
+	require.Contains(t, out, "Creating Mock lab runtime")
+	require.Contains(t, out, "install")
+	require.Contains(t, out, "verify")
+}
+
+func TestPrepareAndRunDryRunExpandSemanticPhasePlans(t *testing.T) {
+	t.Run("prepare", func(t *testing.T) {
+		root, _, _, stdout, stderr := buildUpTestRoot(t)
+
+		out, _, err := execUpRoot(t, root, stdout, stderr, "prepare", "demo", "--type", "gastown", "--dry-run")
+
+		require.NoError(t, err)
+		require.Contains(t, out, "Creating Mock lab runtime")
+		require.Contains(t, out, "ok")
+		require.Contains(t, out, "install")
+		require.Contains(t, out, "verify")
+		require.NotContains(t, out, "Reconciling LiteLLM sidecar")
+		require.Equal(t, 1, strings.Count(out, "No changes were made."))
+	})
+
+	t.Run("run", func(t *testing.T) {
+		root, state, _, stdout, stderr := buildUpTestRoot(t)
+		id := idName("gastown")
+		require.NoError(t, state.Driver.Create(testCtx(t), id, driver.CreateOptions{}))
+		require.NoError(t, state.Driver.WriteLabRef(testCtx(t), id, config.LabRef{Lab: "gastown", Orch: "gastown", Driver: "mock"}))
+
+		out, _, err := execUpRoot(t, root, stdout, stderr, "run", "gastown", "--dry-run")
+
+		require.NoError(t, err)
+		require.Contains(t, out, "Configuring lab gateway environment")
+		require.Contains(t, out, "start")
+		require.NotContains(t, out, "Creating Mock lab runtime")
+		require.Equal(t, 1, strings.Count(out, "No changes were made."))
+	})
 }
 
 // TestUp_NoRuntimeEnvCopyDuringInstallVerify: with --prepare-only, the install

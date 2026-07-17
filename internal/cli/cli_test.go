@@ -521,7 +521,13 @@ func TestDryRun_LabUp(t *testing.T) {
 		dir := filepath.Join(tmp, "orchestrators", orch)
 		require.NoError(t, os.MkdirAll(dir, 0755))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "install.sh"), []byte("#!/bin/bash\n"), 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "verify.sh"), []byte("#!/bin/bash\n"), 0755))
 	}
+	for _, orch := range []string{"gastown", "claude-code"} {
+		require.NoError(t, os.WriteFile(filepath.Join(tmp, "orchestrators", orch, "start.sh"), []byte("#!/bin/bash\n"), 0755))
+	}
+	require.NoError(t, os.MkdirAll(filepath.Join(tmp, "infra", "commands"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(tmp, "infra", "commands", "bootstrap.sh"), []byte("#!/bin/bash\n"), 0755))
 	stateDir := filepath.Join(tmp, ".lab-state")
 	innerDriver := driver.NewMockDriver(stateDir)
 	dryDriver := driver.NewDryRun(innerDriver)

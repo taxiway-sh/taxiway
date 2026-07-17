@@ -254,6 +254,7 @@ Use --from <phase> to resume from a specific phase.`,
 			}
 
 			return runUp(context.Background(), state, ref, id, stateDir, runUpOpts{
+				planName:             "up",
 				force:                force,
 				from:                 fromP,
 				prepareOnly:          prepareOnly,
@@ -353,6 +354,7 @@ func newPrepareCmd(state *RootState) *cobra.Command {
 			}
 			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
 			return runUp(ctx, state, ref, id, stateDir, runUpOpts{
+				planName:             "prepare",
 				force:                force,
 				prepareOnly:          true,
 				dryRun:               state.Flags.DryRun,
@@ -426,6 +428,7 @@ func newRunCmd(state *RootState) *cobra.Command {
 			}
 			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
 			return runUp(ctx, state, ref, id, stateDir, runUpOpts{
+				planName:                "run",
 				force:                   force,
 				from:                    phases.PhaseGateway,
 				requirePrepareCompleted: true,
@@ -453,6 +456,7 @@ func newRunCmd(state *RootState) *cobra.Command {
 }
 
 type runUpOpts struct {
+	planName                string
 	force                   bool
 	from                    phases.Phase
 	requirePrepareCompleted bool
@@ -489,6 +493,20 @@ func runUp(ctx context.Context, state *RootState, ref config.LabRef, id, stateDi
 				}
 			}
 		} else if !os.IsNotExist(err) {
+			return err
+		}
+	}
+	var plan *dryRunPlan
+	inspectionAvailable := false
+	if opts.dryRun {
+		plan = newDryRunPlan(opts.out, "lifecycle", opts.planName, ref.Lab)
+		d, err := driverForRef(state, ref)
+		if err != nil {
+			return err
+		}
+		inspectionAvailable, err = d.Exists(ctx, id)
+		if err != nil {
+
 			return err
 		}
 	}
@@ -555,7 +573,7 @@ func runUp(ctx context.Context, state *RootState, ref config.LabRef, id, stateDi
 		profileMustRun := opts.profileChanged && (phase == phases.PhaseWorkspace || phase == phases.PhaseStart)
 		settingsMustRun := opts.settingsChanged && phase != phases.PhaseCreate
 		phaseDone := phases.Done(stateDir, id, phase)
-		if phase == phases.PhaseCreate && phaseDone && !opts.force && !opts.dryRun {
+		if phase == phases.PhaseCreate && phaseDone && !opts.force {
 			d, err := driverForRef(state, ref)
 			if err != nil {
 				return fmt.Errorf("phase %s: resolve driver: %w", phase, err)
@@ -571,13 +589,13 @@ func runUp(ctx context.Context, state *RootState, ref config.LabRef, id, stateDi
 		}
 		startMustRunAfterResume := resumedStoppedLab && phase == phases.PhaseStart
 		authMustRun := phase == phases.PhaseAuth
-		if opts.dryRun {
-			fmt.Fprintf(opts.out, "  ⏵  %-20s (dry-run)\n", phase)
-			continue
-		}
 
 		if !opts.force && !profileMustRun && !settingsMustRun && !authMustRun && !startMustRunAfterResume && phaseDone {
 			if phase == phases.PhaseGateway {
+				if opts.dryRun {
+					fmt.Fprintf(opts.out, "  ✓  %-20s (ready)\n", phase)
+					continue
+				}
 				fmt.Fprintf(opts.out, "  ⏵  %-20s …\n", phase)
 				if err := ensureLabLiteLLMSidecarForUp(ctx, state, ref); err != nil {
 					return fmt.Errorf("phase %s failed: %w", phase, err)
@@ -586,6 +604,16 @@ func runUp(ctx context.Context, state *RootState, ref config.LabRef, id, stateDi
 				continue
 			}
 			fmt.Fprintf(opts.out, "  ✓  %-20s (cached)\n", phase)
+			continue
+		}
+		if opts.dryRun {
+			fmt.Fprintf(opts.out, "  ⏵  %-20s …\n", phase)
+			if err := planPhase(ctx, state, ref, phase, opts.out, opts.out, phasePlanOptions{
+				InspectionAvailable: inspectionAvailable,
+				ClearProfile:        opts.profileClear,
+			}); err != nil {
+				return fmt.Errorf("phase %s plan failed: %w", phase, err)
+			}
 			continue
 		}
 
@@ -606,6 +634,9 @@ func runUp(ctx context.Context, state *RootState, ref config.LabRef, id, stateDi
 		}
 
 		fmt.Fprintf(opts.out, "  ✓  %-20s\n", phase)
+	}
+	if plan != nil {
+		plan.Finish()
 	}
 
 	return nil
