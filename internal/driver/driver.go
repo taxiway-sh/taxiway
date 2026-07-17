@@ -64,6 +64,9 @@ type ExecRequest struct {
 	Workdir string
 	Argv    []string
 	Env     map[string]string
+	// Inspect marks an explicitly read-only execution. Dry-run drivers forward
+	// inspection requests while continuing to suppress normal executions.
+	Inspect bool
 	Stdout  io.Writer  // if nil, discarded
 	Stderr  io.Writer  // if nil, discarded
 	Events  event.Sink // optional; receives parsed LAB_AGENT_EVENT lines

@@ -96,7 +96,10 @@ func (dr *dryRunDriver) InteractiveExec(_ context.Context, id string, req Intera
 	return nil
 }
 
-func (dr *dryRunDriver) Exec(_ context.Context, id string, req ExecRequest) (ExecResult, error) {
+func (dr *dryRunDriver) Exec(ctx context.Context, id string, req ExecRequest) (ExecResult, error) {
+	if req.Inspect {
+		return dr.inner.Exec(ctx, id, req)
+	}
 	fmt.Printf("[dry-run] %s: Exec id=%s cmd=%s\n", dr.inner.Name(), id, strings.Join(req.Argv, " "))
 	return ExecResult{}, nil
 }

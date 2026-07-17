@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -220,4 +221,35 @@ func TestDryRun_Shell_and_Exec(t *testing.T) {
 	exists, err := inner.Exists(ctx, id)
 	require.NoError(t, err)
 	require.False(t, exists)
+}
+
+func TestDryRun_ExecForwardsInspectionOnly(t *testing.T) {
+	inner := NewMockDriver(t.TempDir())
+	require.NoError(t, inner.Create(context.Background(), "taxiway-demo", CreateOptions{}))
+	var calls []ExecRequest
+	inner.ExecResponder = func(_ string, req ExecRequest) MockExecResponse {
+		calls = append(calls, req)
+		return MockExecResponse{Stdout: "inspection result\n"}
+	}
+	dryRun := NewDryRun(inner)
+
+	var applyOut strings.Builder
+	_, err := dryRun.Exec(context.Background(), "taxiway-demo", ExecRequest{
+		Argv:   []string{"bash", "/lab/bootstrap.sh"},
+		Stdout: &applyOut,
+	})
+	require.NoError(t, err)
+	require.Empty(t, calls)
+	require.Empty(t, applyOut.String())
+
+	var inspectOut strings.Builder
+	_, err = dryRun.Exec(context.Background(), "taxiway-demo", ExecRequest{
+		Argv:    []string{"bash", "/lab/bootstrap.sh"},
+		Stdout:  &inspectOut,
+		Inspect: true,
+	})
+	require.NoError(t, err)
+	require.Len(t, calls, 1)
+	require.True(t, calls[0].Inspect)
+	require.Equal(t, "inspection result\n", inspectOut.String())
 }
