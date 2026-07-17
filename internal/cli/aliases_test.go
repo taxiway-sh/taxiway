@@ -415,9 +415,22 @@ func TestBootstrapDryRunPrintsSemanticSteps(t *testing.T) {
 	require.NoError(t, err)
 	plainOut := strings.NewReplacer("\x1b[1;34m", "", "\x1b[0m", "").Replace(out)
 	require.Contains(t, plainOut, `Dry-run for phase "bootstrap" on lab "gastown"`)
-	require.Contains(t, plainOut, "[bootstrap] Updating apt cache")
-	require.Contains(t, plainOut, "[bootstrap] Installing base packages")
-	require.Contains(t, plainOut, "[bootstrap] Toolchain summary")
+	var bootstrapSteps []string
+	for _, line := range strings.Split(plainOut, "\n") {
+		if step, found := strings.CutPrefix(line, "[bootstrap] "); found {
+			bootstrapSteps = append(bootstrapSteps, step)
+		}
+	}
+	require.Equal(t, []string{
+		"Updating apt cache",
+		"Installing base packages",
+		"Installing Docker",
+		"Installing Node.js 22",
+		"Enabling Corepack",
+		"Toolchain summary",
+		"Enabling tmux mouse support in " + tmuxPath,
+		"Adding the Taxiway environment block to ~/.profile",
+	}, bootstrapSteps)
 	require.Contains(t, plainOut, "java       : missing")
 	require.Contains(t, plainOut, "No changes were made.")
 	require.NotContains(t, plainOut, "docker: Exec")

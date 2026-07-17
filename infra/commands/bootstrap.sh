@@ -46,7 +46,11 @@ install_node() {
   sudo apt-get install -y nodejs
 }
 
+node_install_planned=false
 if ! command -v node >/dev/null 2>&1; then
+  if taxiway_is_plan; then
+    node_install_planned=true
+  fi
   taxiway_step "Installing Node.js 22" install_node
 else
   log "Node already installed ($(node --version))"
@@ -56,7 +60,7 @@ fi
 enable_corepack() {
   sudo corepack enable >/dev/null 2>&1
 }
-if command -v corepack >/dev/null 2>&1; then
+if command -v corepack >/dev/null 2>&1 || [[ "$node_install_planned" == "true" ]]; then
   taxiway_step "Enabling Corepack" enable_corepack || true
 fi
 
@@ -74,8 +78,6 @@ printf '  %-10s : %s\n' "java" "$java_version"
 printf '  %-10s : %s\n' "git" "$(git --version 2>/dev/null || echo 'missing')"
 printf '  %-10s : %s\n' "tmux" "$(tmux -V 2>/dev/null || echo 'missing')"
 printf '  %-10s : %s\n' "asciinema" "$(asciinema --version 2>/dev/null || echo 'missing')"
-
-log "Done. If docker was just installed, reconnect the shell to pick up the docker group."
 
 # --- tmux configuration ---
 TMUX_CONF="$HOME/.tmux.conf"
