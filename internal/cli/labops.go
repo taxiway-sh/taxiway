@@ -423,10 +423,18 @@ func markPhase(state *RootState, stateDir, id string, phase phases.Phase) error 
 
 // execScriptWithRef runs a script inside the lab identified by ref.
 func execScriptWithRef(ctx context.Context, state *RootState, ref config.LabRef, scriptPath string, env map[string]string) error {
-	return execScriptToWithRef(ctx, state, ref, scriptPath, os.Stdout, os.Stderr, env)
+	return execScriptToWithRefMode(ctx, state, ref, scriptPath, os.Stdout, os.Stderr, env, false)
 }
 
 func execScriptToWithRef(ctx context.Context, state *RootState, ref config.LabRef, scriptPath string, stdout, stderr io.Writer, env map[string]string) error {
+	return execScriptToWithRefMode(ctx, state, ref, scriptPath, stdout, stderr, env, false)
+}
+
+func execPlannableScriptToWithRef(ctx context.Context, state *RootState, ref config.LabRef, scriptPath string, stdout, stderr io.Writer, env map[string]string) error {
+	return execScriptToWithRefMode(ctx, state, ref, scriptPath, stdout, stderr, env, true)
+}
+
+func execScriptToWithRefMode(ctx context.Context, state *RootState, ref config.LabRef, scriptPath string, stdout, stderr io.Writer, env map[string]string, plannable bool) error {
 	id := idName(ref.Lab)
 	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
 	jsonlPath := driver.EventsJSONLPath(stateDir, id)
@@ -458,16 +466,23 @@ func execScriptToWithRef(ctx context.Context, state *RootState, ref config.LabRe
 	// by default. Passing them via `env VAR=val bash script.sh` in the argv
 	// is the portable solution that works with any SSH configuration.
 	var argv []string
-	if len(env) > 0 {
+	execEnv := make(map[string]string, len(env)+1)
+	for key, value := range env {
+		execEnv[key] = value
+	}
+	if state.Flags.DryRun && plannable {
+		execEnv["TAXIWAY_EXECUTION_MODE"] = "plan"
+	}
+	if len(execEnv) > 0 {
 		argv = append(argv, "env")
 		// Sort keys for deterministic ordering (important for tests and logs).
-		keys := make([]string, 0, len(env))
-		for k := range env {
+		keys := make([]string, 0, len(execEnv))
+		for k := range execEnv {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
-			argv = append(argv, k+"="+env[k])
+			argv = append(argv, k+"="+execEnv[k])
 		}
 	}
 	argv = append(argv, "bash", labScript)
@@ -475,10 +490,11 @@ func execScriptToWithRef(ctx context.Context, state *RootState, ref config.LabRe
 	req := driver.ExecRequest{
 		Workdir: LabRepoRoot,
 		Argv:    argv,
+		Inspect: state.Flags.DryRun && plannable,
 		Stdout:  stdout,
 		Stderr:  stderr,
 		Events:  evSink,
-		Env:     env, // still set for drivers that do forward env (e.g. mock)
+		Env:     execEnv, // still set for drivers that do forward env (e.g. mock)
 	}
 
 	d, err := driverForRef(state, ref)

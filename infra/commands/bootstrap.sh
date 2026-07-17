@@ -7,17 +7,17 @@
 set -euo pipefail
 
 log() { printf '\n\033[1;34m[bootstrap]\033[0m %s\n' "$*"; }
+# shellcheck source=steps.sh
+source "$(dirname "${BASH_SOURCE[0]}")/steps.sh"
 
 export DEBIAN_FRONTEND=noninteractive
 
-log "Updating apt cache"
 # Tolerate transient failures from third-party PPAs that may live on the host
 # — apt-get still refreshes the sources it can reach. If the subsequent
 # install step needs a stale index it will fail with a clear message.
-sudo apt-get update || log "apt-get update had errors (continuing)"
+taxiway_step "Updating apt cache" sudo apt-get update || log "apt-get update had errors (continuing)"
 
-log "Installing base packages"
-sudo apt-get install -y --no-install-recommends \
+base_packages=(
   ca-certificates curl git make tmux asciinema jq unzip \
   bash-completion \
   build-essential pkg-config \
@@ -25,26 +25,39 @@ sudo apt-get install -y --no-install-recommends \
   lsof procps \
   python3 python3-pip python3-venv \
   openjdk-21-jdk-headless
+)
+log "Installing base packages"
+taxiway_plan_detail "${base_packages[*]}"
+taxiway_apply sudo apt-get install -y --no-install-recommends "${base_packages[@]}"
 
-if ! command -v docker >/dev/null 2>&1; then
-  log "Installing Docker"
+install_docker() {
   curl -fsSL https://get.docker.com | sh
   sudo usermod -aG docker "$USER"
+}
+
+if ! command -v docker >/dev/null 2>&1; then
+  taxiway_step "Installing Docker" install_docker
 else
   log "Docker already installed ($(docker --version))"
 fi
 
-if ! command -v node >/dev/null 2>&1; then
-  log "Installing Node.js 22"
+install_node() {
   curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
   sudo apt-get install -y nodejs
+}
+
+if ! command -v node >/dev/null 2>&1; then
+  taxiway_step "Installing Node.js 22" install_node
 else
   log "Node already installed ($(node --version))"
 fi
 
 # Enable corepack so pnpm/yarn are available when a workspace asks for them.
+enable_corepack() {
+  sudo corepack enable >/dev/null 2>&1
+}
 if command -v corepack >/dev/null 2>&1; then
-  sudo corepack enable >/dev/null 2>&1 || true
+  taxiway_step "Enabling Corepack" enable_corepack || true
 fi
 
 log "Toolchain summary"
@@ -61,17 +74,19 @@ log "Done. If docker was just installed, reconnect the shell to pick up the dock
 
 # --- tmux configuration ---
 TMUX_CONF="$HOME/.tmux.conf"
+enable_tmux_mouse() {
+  echo "set -g mouse on" >> "$TMUX_CONF"
+}
 if ! grep -qF "set -g mouse on" "$TMUX_CONF" 2>/dev/null; then
-    echo "set -g mouse on" >> "$TMUX_CONF"
-    echo "[bootstrap] tmux mouse support enabled in $TMUX_CONF"
+    taxiway_step "Enabling tmux mouse support in $TMUX_CONF" enable_tmux_mouse
 else
-    echo "[bootstrap] tmux mouse support already configured, skipping"
+    log "tmux mouse support already configured, skipping"
 fi
 
 
 # --- taxiway env: source per-lab managed env if present ---
 TAXIWAY_PROFILE_MARKER='# >>> taxiway-managed: do not edit between markers'
-if ! grep -qF "$TAXIWAY_PROFILE_MARKER" "$HOME/.profile" 2>/dev/null; then
+add_taxiway_profile_block() {
   cat >> "$HOME/.profile" << 'EOF'
 
 # >>> taxiway-managed: do not edit between markers
@@ -82,7 +97,9 @@ if [ -f "$HOME/.config/taxiway/env" ]; then
 fi
 # <<< taxiway-managed
 EOF
-  echo "[bootstrap] taxiway env block added to ~/.profile"
+}
+if ! grep -qF "$TAXIWAY_PROFILE_MARKER" "$HOME/.profile" 2>/dev/null; then
+  taxiway_step "Adding the Taxiway environment block to ~/.profile" add_taxiway_profile_block
 else
-  echo "[bootstrap] taxiway env block already present in ~/.profile, skipping"
+  log "Taxiway environment block already present in ~/.profile, skipping"
 fi

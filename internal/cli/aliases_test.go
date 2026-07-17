@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -364,7 +365,6 @@ func TestFlatVerbs_DryRunDoesNotExecuteOrMarkPhases(t *testing.T) {
 		phase phases.Phase
 		args  []string
 	}{
-		{name: "bootstrap", phase: phases.PhaseBootstrap, args: []string{"bootstrap", "gastown", "--dry-run"}},
 		{name: "install", phase: phases.PhaseInstall, args: []string{"install", "gastown", "--dry-run"}},
 		{name: "verify", phase: phases.PhaseVerify, args: []string{"verify", "gastown", "--dry-run"}},
 		{name: "gateway", phase: phases.PhaseGateway, args: []string{"gateway", "gastown", "--dry-run"}},
@@ -384,6 +384,41 @@ func TestFlatVerbs_DryRunDoesNotExecuteOrMarkPhases(t *testing.T) {
 			require.False(t, phases.Done(stateDir, id, tt.phase), "dry-run must not mark phase %s", tt.phase)
 		})
 	}
+}
+
+func TestBootstrapDryRunPrintsSemanticSteps(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	profilePath := filepath.Join(home, ".profile")
+	tmuxPath := filepath.Join(home, ".tmux.conf")
+	require.NoError(t, os.WriteFile(profilePath, []byte("existing profile\n"), 0o644))
+	require.NoError(t, os.WriteFile(tmuxPath, []byte("existing tmux config\n"), 0o644))
+
+	root, state, _, stdout, stderr := buildAliasTestRoot(t)
+	id := createAliasLab(t, state, "gastown")
+
+	for _, name := range []string{"bootstrap.sh", "steps.sh"} {
+		data, err := os.ReadFile(filepath.Join("..", "..", "infra", "commands", name))
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(filepath.Join(state.RepoDir, "infra", "commands", name), data, 0o755))
+	}
+
+	out, _, err := execAlias(t, root, stdout, stderr, "bootstrap", "gastown", "--dry-run")
+	require.NoError(t, err)
+	plainOut := strings.NewReplacer("\x1b[1;34m", "", "\x1b[0m", "").Replace(out)
+	require.Contains(t, plainOut, `Dry-run for phase "bootstrap" on lab "gastown"`)
+	require.Contains(t, plainOut, "[bootstrap] Updating apt cache")
+	require.Contains(t, plainOut, "[bootstrap] Installing base packages")
+	require.Contains(t, plainOut, "[bootstrap] Toolchain summary")
+	require.Contains(t, plainOut, "No changes were made.")
+	require.NotContains(t, plainOut, "docker: Exec")
+	require.False(t, phases.Done(config.StateDir(state.Flags.StateDir, state.RepoDir), id, phases.PhaseBootstrap))
+	profile, err := os.ReadFile(profilePath)
+	require.NoError(t, err)
+	require.Equal(t, "existing profile\n", string(profile))
+	tmuxConfig, err := os.ReadFile(tmuxPath)
+	require.NoError(t, err)
+	require.Equal(t, "existing tmux config\n", string(tmuxConfig))
 }
 
 func TestFlatVerbs_GatewayDryRunDoesNotCreateHostState(t *testing.T) {

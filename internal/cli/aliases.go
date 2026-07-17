@@ -422,15 +422,21 @@ func newBootstrapCmd(state *RootState) *cobra.Command {
 			}
 			return validateLabArg(a[0])
 		},
-		RunE: func(_ *cobra.Command, a []string) error {
+		RunE: func(cmd *cobra.Command, a []string) error {
 			ctx := context.Background()
 			id := idName(a[0])
 			ref, err := loadLabRef(ctx, state, id)
 			if err != nil {
 				return err
 			}
-			if err := execScriptWithRef(ctx, state, ref, config.BootstrapScript(state.RepoDir), nil); err != nil {
+			if state.Flags.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "Dry-run for phase %q on lab %q\n", phases.PhaseBootstrap, ref.Lab)
+			}
+			if err := execPlannableScriptToWithRef(ctx, state, ref, config.BootstrapScript(state.RepoDir), cmd.OutOrStdout(), cmd.ErrOrStderr(), nil); err != nil {
 				return err
+			}
+			if state.Flags.DryRun {
+				fmt.Fprintln(cmd.OutOrStdout(), "\nNo changes were made.")
 			}
 			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
 			return markPhase(state, stateDir, id, phases.PhaseBootstrap)
