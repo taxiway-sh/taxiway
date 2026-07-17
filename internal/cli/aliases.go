@@ -170,7 +170,7 @@ func newStartCmd(state *RootState) *cobra.Command {
 			}
 			return validateLabArg(a[0])
 		},
-		RunE: func(_ *cobra.Command, a []string) error {
+		RunE: func(cmd *cobra.Command, a []string) error {
 			ctx := context.Background()
 			id := idName(a[0])
 			ref, err := loadLabRef(ctx, state, id)
@@ -182,6 +182,9 @@ func newStartCmd(state *RootState) *cobra.Command {
 			}
 			if ref.Orch == "" {
 				return fmt.Errorf("lab %q has no orchestrator type; re-create with: taxiway up %s --type <orch>", a[0], a[0])
+			}
+			if state.Flags.DryRun {
+				return planSinglePhase(ctx, cmd, state, ref, phases.PhaseStart)
 			}
 			script, err := config.StartScript(state.RepoDir, ref.Orch)
 			if err != nil {
@@ -279,6 +282,9 @@ func newWorkspaceCmd(state *RootState) *cobra.Command {
 			if !workspaceConfigured(ref) {
 				fmt.Fprintln(cmd.OutOrStdout(), "No repo configured for this lab — skipping workspace phase")
 				return nil
+			}
+			if state.Flags.DryRun {
+				return planSinglePhase(ctx, cmd, state, ref, phases.PhaseWorkspace)
 			}
 			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
 			if err := runPhase(ctx, state, ref, phases.PhaseWorkspace); err != nil {

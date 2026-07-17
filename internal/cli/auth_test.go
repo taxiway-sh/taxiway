@@ -66,8 +66,10 @@ func TestFlatVerbs_AuthDryRunDoesNotWriteEventsOrCredentials(t *testing.T) {
 	addAuthScript(t, state, "claude-code")
 	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
 
-	_, _, err := execAlias(t, root, stdout, stderr, "auth", "gastown", "--dry-run")
+	out, _, err := execAlias(t, root, stdout, stderr, "auth", "gastown", "--dry-run")
 	require.NoError(t, err)
+	require.Contains(t, out, "[claude-code-auth] Checking authentication")
+	require.Contains(t, out, "No changes were made.")
 	require.NoFileExists(t, driver.EventsJSONLPath(stateDir, id))
 	require.Empty(t, mock.CopyLog)
 	require.Empty(t, mock.InteractiveExecLog)

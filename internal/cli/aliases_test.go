@@ -33,7 +33,11 @@ func buildAliasTestRoot(t *testing.T) (*cobra.Command, *RootState, *driver.MockD
 	// gastown has start.sh; codex does not in this test fixture (for TestStart_MissingScript).
 	require.NoError(t, os.WriteFile(
 		filepath.Join(tmp, "orchestrators", "gastown", "start.sh"),
-		[]byte("#!/bin/bash\necho start\n"), 0755,
+		[]byte("#!/bin/bash\nif [[ \"$TAXIWAY_EXECUTION_MODE\" == plan ]]; then echo \"[gastown-start] Starting tmux session 'gastown'\"; exit 0; fi\necho start\n"), 0755,
+	))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(tmp, "orchestrators", "gastown", "workspace.sh"),
+		[]byte("#!/bin/bash\nif [[ \"$TAXIWAY_EXECUTION_MODE\" == plan ]]; then echo '[gastown-workspace] Cloning workspace repository'; exit 0; fi\necho workspace\n"), 0755,
 	))
 	for _, p := range []string{"infra/commands"} {
 		require.NoError(t, os.MkdirAll(filepath.Join(tmp, p), 0755))
@@ -407,6 +411,33 @@ func TestFlatVerbs_DryRunPlansInstallAndVerify(t *testing.T) {
 
 			require.NoError(t, err)
 			require.Contains(t, out, fmt.Sprintf("Dry-run for phase %q on lab %q", tt.phase, "gastown"))
+			require.Contains(t, out, tt.label)
+			require.Contains(t, out, "No changes were made.")
+			require.False(t, phases.Done(stateDir, id, tt.phase))
+		})
+	}
+}
+
+func TestFlatVerbs_DryRunPlansWorkspaceAndStart(t *testing.T) {
+	tests := []struct {
+		command string
+		args    []string
+		label   string
+		phase   phases.Phase
+	}{
+		{command: "workspace", args: []string{"workspace", "gastown", "--repo", "https://github.com/acme/project", "--dry-run"}, label: "[gastown-workspace] Cloning workspace repository", phase: phases.PhaseWorkspace},
+		{command: "start", args: []string{"start", "gastown", "--dry-run"}, label: "[gastown-start] Starting tmux session 'gastown'", phase: phases.PhaseStart},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.command, func(t *testing.T) {
+			root, state, _, stdout, stderr := buildAliasTestRoot(t)
+			id := createAliasLab(t, state, "gastown")
+			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+
+			out, _, err := execAlias(t, root, stdout, stderr, tt.args...)
+
+			require.NoError(t, err)
 			require.Contains(t, out, tt.label)
 			require.Contains(t, out, "No changes were made.")
 			require.False(t, phases.Done(stateDir, id, tt.phase))

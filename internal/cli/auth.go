@@ -53,7 +53,7 @@ func newLabAuthCmd(state *RootState) *cobra.Command {
 			}
 			return nil
 		},
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 			id := idName(args[0])
 			ref, err := loadLabRef(ctx, state, id)
@@ -62,6 +62,22 @@ func newLabAuthCmd(state *RootState) *cobra.Command {
 			}
 			if _, err := applySettingsFromFlags(ctx, state, id, &ref, setValues, clearSet); err != nil {
 				return err
+			}
+			if state.Flags.DryRun {
+				d, err := driverForRef(state, ref)
+				if err != nil {
+					return err
+				}
+				exists, err := d.Exists(ctx, id)
+				if err != nil {
+					return err
+				}
+				plan := newDryRunPlan(cmd.OutOrStdout(), "phase", string(phases.PhaseAuth), ref.Lab)
+				if err := planAuth(ctx, state, ref, cmd.OutOrStdout(), cmd.ErrOrStderr(), args[1:], phasePlanOptions{InspectionAvailable: exists}); err != nil {
+					return err
+				}
+				plan.Finish()
+				return nil
 			}
 			if err := runAuth(ctx, state, ref, true, args[1:]...); err != nil {
 				return err

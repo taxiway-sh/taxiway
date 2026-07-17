@@ -201,7 +201,12 @@ func addAgentScript(t *testing.T, state *RootState, agent, script string) {
 
 func addAuthScript(t *testing.T, state *RootState, agent string) {
 	t.Helper()
-	addAgentScript(t, state, agent, "auth.sh")
+	dir := filepath.Join(state.RepoDir, "agents", agent)
+	require.NoError(t, os.MkdirAll(dir, 0755))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(dir, "auth.sh"),
+		[]byte("#!/bin/bash\nif [[ \"$TAXIWAY_EXECUTION_MODE\" == plan ]]; then echo '["+agent+"-auth] Checking authentication'; exit 0; fi\necho agent-auth.sh\n"), 0755,
+	))
 }
 
 func writeAgentManifest(t *testing.T, state *RootState, agent, content string) {

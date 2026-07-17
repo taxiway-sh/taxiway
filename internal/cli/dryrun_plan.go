@@ -116,9 +116,58 @@ func planPhase(ctx context.Context, state *RootState, ref config.LabRef, phase p
 			return err
 		}
 		return planAgentScripts(ctx, state, ref, "verify.sh", stdout, stderr, baseEnv, opts)
+	case phases.PhaseWorkspace:
+		if !workspaceConfigured(ref) {
+			return nil
+		}
+		script, err := workspaceScript(state.RepoDir, ref.Orch)
+		if err != nil || script == "" {
+			return err
+		}
+		return planScript(ctx, state, ref, script, stdout, stderr, baseEnv, opts)
+	case phases.PhaseAuth:
+		return planAuth(ctx, state, ref, stdout, stderr, nil, opts)
+	case phases.PhaseStart:
+		script, err := config.StartScript(state.RepoDir, ref.Orch)
+		if err != nil {
+			return err
+		}
+		return planScript(ctx, state, ref, script, stdout, stderr, baseEnv, opts)
 	default:
 		return fmt.Errorf("phase %q does not have a semantic dry-run plan", phase)
 	}
+}
+
+func planAuth(ctx context.Context, state *RootState, ref config.LabRef, stdout, stderr io.Writer, requestedAgents []string, opts phasePlanOptions) error {
+	agents := requestedAgents
+	if len(agents) == 0 {
+		manifest, err := config.LoadOrchManifest(state.RepoDir, ref.Orch)
+		if err != nil {
+			return err
+		}
+		agents = manifestAgents(manifest)
+	}
+	baseEnv, err := buildBaseEnv(ref)
+	if err != nil {
+		return err
+	}
+	for _, agent := range agents {
+		script, err := agentScript(state.RepoDir, agent, "auth.sh")
+		if err != nil {
+			return err
+		}
+		if script == "" {
+			return fmt.Errorf("auth agent %q has no agents/%s/auth.sh", agent, agent)
+		}
+		env := agentEnv(baseEnv, agent)
+		if _, err := injectAgentAuthEnv(state.RepoDir, agent, env); err != nil {
+			return err
+		}
+		if err := planScript(ctx, state, ref, script, stdout, stderr, env, opts); err != nil {
+			return fmt.Errorf("auth agent %q plan: %w", agent, err)
+		}
+	}
+	return nil
 }
 
 func planScript(ctx context.Context, state *RootState, ref config.LabRef, script string, stdout, stderr io.Writer, env map[string]string, opts phasePlanOptions) error {

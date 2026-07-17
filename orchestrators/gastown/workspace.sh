@@ -20,13 +20,13 @@ export PATH="$HOME/.local/bin:$PATH"
 
 # shellcheck source=../../infra/trace/events.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../../infra/trace/events.sh" 2>/dev/null || true
-# shellcheck source=../../infra/workspace/clone.sh
-source "$(dirname "${BASH_SOURCE[0]}")/../../infra/workspace/clone.sh"
-lab_emit_event phase start
+# shellcheck source=../../infra/commands/steps.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../infra/commands/steps.sh"
+
+log() { printf '\n\033[1;34m[gastown-workspace]\033[0m %s\n' "$*"; }
 
 if [[ -z "${TAXIWAY_REPO_URL:-}" ]]; then
     echo "No repo configured for this lab — skipping workspace phase"
-    lab_emit_event phase done
     exit 0
 fi
 
@@ -60,6 +60,31 @@ fi
 
 HQ_DIR="${TAXIWAY_HQ_DIR:-/lab/work/gt}"
 MARKER="$HQ_DIR/.taxiway-hq-initialized"
+
+if taxiway_is_plan; then
+    if taxiway_can_inspect && [[ -f "$MARKER" ]]; then
+        log "Gas Town HQ already initialized at $HQ_DIR"
+    else
+        log "Initializing Gas Town HQ at $HQ_DIR"
+    fi
+    log "Applying Gas Town profile settings"
+    log "Adding rig '$TAXIWAY_RIG_NAME' from ${TAXIWAY_RIG_SOURCE_URL:-$TAXIWAY_REPO_URL} when missing"
+    if [[ -n "${TAXIWAY_REPO_REF:-}" ]]; then
+        log "Checking out rig ref ${TAXIWAY_REPO_REF}"
+    fi
+    crew_dir="$HQ_DIR/$TAXIWAY_RIG_NAME/crew/$TAXIWAY_CREW_NAME"
+    if taxiway_can_inspect && [[ -d "$crew_dir" ]]; then
+        log "Crew workspace '$TAXIWAY_CREW_NAME' already exists"
+    else
+        log "Adding crew workspace '$TAXIWAY_CREW_NAME' for rig '$TAXIWAY_RIG_NAME'"
+    fi
+    taxiway_plan_detail "TAXIWAY_WORKSPACE_DIR=$crew_dir"
+    exit 0
+fi
+
+# shellcheck source=../../infra/workspace/clone.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../infra/workspace/clone.sh"
+lab_emit_event phase start
 
 prepare_beads_dir() {
     mkdir -p "$HQ_DIR/.beads"
