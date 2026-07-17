@@ -65,7 +65,12 @@ printf '  %-10s : %s\n' "docker" "$(docker --version 2>/dev/null || echo 'missin
 printf '  %-10s : %s\n' "node" "$(node --version 2>/dev/null || echo 'missing')"
 printf '  %-10s : %s\n' "npm" "$(npm --version 2>/dev/null || echo 'missing')"
 printf '  %-10s : %s\n' "python" "$(python3 --version 2>/dev/null || echo 'missing')"
-printf '  %-10s : %s\n' "java" "$(java -version 2>&1 | head -n1 || echo 'missing')"
+if command -v java >/dev/null 2>&1; then
+  java_version="$(java -version 2>&1 | head -n1)"
+else
+  java_version="missing"
+fi
+printf '  %-10s : %s\n' "java" "$java_version"
 printf '  %-10s : %s\n' "git" "$(git --version 2>/dev/null || echo 'missing')"
 printf '  %-10s : %s\n' "tmux" "$(tmux -V 2>/dev/null || echo 'missing')"
 printf '  %-10s : %s\n' "asciinema" "$(asciinema --version 2>/dev/null || echo 'missing')"

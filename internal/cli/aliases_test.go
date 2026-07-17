@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -389,6 +390,13 @@ func TestFlatVerbs_DryRunDoesNotExecuteOrMarkPhases(t *testing.T) {
 func TestBootstrapDryRunPrintsSemanticSteps(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	binDir := t.TempDir()
+	for _, name := range []string{"bash", "dirname", "env", "head"} {
+		resolved, err := exec.LookPath(name)
+		require.NoError(t, err)
+		require.NoError(t, os.Symlink(resolved, filepath.Join(binDir, name)))
+	}
+	t.Setenv("PATH", binDir)
 	profilePath := filepath.Join(home, ".profile")
 	tmuxPath := filepath.Join(home, ".tmux.conf")
 	require.NoError(t, os.WriteFile(profilePath, []byte("existing profile\n"), 0o644))
@@ -410,6 +418,7 @@ func TestBootstrapDryRunPrintsSemanticSteps(t *testing.T) {
 	require.Contains(t, plainOut, "[bootstrap] Updating apt cache")
 	require.Contains(t, plainOut, "[bootstrap] Installing base packages")
 	require.Contains(t, plainOut, "[bootstrap] Toolchain summary")
+	require.Contains(t, plainOut, "java       : missing")
 	require.Contains(t, plainOut, "No changes were made.")
 	require.NotContains(t, plainOut, "docker: Exec")
 	require.False(t, phases.Done(config.StateDir(state.Flags.StateDir, state.RepoDir), id, phases.PhaseBootstrap))
