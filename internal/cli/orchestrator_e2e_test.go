@@ -712,7 +712,7 @@ func runE2EScriptDryRunStep(
 		for _, label := range expected {
 			require.Contains(t, output, label)
 		}
-		require.Contains(t, output, "No changes were made.")
+		require.Equal(t, 1, strings.Count(output, "No changes were made."))
 		runE2EAssert(t, "assert:phase-markers-preserved", func(t *testing.T) {
 			require.Equal(t, phaseStateBefore, captureE2EPhaseState(stateDir, id))
 		})

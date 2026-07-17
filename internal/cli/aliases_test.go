@@ -445,6 +445,18 @@ func TestFlatVerbs_DryRunPlansWorkspaceAndStart(t *testing.T) {
 	}
 }
 
+func TestWorkspaceDryRunWithoutRepositoryStillRendersACompletePlan(t *testing.T) {
+	root, state, _, stdout, stderr := buildAliasTestRoot(t)
+	createAliasLab(t, state, "gastown")
+
+	out, _, err := execAlias(t, root, stdout, stderr, "workspace", "gastown", "--dry-run")
+
+	require.NoError(t, err)
+	require.Contains(t, out, `Dry-run for phase "workspace" on lab "gastown"`)
+	require.Contains(t, out, "No repository configured; workspace phase would be skipped")
+	require.Equal(t, 1, strings.Count(out, "No changes were made."))
+}
+
 func TestFlatVerbs_DryRunPlansGoLifecycleOperations(t *testing.T) {
 	tests := []struct {
 		command string

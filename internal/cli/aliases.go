@@ -298,12 +298,12 @@ func newWorkspaceCmd(state *RootState) *cobra.Command {
 			if err := applyWorkspaceFlags(ctx, state, id, &ref, repo, repoRef, repoPath); err != nil {
 				return err
 			}
+			if state.Flags.DryRun {
+				return planSinglePhase(ctx, cmd, state, ref, phases.PhaseWorkspace)
+			}
 			if !workspaceConfigured(ref) {
 				fmt.Fprintln(cmd.OutOrStdout(), "No repo configured for this lab — skipping workspace phase")
 				return nil
-			}
-			if state.Flags.DryRun {
-				return planSinglePhase(ctx, cmd, state, ref, phases.PhaseWorkspace)
 			}
 			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
 			if err := runPhase(ctx, state, ref, phases.PhaseWorkspace); err != nil {

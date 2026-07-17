@@ -94,6 +94,9 @@ func planPhase(ctx context.Context, state *RootState, ref config.LabRef, phase p
 	if err != nil {
 		return err
 	}
+	if opts.ClearProfile && (phase == phases.PhaseWorkspace || phase == phases.PhaseStart) {
+		(&dryRunPlan{out: stdout}).Step("profile", "Clearing the configured orchestrator profile")
+	}
 
 	switch phase {
 	case phases.PhaseCreate:
@@ -120,6 +123,7 @@ func planPhase(ctx context.Context, state *RootState, ref config.LabRef, phase p
 		return planAgentScripts(ctx, state, ref, "verify.sh", stdout, stderr, baseEnv, opts)
 	case phases.PhaseWorkspace:
 		if !workspaceConfigured(ref) {
+			(&dryRunPlan{out: stdout}).Step("workspace", "No repository configured; workspace phase would be skipped")
 			return nil
 		}
 		script, err := workspaceScript(state.RepoDir, ref.Orch)

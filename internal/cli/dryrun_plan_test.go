@@ -122,3 +122,25 @@ func TestDryRunInstallAndVerifyPlansKeepOrchestratorBeforeAgents(t *testing.T) {
 		})
 	}
 }
+
+func TestPlanPhaseAnnouncesProfileClear(t *testing.T) {
+	repoDir := t.TempDir()
+	startDir := filepath.Join(repoDir, "orchestrators", "codex")
+	require.NoError(t, os.MkdirAll(startDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(startDir, "start.sh"), []byte("#!/bin/bash\nexit 0\n"), 0o755))
+	state := &RootState{
+		RepoDir: repoDir,
+		Flags:   GlobalFlags{DryRun: true, StateDir: t.TempDir()},
+		Driver:  driver.NewDryRun(driver.NewMockDriver(t.TempDir())),
+	}
+	ref := config.LabRef{Lab: "demo", Orch: "codex", Driver: "mock"}
+	var stdout, stderr bytes.Buffer
+
+	err := planPhase(context.Background(), state, ref, phases.PhaseStart, &stdout, &stderr, phasePlanOptions{
+		InspectionAvailable: false,
+		ClearProfile:        true,
+	})
+
+	require.NoError(t, err)
+	require.Contains(t, stdout.String(), "Clearing the configured orchestrator profile")
+}
