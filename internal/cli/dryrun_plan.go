@@ -96,6 +96,8 @@ func planPhase(ctx context.Context, state *RootState, ref config.LabRef, phase p
 	}
 
 	switch phase {
+	case phases.PhaseCreate:
+		return planCreate(state, ref, &dryRunPlan{out: stdout})
 	case phases.PhaseBootstrap:
 		return planScript(ctx, state, ref, config.BootstrapScript(state.RepoDir), stdout, stderr, baseEnv, opts)
 	case phases.PhaseInstall:
@@ -133,8 +135,68 @@ func planPhase(ctx context.Context, state *RootState, ref config.LabRef, phase p
 			return err
 		}
 		return planScript(ctx, state, ref, script, stdout, stderr, baseEnv, opts)
+	case phases.PhaseGateway:
+		return planGateway(state, ref, &dryRunPlan{out: stdout})
 	default:
 		return fmt.Errorf("phase %q does not have a semantic dry-run plan", phase)
+	}
+}
+
+func planCreate(state *RootState, ref config.LabRef, plan *dryRunPlan) error {
+	driverName := ref.Driver
+	if driverName == "" {
+		driverName = state.Driver.Name()
+	}
+	plan.Step("create", fmt.Sprintf("Creating %s lab runtime", driverDisplayName(driverName)))
+	plan.Step("create", "Preparing Taxiway lab state")
+	plan.Detail("runtime reference, workspace directories, and lifecycle metadata")
+	return nil
+}
+
+func planGateway(state *RootState, ref config.LabRef, plan *dryRunPlan) error {
+	plan.Step("gateway", "Configuring lab gateway environment")
+	plan.Detail(fmt.Sprintf("lab: %s", ref.Lab))
+	plan.Step("gateway", "Reconciling LiteLLM sidecar")
+	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+	if labGatewayStateExists(stateDir, ref) {
+		plan.Detail("existing sidecar state will be inspected and updated")
+	} else {
+		plan.Detail("sidecar state will be created")
+	}
+	return nil
+}
+
+func planDown(state *RootState, ref config.LabRef, plan *dryRunPlan) error {
+	plan.Step("down", "Stopping lab runtime")
+	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+	plan.Step("down", "Stopping LiteLLM sidecar")
+	if !labGatewayStateExists(stateDir, ref) {
+		plan.Detail("no persisted gateway state is currently present")
+	}
+	return nil
+}
+
+func planRemove(state *RootState, ref config.LabRef, plan *dryRunPlan) error {
+	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+	if labGatewayStateExists(stateDir, ref) {
+		plan.Step("rm", "Removing LiteLLM sidecar")
+		plan.Step("rm", "Removing Langfuse project")
+	}
+	plan.Step("rm", "Deleting lab runtime and storage")
+	plan.Step("rm", "Clearing lifecycle phase markers")
+	return nil
+}
+
+func driverDisplayName(name string) string {
+	switch name {
+	case "docker":
+		return "Docker"
+	case "lima":
+		return "Lima"
+	case "mock":
+		return "Mock"
+	default:
+		return name
 	}
 }
 

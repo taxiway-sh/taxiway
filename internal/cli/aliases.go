@@ -34,12 +34,23 @@ func newCreateCmd(state *RootState) *cobra.Command {
 			}
 			return validateLabArg(a[0])
 		},
-		RunE: func(_ *cobra.Command, a []string) error {
+		RunE: func(cmd *cobra.Command, a []string) error {
 			ref, err := makeLabRef(a[0], orchType)
 			if err != nil {
 				return err
 			}
 			ctx := context.Background()
+			if state.Flags.DryRun {
+				if ref.Driver == "" {
+					ref.Driver = state.Driver.Name()
+				}
+				plan := newDryRunPlan(cmd.OutOrStdout(), "phase", string(phases.PhaseCreate), ref.Lab)
+				if err := planCreate(state, ref, plan); err != nil {
+					return err
+				}
+				plan.Finish()
+				return nil
+			}
 			if err := labUp(ctx, state, ref, os.Stderr); err != nil {
 				return err
 			}
@@ -99,6 +110,14 @@ func newRmCmd(state *RootState) *cobra.Command {
 			if hasFork {
 				forkName := repoBasename(ref.Workspace.Fork)
 				fmt.Fprintf(cmd.OutOrStdout(), "Warning: lab %q has a workspace fork that must be deleted manually:\n  Repo: %s\n  URL:  %s\n\n", lab, forkName, ref.Workspace.Fork)
+			}
+			if state.Flags.DryRun {
+				plan := newDryRunPlan(cmd.OutOrStdout(), "operation", "rm", ref.Lab)
+				if err := planRemove(state, ref, plan); err != nil {
+					return err
+				}
+				plan.Finish()
+				return nil
 			}
 			if !yes && !state.Flags.DryRun {
 				fmt.Fprintf(cmd.OutOrStdout(), "Delete lab %q? [y/N] ", lab)
@@ -237,7 +256,7 @@ func newGatewayCmd(state *RootState) *cobra.Command {
 				return err
 			}
 			if state.Flags.DryRun {
-				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] Would reconcile gateway for lab %q.\n", ref.Lab)
+				return planSinglePhase(ctx, cmd, state, ref, phases.PhaseGateway)
 			}
 			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
 			if err := reconcileGateway(ctx, state, ref); err != nil {
@@ -473,7 +492,7 @@ func newDoctorCmd(state *RootState) *cobra.Command {
 			}
 			return validateLabArg(a[0])
 		},
-		RunE: func(_ *cobra.Command, a []string) error {
+		RunE: func(cmd *cobra.Command, a []string) error {
 			ctx := context.Background()
 			id := idName(a[0])
 			ref, err := loadLabRef(ctx, state, id)
@@ -505,7 +524,7 @@ func newResetCmd(state *RootState) *cobra.Command {
 			}
 			return validateLabArg(a[0])
 		},
-		RunE: func(_ *cobra.Command, a []string) error {
+		RunE: func(cmd *cobra.Command, a []string) error {
 			ctx := context.Background()
 			id := idName(a[0])
 			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
@@ -517,6 +536,15 @@ func newResetCmd(state *RootState) *cobra.Command {
 			ref, err := loadLabRef(ctx, state, id)
 			if err != nil {
 				return err
+			}
+			if state.Flags.DryRun {
+				plan := newDryRunPlan(cmd.OutOrStdout(), "operation", "reset", ref.Lab)
+				if err := execPlannableScriptToWithRef(ctx, state, ref, config.ResetScript(state.RepoDir), cmd.OutOrStdout(), cmd.ErrOrStderr(), nil); err != nil {
+					return err
+				}
+				plan.Step("reset", "Clearing lifecycle phase markers")
+				plan.Finish()
+				return nil
 			}
 			var env map[string]string
 			if yes {

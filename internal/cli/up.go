@@ -1000,20 +1000,25 @@ func newDownCmd(state *RootState) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 			id := idName(args[0])
-			fmt.Fprintf(cmd.ErrOrStderr(), "Stopping lab %q\n", args[0])
 			ref, err := loadLabRef(ctx, state, id)
 			if err != nil {
 				return err
 			}
+			if state.Flags.DryRun {
+				plan := newDryRunPlan(cmd.OutOrStdout(), "operation", "down", ref.Lab)
+				if err := planDown(state, ref, plan); err != nil {
+					return err
+				}
+				plan.Finish()
+				return nil
+			}
+			fmt.Fprintf(cmd.ErrOrStderr(), "Stopping lab %q\n", args[0])
 			d, err := driverForRef(state, ref)
 			if err != nil {
 				return err
 			}
 			if err := d.Stop(ctx, id); err != nil {
 				return err
-			}
-			if state.Flags.DryRun {
-				return nil
 			}
 			return stopLabLiteLLMSidecarForDown(ctx, state, ref)
 		},

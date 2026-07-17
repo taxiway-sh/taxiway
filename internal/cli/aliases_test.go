@@ -42,13 +42,13 @@ func buildAliasTestRoot(t *testing.T) (*cobra.Command, *RootState, *driver.MockD
 	for _, p := range []string{"infra/commands"} {
 		require.NoError(t, os.MkdirAll(filepath.Join(tmp, p), 0755))
 	}
-	for _, script := range []string{
-		"infra/commands/bootstrap.sh",
-		"infra/commands/doctor.sh",
-		"infra/commands/reset.sh",
-	} {
+	for _, script := range []string{"infra/commands/bootstrap.sh", "infra/commands/doctor.sh"} {
 		require.NoError(t, os.WriteFile(filepath.Join(tmp, script), []byte("#!/bin/bash\necho ok\n"), 0755))
 	}
+	require.NoError(t, os.WriteFile(
+		filepath.Join(tmp, "infra/commands/reset.sh"),
+		[]byte("#!/bin/bash\nif [[ \"$TAXIWAY_EXECUTION_MODE\" == plan ]]; then echo '[reset] Stopping workspace services'; echo '[reset] Clearing /lab/work contents'; exit 0; fi\necho ok\n"), 0755,
+	))
 
 	stateDir := filepath.Join(tmp, ".lab-state")
 	mock := driver.NewMockDriver(stateDir)
@@ -445,6 +445,39 @@ func TestFlatVerbs_DryRunPlansWorkspaceAndStart(t *testing.T) {
 	}
 }
 
+func TestFlatVerbs_DryRunPlansGoLifecycleOperations(t *testing.T) {
+	tests := []struct {
+		command string
+		args    []string
+		labels  []string
+		create  bool
+	}{
+		{command: "create", args: []string{"create", "demo", "--type", "gastown", "--dry-run"}, labels: []string{"Creating Mock lab runtime", "Preparing Taxiway lab state"}},
+		{command: "gateway", args: []string{"gateway", "gastown", "--dry-run"}, labels: []string{"Configuring lab gateway environment", "Reconciling LiteLLM sidecar"}, create: true},
+		{command: "down", args: []string{"down", "gastown", "--dry-run"}, labels: []string{"Stopping lab runtime", "Stopping LiteLLM sidecar"}, create: true},
+		{command: "reset", args: []string{"reset", "gastown", "--dry-run"}, labels: []string{"Stopping workspace services", "Clearing /lab/work contents", "Clearing lifecycle phase markers"}, create: true},
+		{command: "rm", args: []string{"rm", "gastown", "--dry-run"}, labels: []string{"Deleting lab runtime and storage", "Clearing lifecycle phase markers"}, create: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.command, func(t *testing.T) {
+			root, state, _, stdout, stderr := buildAliasTestRoot(t)
+			if tt.create {
+				createAliasLab(t, state, "gastown")
+			}
+
+			out, errOut, err := execAlias(t, root, stdout, stderr, tt.args...)
+
+			require.NoError(t, err)
+			combined := out + errOut
+			for _, label := range tt.labels {
+				require.Contains(t, combined, label)
+			}
+			require.Contains(t, combined, "No changes were made.")
+		})
+	}
+}
+
 func TestBootstrapDryRunPrintsSemanticSteps(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -509,8 +542,9 @@ func TestFlatVerbs_GatewayDryRunDoesNotCreateHostState(t *testing.T) {
 
 	out, _, err := execAlias(t, root, stdout, stderr, "gateway", "gastown", "--dry-run")
 	require.NoError(t, err)
-	require.Contains(t, out, "[dry-run]")
-	require.Contains(t, out, "gateway")
+	require.Contains(t, out, "Configuring lab gateway environment")
+	require.Contains(t, out, "Reconciling LiteLLM sidecar")
+	require.Contains(t, out, "No changes were made.")
 	_, err = os.Stat(labGatewayDir(stateDir, ref))
 	require.ErrorIs(t, err, os.ErrNotExist)
 }
@@ -528,16 +562,17 @@ func TestFlatVerbs_CreateDryRunDoesNotCreateOrMark(t *testing.T) {
 	require.False(t, phases.Done(stateDir, id, phases.PhaseCreate))
 }
 
-func TestFlatVerbs_ResetDryRunKeepsMarkersAndSkipsExec(t *testing.T) {
-	root, state, mock, stdout, stderr := buildAliasTestRoot(t)
+func TestFlatVerbs_ResetDryRunKeepsMarkersAndShowsPlan(t *testing.T) {
+	root, state, _, stdout, stderr := buildAliasTestRoot(t)
 	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
 	id := createAliasLab(t, state, "gastown")
 	require.NoError(t, phases.Mark(stateDir, id, phases.PhaseBootstrap))
 
-	_, _, err := execAlias(t, root, stdout, stderr, "reset", "gastown", "--yes", "--dry-run")
+	out, _, err := execAlias(t, root, stdout, stderr, "reset", "gastown", "--yes", "--dry-run")
 	require.NoError(t, err)
 	require.True(t, phases.Done(stateDir, id, phases.PhaseBootstrap))
-	require.Empty(t, mock.ExecLog)
+	require.Contains(t, out, "Stopping workspace services")
+	require.Contains(t, out, "Clearing lifecycle phase markers")
 }
 
 func TestFlatVerbs_RmDryRunKeepsLabAndMarkers(t *testing.T) {

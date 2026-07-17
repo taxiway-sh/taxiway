@@ -115,4 +115,8 @@ assert_contains "$output" "Starting Gas Town daemon if required"
 assert_contains "$output" "Starting crew workspace"
 assert_contains "$output" "Starting tmux session 'gastown'"
 
+output="$(run_plan "$ROOT_DIR/infra/commands/reset.sh")"
+assert_contains "$output" "Stopping workspace services"
+assert_contains "$output" "Clearing /lab/work contents"
+
 printf 'dry-run plan scripts: OK\n'
