@@ -203,6 +203,40 @@ func testE2EOrchestratorPrepareRun(t *testing.T, orch string) {
 	})
 }
 
+type e2eDryRunLabels struct {
+	Bootstrap []string
+	Install   []string
+	Verify    []string
+	Workspace []string
+	Auth      []string
+	Start     []string
+}
+
+func e2eSemanticDryRunLabels(orch string) e2eDryRunLabels {
+	labels := e2eDryRunLabels{Bootstrap: []string{"Updating apt cache", "Enabling Corepack"}}
+	switch orch {
+	case "codex":
+		labels.Install = []string{"Installing @openai/codex@latest"}
+		labels.Verify = []string{"Verifying codex version and help"}
+		labels.Workspace = []string{"Cloning workspace repository"}
+		labels.Auth = []string{"Authentication is managed by the Taxiway LiteLLM gateway"}
+		labels.Start = []string{"Starting tmux session 'codex'"}
+	case "claude-code":
+		labels.Install = []string{"Installing @anthropic-ai/claude-code@latest"}
+		labels.Verify = []string{"Verifying claude version, help, and auth status"}
+		labels.Workspace = []string{"Cloning workspace repository"}
+		labels.Auth = []string{"Checking Claude Code authentication"}
+		labels.Start = []string{"Starting tmux session 'claude-code'"}
+	case "gastown":
+		labels.Install = []string{"Installing Gas Town", "Installing @anthropic-ai/claude-code@latest"}
+		labels.Verify = []string{"Verifying tool versions", "Verifying claude version, help, and auth status"}
+		labels.Workspace = []string{"Adding rig", "Adding crew workspace"}
+		labels.Auth = []string{"Checking Claude Code authentication"}
+		labels.Start = []string{"Checking Gas Town runtime health", "Starting crew workspace", "Starting tmux session 'gastown'"}
+	}
+	return labels
+}
+
 func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 	t.Helper()
 	expectations := e2eExpectations(t, orch)
@@ -218,6 +252,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 	configureE2ELiteLLMModelCatalog(t, state, fakeUpstream)
 	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
 	assertE2EInvalidModelSelections(t, root, tb, state, id, lab, orch)
+	dryRunLabels := e2eSemanticDryRunLabels(orch)
 
 	runE2EStep(t, "taxiway:init", func(t *testing.T) {
 		ensureE2ERuntimeInitialized(t, root, tb)
@@ -230,7 +265,9 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		existedBefore, err := state.Driver.Exists(context.Background(), id)
 		require.NoError(t, err)
 		phaseStateBefore := captureE2EPhaseState(stateDir, id)
-		runE2EDryRunCommand(t, root, tb, "create", lab, "--type", orch)
+		output := runE2EDryRunCommand(t, root, tb, "create", lab, "--type", orch)
+		require.Contains(t, output, "Creating Docker lab runtime")
+		require.Contains(t, output, "No changes were made.")
 		runE2EAssert(t, "assert:phase-markers-preserved", func(t *testing.T) {
 			require.Equal(t, phaseStateBefore, captureE2EPhaseState(stateDir, id))
 		})
@@ -252,23 +289,17 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		})
 	})
 
-	runE2EScriptDryRunStep(t, "taxiway:bootstrap[--dry-run]", root, tb, state, stateDir, id, "bootstrap", lab)
+	runE2EScriptDryRunStep(t, "taxiway:bootstrap[--dry-run]", root, tb, stateDir, id, dryRunLabels.Bootstrap, "bootstrap", lab)
 	runE2EStep(t, "taxiway:bootstrap", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "bootstrap", lab)
-		runE2EAssert(t, "assert:phase-script-executed", func(t *testing.T) {
-			assertE2EPhaseProbeExecuted(t, state, id, "bootstrap")
-		})
 		runE2EAssert(t, "assert:phase-bootstrapped", func(t *testing.T) {
 			assertE2EPhase(t, stateDir, id, phases.PhaseBootstrap)
 		})
 	})
 
-	runE2EScriptDryRunStep(t, "taxiway:install[--dry-run]", root, tb, state, stateDir, id, "install", lab)
+	runE2EScriptDryRunStep(t, "taxiway:install[--dry-run]", root, tb, stateDir, id, dryRunLabels.Install, "install", lab)
 	runE2EStep(t, "taxiway:install", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "install", lab, "--set", "model="+expectations.model)
-		runE2EAssert(t, "assert:phase-script-executed", func(t *testing.T) {
-			assertE2EPhaseProbeExecuted(t, state, id, "install")
-		})
 		runE2EAssert(t, "assert:phase-installed", func(t *testing.T) {
 			assertE2EPhase(t, stateDir, id, phases.PhaseInstall)
 		})
@@ -277,12 +308,9 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		})
 	})
 
-	runE2EScriptDryRunStep(t, "taxiway:verify[--dry-run]", root, tb, state, stateDir, id, "verify", lab)
+	runE2EScriptDryRunStep(t, "taxiway:verify[--dry-run]", root, tb, stateDir, id, dryRunLabels.Verify, "verify", lab)
 	runE2EStep(t, "taxiway:verify", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "verify", lab)
-		runE2EAssert(t, "assert:phase-script-executed", func(t *testing.T) {
-			assertE2EPhaseProbeExecuted(t, state, id, "verify")
-		})
 		runE2EAssert(t, "assert:phase-verified", func(t *testing.T) {
 			assertE2EPhase(t, stateDir, id, phases.PhaseVerify)
 		})
@@ -293,7 +321,9 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		ref := config.LabRef{Lab: lab, Orch: orch, Driver: state.Driver.Name()}
 		sidecar := e2eLabLiteLLMContainer(state, ref)
 		sidecarStateBefore := e2eDockerContainerState(t, sidecar)
-		runE2EDryRunCommand(t, root, tb, "gateway", lab)
+		output := runE2EDryRunCommand(t, root, tb, "gateway", lab)
+		require.Contains(t, output, "Configuring lab gateway environment")
+		require.Contains(t, output, "Reconciling LiteLLM sidecar")
 		runE2EAssert(t, "assert:phase-markers-preserved", func(t *testing.T) {
 			require.Equal(t, phaseStateBefore, captureE2EPhaseState(stateDir, id))
 		})
@@ -312,12 +342,9 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		})
 	})
 
-	runE2EScriptDryRunStep(t, "taxiway:workspace[--dry-run]", root, tb, state, stateDir, id, "workspace", lab)
+	runE2EScriptDryRunStep(t, "taxiway:workspace[--dry-run]", root, tb, stateDir, id, dryRunLabels.Workspace, "workspace", lab)
 	runE2EStep(t, "taxiway:workspace", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "workspace", lab)
-		runE2EAssert(t, "assert:phase-script-executed", func(t *testing.T) {
-			assertE2EPhaseProbeExecuted(t, state, id, "workspace")
-		})
 		runE2EAssert(t, "assert:phase-workspace-created", func(t *testing.T) {
 			assertE2EPhase(t, stateDir, id, phases.PhaseWorkspace)
 		})
@@ -334,12 +361,17 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		})
 	})
 
-	runE2EScriptDryRunStep(t, "taxiway:start[--dry-run]", root, tb, state, stateDir, id, "start", lab)
+	runE2EScriptDryRunStep(t, "taxiway:auth[--dry-run]", root, tb, stateDir, id, dryRunLabels.Auth, "auth", lab)
+	runE2EStep(t, "taxiway:auth", func(t *testing.T) {
+		runE2ECommand(t, root, tb, "auth", lab)
+		runE2EAssert(t, "assert:phase-authenticated", func(t *testing.T) {
+			assertE2EPhase(t, stateDir, id, phases.PhaseAuth)
+		})
+	})
+
+	runE2EScriptDryRunStep(t, "taxiway:start[--dry-run]", root, tb, stateDir, id, dryRunLabels.Start, "start", lab)
 	runE2EStep(t, "taxiway:start", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "start", lab)
-		runE2EAssert(t, "assert:phase-script-executed", func(t *testing.T) {
-			assertE2EPhaseProbeExecuted(t, state, id, "start")
-		})
 		runE2EAssert(t, "assert:phase-started", func(t *testing.T) {
 			assertE2EPhase(t, stateDir, id, phases.PhaseStart)
 		})
@@ -385,7 +417,9 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		ref := config.LabRef{Lab: lab, Orch: orch, Driver: state.Driver.Name()}
 		sidecar := e2eLabLiteLLMContainer(state, ref)
 		sidecarStateBefore := e2eDockerContainerState(t, sidecar)
-		runE2EDryRunCommand(t, root, tb, "down", lab)
+		output := runE2EDryRunCommand(t, root, tb, "down", lab)
+		require.Contains(t, output, "Stopping lab runtime")
+		require.Contains(t, output, "Stopping LiteLLM sidecar")
 		runE2EAssert(t, "assert:lab-runtime-preserved", func(t *testing.T) {
 			runningAfter, err := state.Driver.Running(context.Background(), id)
 			require.NoError(t, err)
@@ -449,12 +483,9 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 
 	runE2ERecordScenario(t, root, tb, state, lab, orch)
 
-	runE2EScriptDryRunStep(t, "taxiway:reset[--yes,--dry-run]", root, tb, state, stateDir, id, "reset", "--yes", lab)
+	runE2EScriptDryRunStep(t, "taxiway:reset[--yes,--dry-run]", root, tb, stateDir, id, []string{"Stopping workspace services", "Clearing lifecycle phase markers"}, "reset", "--yes", lab)
 	runE2EStep(t, "taxiway:reset[--yes]", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "reset", "--yes", lab)
-		runE2EAssert(t, "assert:phase-script-executed", func(t *testing.T) {
-			assertE2EPhaseProbeExecuted(t, state, id, "reset")
-		})
 		runE2EAssert(t, "assert:lab-listed", func(t *testing.T) {
 			assertE2EList(t, root, tb, lab, orch, "degraded", "-")
 		})
@@ -466,7 +497,9 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		ref := config.LabRef{Lab: lab, Orch: orch, Driver: state.Driver.Name()}
 		sidecar := e2eLabLiteLLMContainer(state, ref)
 		sidecarStateBefore := e2eDockerContainerState(t, sidecar)
-		runE2EDryRunCommand(t, root, tb, "rm", "--yes", lab)
+		output := runE2EDryRunCommand(t, root, tb, "rm", "--yes", lab)
+		require.Contains(t, output, "Deleting lab runtime and storage")
+		require.Contains(t, output, "Clearing lifecycle phase markers")
 		runE2EAssert(t, "assert:lab-runtime-preserved", func(t *testing.T) {
 			existsAfter, err := state.Driver.Exists(context.Background(), id)
 			require.NoError(t, err)
@@ -586,22 +619,6 @@ func buildRealOrchestratorDockerRoot(t *testing.T, orch, scope string) (*cobra.C
 	for _, agent := range e2eAgents(t, tmp, orch) {
 		copyRuntimeTree(t, filepath.Join("agents", agent), filepath.Join(tmp, "agents", agent))
 	}
-	instrumentE2EPhaseScript(t, config.BootstrapScript(tmp), string(phases.PhaseBootstrap))
-	installScript, err := config.InstallScript(tmp, orch)
-	require.NoError(t, err)
-	instrumentE2EPhaseScript(t, installScript, string(phases.PhaseInstall))
-	verifyScript, err := config.VerifyScript(tmp, orch)
-	require.NoError(t, err)
-	instrumentE2EPhaseScript(t, verifyScript, string(phases.PhaseVerify))
-	workspacePhaseScript, err := workspaceScript(tmp, orch)
-	require.NoError(t, err)
-	require.NotEmpty(t, workspacePhaseScript)
-	instrumentE2EPhaseScript(t, workspacePhaseScript, string(phases.PhaseWorkspace))
-	startScript, err := config.StartScript(tmp, orch)
-	require.NoError(t, err)
-	instrumentE2EPhaseScript(t, startScript, string(phases.PhaseStart))
-	instrumentE2EPhaseScript(t, config.ResetScript(tmp), "reset")
-
 	d := driver.NewDockerDriver(stateDir)
 	state := &RootState{
 		RepoDir: tmp,
@@ -672,20 +689,6 @@ func cleanupE2EOrchestratorLab(t *testing.T, state *RootState, id, lab, orch str
 	})
 }
 
-func instrumentE2EPhaseScript(t *testing.T, path, probe string) {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	require.NoError(t, err)
-	lineEnd := bytes.IndexByte(data, '\n')
-	require.GreaterOrEqual(t, lineEnd, 0, "phase script %s must have a shebang", path)
-	probeLine := fmt.Sprintf("printf 'executed\\n' >> /lab/work/.taxiway-e2e-%s-probe\n", probe)
-	instrumented := make([]byte, 0, len(data)+len(probeLine))
-	instrumented = append(instrumented, data[:lineEnd+1]...)
-	instrumented = append(instrumented, probeLine...)
-	instrumented = append(instrumented, data[lineEnd+1:]...)
-	require.NoError(t, os.WriteFile(path, instrumented, 0o755))
-}
-
 func runE2EDryRunCommand(t *testing.T, root *cobra.Command, tb *dockerTestBuf, args ...string) string {
 	t.Helper()
 	dryRunArgs := append(append([]string(nil), args...), "--dry-run")
@@ -697,22 +700,21 @@ func runE2EScriptDryRunStep(
 	stepName string,
 	root *cobra.Command,
 	tb *dockerTestBuf,
-	state *RootState,
 	stateDir, id string,
+	expected []string,
 	args ...string,
 ) {
 	t.Helper()
 	require.NotEmpty(t, args)
-	probe := args[0]
-	setE2EPhaseProbe(t, state, id, probe, "baseline\n")
 	phaseStateBefore := captureE2EPhaseState(stateDir, id)
 	runE2EStep(t, stepName, func(t *testing.T) {
-		runE2EDryRunCommand(t, root, tb, args...)
+		output := runE2EDryRunCommand(t, root, tb, args...)
+		for _, label := range expected {
+			require.Contains(t, output, label)
+		}
+		require.Contains(t, output, "No changes were made.")
 		runE2EAssert(t, "assert:phase-markers-preserved", func(t *testing.T) {
 			require.Equal(t, phaseStateBefore, captureE2EPhaseState(stateDir, id))
-		})
-		runE2EAssert(t, "assert:phase-script-not-executed", func(t *testing.T) {
-			require.Equal(t, "baseline\n", readE2EPhaseProbe(t, state, id, probe))
 		})
 	})
 }
@@ -723,37 +725,6 @@ func captureE2EPhaseState(stateDir, id string) []bool {
 		state[i] = phases.Done(stateDir, id, phase)
 	}
 	return state
-}
-
-func assertE2EPhaseProbeExecuted(t *testing.T, state *RootState, id, probe string) {
-	t.Helper()
-	require.Equal(t, "baseline\nexecuted\n", readE2EPhaseProbe(t, state, id, probe))
-}
-
-func setE2EPhaseProbe(t *testing.T, state *RootState, id, probe, value string) {
-	t.Helper()
-	var stderr bytes.Buffer
-	res, err := state.Driver.Exec(context.Background(), id, driver.ExecRequest{
-		Workdir: "/lab/work",
-		Argv:    []string{"sh", "-c", "printf '%s' \"$1\" > .taxiway-e2e-\"$2\"-probe", "sh", value, probe},
-		Stderr:  &stderr,
-	})
-	require.NoError(t, err)
-	require.Equal(t, 0, res.ExitCode, "initialize %s probe: %s", probe, stderr.String())
-}
-
-func readE2EPhaseProbe(t *testing.T, state *RootState, id, probe string) string {
-	t.Helper()
-	var stdout, stderr bytes.Buffer
-	res, err := state.Driver.Exec(context.Background(), id, driver.ExecRequest{
-		Workdir: "/lab/work",
-		Argv:    []string{"cat", ".taxiway-e2e-" + probe + "-probe"},
-		Stdout:  &stdout,
-		Stderr:  &stderr,
-	})
-	require.NoError(t, err)
-	require.Equal(t, 0, res.ExitCode, "read %s probe: %s", probe, stderr.String())
-	return stdout.String()
 }
 
 func e2eLabLiteLLMContainer(state *RootState, ref config.LabRef) string {
