@@ -2,8 +2,6 @@ package driver
 
 import (
 	"context"
-	"fmt"
-	"strings"
 
 	"github.com/taxiway-sh/taxiway/internal/config"
 )
@@ -32,23 +30,19 @@ func (dr *dryRunDriver) Running(ctx context.Context, id string) (bool, error) {
 	return dr.inner.Running(ctx, id)
 }
 
-func (dr *dryRunDriver) Create(_ context.Context, id string, opts CreateOptions) error {
-	fmt.Printf("[dry-run] %s: Create id=%s orch=%s\n", dr.inner.Name(), id, opts.Orch)
+func (dr *dryRunDriver) Create(_ context.Context, _ string, _ CreateOptions) error {
 	return nil
 }
 
-func (dr *dryRunDriver) Start(_ context.Context, id string) error {
-	fmt.Printf("[dry-run] %s: Start id=%s\n", dr.inner.Name(), id)
+func (dr *dryRunDriver) Start(_ context.Context, _ string) error {
 	return nil
 }
 
-func (dr *dryRunDriver) Stop(_ context.Context, id string) error {
-	fmt.Printf("[dry-run] %s: Stop id=%s\n", dr.inner.Name(), id)
+func (dr *dryRunDriver) Stop(_ context.Context, _ string) error {
 	return nil
 }
 
-func (dr *dryRunDriver) Delete(_ context.Context, id string) error {
-	fmt.Printf("[dry-run] %s: Delete id=%s\n", dr.inner.Name(), id)
+func (dr *dryRunDriver) Delete(_ context.Context, _ string) error {
 	return nil
 }
 
@@ -60,19 +54,11 @@ func (dr *dryRunDriver) List(ctx context.Context) ([]Status, error) {
 	return dr.inner.List(ctx)
 }
 
-func (dr *dryRunDriver) Copy(_ context.Context, id, srcHost, dstlab string) error {
-	fmt.Printf("[dry-run] %s: Copy id=%s src=%s dst=%s\n", dr.inner.Name(), id, srcHost, dstlab)
+func (dr *dryRunDriver) Copy(_ context.Context, _, _, _ string) error {
 	return nil
 }
 
-func (dr *dryRunDriver) WriteLabRef(_ context.Context, id string, ref config.LabRef) error {
-	if ref.Workspace != nil {
-		fmt.Printf("[dry-run] %s: WriteLabRef id=%s lab=%s orch=%s repo=%s ref=%s path=%s\n",
-			dr.inner.Name(), id, ref.Lab, ref.Orch,
-			ref.Workspace.Repo, ref.Workspace.Ref, ref.Workspace.Path)
-	} else {
-		fmt.Printf("[dry-run] %s: WriteLabRef id=%s lab=%s orch=%s\n", dr.inner.Name(), id, ref.Lab, ref.Orch)
-	}
+func (dr *dryRunDriver) WriteLabRef(_ context.Context, _ string, _ config.LabRef) error {
 	return nil
 }
 
@@ -80,19 +66,15 @@ func (dr *dryRunDriver) ReadLabRef(ctx context.Context, id string) (config.LabRe
 	return dr.inner.ReadLabRef(ctx, id)
 }
 
-func (dr *dryRunDriver) Shell(_ context.Context, id, workdir string) error {
-	fmt.Printf("[dry-run] %s: Shell id=%s workdir=%s\n", dr.inner.Name(), id, workdir)
+func (dr *dryRunDriver) Shell(_ context.Context, _, _ string) error {
 	return nil
 }
 
-func (dr *dryRunDriver) ShellExec(_ context.Context, id, workdir, shellCmd string) error {
-	fmt.Printf("[dry-run] %s: ShellExec id=%s workdir=%s cmd=%s\n", dr.inner.Name(), id, workdir, shellCmd)
+func (dr *dryRunDriver) ShellExec(_ context.Context, _, _, _ string) error {
 	return nil
 }
 
-func (dr *dryRunDriver) InteractiveExec(_ context.Context, id string, req InteractiveExecRequest) error {
-	fmt.Printf("[dry-run] %s: InteractiveExec id=%s workdir=%s cmd=%s\n",
-		dr.inner.Name(), id, req.Workdir, strings.Join(req.Argv, " "))
+func (dr *dryRunDriver) InteractiveExec(_ context.Context, _ string, _ InteractiveExecRequest) error {
 	return nil
 }
 
@@ -100,6 +82,5 @@ func (dr *dryRunDriver) Exec(ctx context.Context, id string, req ExecRequest) (E
 	if req.Inspect {
 		return dr.inner.Exec(ctx, id, req)
 	}
-	fmt.Printf("[dry-run] %s: Exec id=%s cmd=%s\n", dr.inner.Name(), id, strings.Join(req.Argv, " "))
 	return ExecResult{}, nil
 }

@@ -472,6 +472,7 @@ func execScriptToWithRefMode(ctx context.Context, state *RootState, ref config.L
 	}
 	if state.Flags.DryRun && plannable {
 		execEnv["TAXIWAY_EXECUTION_MODE"] = "plan"
+		execEnv["TAXIWAY_PLAN_INSPECTION"] = "available"
 	}
 	if len(execEnv) > 0 {
 		argv = append(argv, "env")

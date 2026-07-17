@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/taxiway-sh/taxiway/internal/config"
 	"github.com/taxiway-sh/taxiway/internal/event"
 )
 
@@ -221,6 +222,47 @@ func TestDryRun_Shell_and_Exec(t *testing.T) {
 	exists, err := inner.Exists(ctx, id)
 	require.NoError(t, err)
 	require.False(t, exists)
+}
+
+func TestDryRunMutationsAreSilent(t *testing.T) {
+	inner := NewMockDriver(t.TempDir())
+	dryRun := NewDryRun(inner)
+
+	stdout, stderr := captureProcessOutput(t, func() error {
+		ctx := context.Background()
+		if err := dryRun.Create(ctx, "taxiway-demo", CreateOptions{Orch: "codex"}); err != nil {
+			return err
+		}
+		if err := dryRun.Start(ctx, "taxiway-demo"); err != nil {
+			return err
+		}
+		if err := dryRun.Stop(ctx, "taxiway-demo"); err != nil {
+			return err
+		}
+		if err := dryRun.Copy(ctx, "taxiway-demo", "/host/source", "/lab/target"); err != nil {
+			return err
+		}
+		if err := dryRun.WriteLabRef(ctx, "taxiway-demo", config.LabRef{Lab: "demo", Orch: "codex"}); err != nil {
+			return err
+		}
+		if err := dryRun.Shell(ctx, "taxiway-demo", "/lab"); err != nil {
+			return err
+		}
+		if err := dryRun.ShellExec(ctx, "taxiway-demo", "/lab", "true"); err != nil {
+			return err
+		}
+		if err := dryRun.InteractiveExec(ctx, "taxiway-demo", InteractiveExecRequest{Argv: []string{"true"}}); err != nil {
+			return err
+		}
+		if _, err := dryRun.Exec(ctx, "taxiway-demo", ExecRequest{Argv: []string{"true"}}); err != nil {
+			return err
+		}
+		return dryRun.Delete(ctx, "taxiway-demo")
+	})
+
+	require.Empty(t, stdout)
+	require.Empty(t, stderr)
+	require.Empty(t, inner.CallLog)
 }
 
 func TestDryRun_ExecForwardsInspectionOnly(t *testing.T) {
