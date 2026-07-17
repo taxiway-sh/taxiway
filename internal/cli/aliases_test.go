@@ -429,7 +429,7 @@ func TestBootstrapDryRunPrintsSemanticSteps(t *testing.T) {
 		"Enabling Corepack",
 		"Toolchain summary",
 		"Enabling tmux mouse support in " + tmuxPath,
-		"Adding the Taxiway environment block to ~/.profile",
+		"Configuring login shells to load the Taxiway environment",
 	}, bootstrapSteps)
 	require.Contains(t, plainOut, "java       : missing")
 	require.Contains(t, plainOut, "No changes were made.")

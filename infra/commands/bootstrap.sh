@@ -106,7 +106,7 @@ fi
 EOF
 }
 if ! grep -qF "$TAXIWAY_PROFILE_MARKER" "$HOME/.profile" 2>/dev/null; then
-  taxiway_step "Adding the Taxiway environment block to ~/.profile" add_taxiway_profile_block
+  taxiway_step "Configuring login shells to load the Taxiway environment" add_taxiway_profile_block
 else
   log "Taxiway environment block already present in ~/.profile, skipping"
 fi
