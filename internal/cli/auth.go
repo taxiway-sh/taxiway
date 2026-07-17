@@ -67,10 +67,11 @@ func newLabAuthCmd(state *RootState) *cobra.Command {
 				return err
 			}
 			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
-			return phases.Mark(stateDir, id, phases.PhaseAuth)
+			return markPhase(state, stateDir, id, phases.PhaseAuth)
 		},
 	}
 	addSetFlags(cmd, &setValues, &clearSet)
+	addDryRunFlag(cmd, state)
 	return cmd
 }
 
@@ -148,7 +149,11 @@ func runAuth(ctx context.Context, state *RootState, ref config.LabRef, requireAu
 
 		argv := buildEnvScriptArgv(agentEnv, labScript)
 
-		sink, closeSink, _ := makeExecSink(jsonlPath)
+		var sink event.Sink = event.DiscardSink{}
+		closeSink := func() {}
+		if !state.Flags.DryRun {
+			sink, closeSink, _ = makeExecSink(jsonlPath)
+		}
 		_ = sink.Handle(ctx, event.Event{
 			Type:      event.TypePhase,
 			LabName:   id,

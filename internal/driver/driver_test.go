@@ -189,6 +189,14 @@ func TestDryRun_WritesDoNotModifyState(t *testing.T) {
 	require.NoError(t, dr.Delete(ctx, id))
 }
 
+func TestDryRun_PreservesDriverIdentityAndWrappingIsIdempotent(t *testing.T) {
+	inner := NewMockDriver(t.TempDir())
+	dryRun := NewDryRun(inner)
+
+	require.Equal(t, inner.Name(), dryRun.Name())
+	require.Same(t, dryRun, NewDryRun(dryRun))
+}
+
 // TestDryRun_Shell_and_Exec verifies the dryRun decorator handles
 // both shell and exec without panicking or modifying state.
 func TestDryRun_Shell_and_Exec(t *testing.T) {

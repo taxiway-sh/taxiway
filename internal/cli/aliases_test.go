@@ -57,11 +57,13 @@ func buildAliasTestRoot(t *testing.T) (*cobra.Command, *RootState, *driver.MockD
 	root := &cobra.Command{Use: "taxiway", SilenceUsage: true}
 	root.SetOut(&stdout)
 	root.SetErr(&stderr)
+	wrapTestDriverForDryRun(root, state)
 
 	// Wire all commands exactly as Execute() does (including flat verbs).
 	root.AddCommand(
 		newVersionCmd(state),
 		newUpCmd(state),
+		newCreateCmd(state),
 		newDownCmd(state),
 		newShellCmd(state),
 		newListCmd(state),
@@ -72,6 +74,8 @@ func buildAliasTestRoot(t *testing.T) (*cobra.Command, *RootState, *driver.MockD
 		newStartCmd(state),
 		newInstallCmd(state),
 		newVerifyCmd(state),
+		newGatewayCmd(state),
+		newWorkspaceCmd(state),
 		newDoctorCmd(state),
 		newStatusCmd(state),
 		newAccessCmd(state),
@@ -352,6 +356,97 @@ func TestFlatVerbs_ResetYes_PassesNonInteractiveEnv(t *testing.T) {
 
 	require.NotEmpty(t, mock.ExecEnvLog)
 	require.Equal(t, "1", mock.ExecEnvLog[len(mock.ExecEnvLog)-1]["LAB_RESET_YES"])
+}
+
+func TestFlatVerbs_DryRunDoesNotExecuteOrMarkPhases(t *testing.T) {
+	tests := []struct {
+		name  string
+		phase phases.Phase
+		args  []string
+	}{
+		{name: "bootstrap", phase: phases.PhaseBootstrap, args: []string{"bootstrap", "gastown", "--dry-run"}},
+		{name: "install", phase: phases.PhaseInstall, args: []string{"install", "gastown", "--dry-run"}},
+		{name: "verify", phase: phases.PhaseVerify, args: []string{"verify", "gastown", "--dry-run"}},
+		{name: "gateway", phase: phases.PhaseGateway, args: []string{"gateway", "gastown", "--dry-run"}},
+		{name: "workspace", phase: phases.PhaseWorkspace, args: []string{"workspace", "gastown", "--repo", "https://github.com/acme/project", "--dry-run"}},
+		{name: "start", phase: phases.PhaseStart, args: []string{"start", "gastown", "--dry-run"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root, state, mock, stdout, stderr := buildAliasTestRoot(t)
+			id := createAliasLab(t, state, "gastown")
+			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+
+			_, _, err := execAlias(t, root, stdout, stderr, tt.args...)
+			require.NoError(t, err)
+			require.Empty(t, mock.ExecLog, "dry-run must not execute phase commands")
+			require.False(t, phases.Done(stateDir, id, tt.phase), "dry-run must not mark phase %s", tt.phase)
+		})
+	}
+}
+
+func TestFlatVerbs_GatewayDryRunDoesNotCreateHostState(t *testing.T) {
+	root, state, _, stdout, stderr := buildAliasTestRoot(t)
+	createAliasLab(t, state, "gastown")
+	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+	ref := config.LabRef{Lab: "gastown", Orch: "gastown", Driver: "mock"}
+
+	out, _, err := execAlias(t, root, stdout, stderr, "gateway", "gastown", "--dry-run")
+	require.NoError(t, err)
+	require.Contains(t, out, "[dry-run]")
+	require.Contains(t, out, "gateway")
+	_, err = os.Stat(labGatewayDir(stateDir, ref))
+	require.ErrorIs(t, err, os.ErrNotExist)
+}
+
+func TestFlatVerbs_CreateDryRunDoesNotCreateOrMark(t *testing.T) {
+	root, state, mock, stdout, stderr := buildAliasTestRoot(t)
+	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+	id := idName("preview")
+
+	_, _, err := execAlias(t, root, stdout, stderr, "create", "preview", "--type", "gastown", "--dry-run")
+	require.NoError(t, err)
+	exists, err := mock.Exists(context.Background(), id)
+	require.NoError(t, err)
+	require.False(t, exists)
+	require.False(t, phases.Done(stateDir, id, phases.PhaseCreate))
+}
+
+func TestFlatVerbs_ResetDryRunKeepsMarkersAndSkipsExec(t *testing.T) {
+	root, state, mock, stdout, stderr := buildAliasTestRoot(t)
+	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+	id := createAliasLab(t, state, "gastown")
+	require.NoError(t, phases.Mark(stateDir, id, phases.PhaseBootstrap))
+
+	_, _, err := execAlias(t, root, stdout, stderr, "reset", "gastown", "--yes", "--dry-run")
+	require.NoError(t, err)
+	require.True(t, phases.Done(stateDir, id, phases.PhaseBootstrap))
+	require.Empty(t, mock.ExecLog)
+}
+
+func TestFlatVerbs_RmDryRunKeepsLabAndMarkers(t *testing.T) {
+	root, state, mock, stdout, stderr := buildAliasTestRoot(t)
+	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+	id := createAliasLab(t, state, "gastown")
+	require.NoError(t, phases.Mark(stateDir, id, phases.PhaseBootstrap))
+
+	_, _, err := execAlias(t, root, stdout, stderr, "rm", "gastown", "--yes", "--dry-run")
+	require.NoError(t, err)
+	exists, err := mock.Exists(context.Background(), id)
+	require.NoError(t, err)
+	require.True(t, exists)
+	require.True(t, phases.Done(stateDir, id, phases.PhaseBootstrap))
+}
+
+func TestFlatVerbs_RmDryRunDoesNotPrompt(t *testing.T) {
+	root, state, _, stdout, stderr := buildAliasTestRoot(t)
+	createAliasLab(t, state, "gastown")
+
+	out, _, err := execAlias(t, root, stdout, stderr, "rm", "gastown", "--dry-run")
+	require.NoError(t, err)
+	require.NotContains(t, out, "Delete lab")
+	require.NotContains(t, out, "Aborted")
 }
 
 func TestHiddenNouns_HiddenInHelp(t *testing.T) {

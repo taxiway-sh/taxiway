@@ -16,10 +16,13 @@ type dryRunDriver struct {
 
 // NewDryRun wraps d so that all write operations print a description and return nil.
 func NewDryRun(d Driver) Driver {
+	if _, ok := d.(*dryRunDriver); ok {
+		return d
+	}
 	return &dryRunDriver{inner: d}
 }
 
-func (dr *dryRunDriver) Name() string { return dr.inner.Name() + "+dryrun" }
+func (dr *dryRunDriver) Name() string { return dr.inner.Name() }
 
 func (dr *dryRunDriver) Exists(ctx context.Context, id string) (bool, error) {
 	return dr.inner.Exists(ctx, id)

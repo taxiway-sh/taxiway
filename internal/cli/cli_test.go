@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -51,6 +52,7 @@ func buildTestRoot(t *testing.T) (*cobra.Command, *RootState, *bytes.Buffer, *by
 	}
 	root.SetOut(&stdout)
 	root.SetErr(&stderr)
+	wrapTestDriverForDryRun(root, state)
 
 	root.AddCommand(
 		newVersionCmd(state),
@@ -71,6 +73,15 @@ func execRoot(t *testing.T, root *cobra.Command, stdout, stderr *bytes.Buffer, a
 	root.SetArgs(args)
 	err := root.Execute()
 	return stdout.String(), stderr.String(), err
+}
+
+func wrapTestDriverForDryRun(root *cobra.Command, state *RootState) {
+	root.PersistentPreRunE = func(_ *cobra.Command, _ []string) error {
+		if state.Flags.DryRun && state.Driver != nil {
+			state.Driver = driver.NewDryRun(state.Driver)
+		}
+		return nil
+	}
 }
 
 func createCLITestLab(t *testing.T, state *RootState, lab string) string {
@@ -517,7 +528,7 @@ func TestDryRun_LabUp(t *testing.T) {
 
 	state := &RootState{
 		RepoDir: tmp,
-		Flags:   GlobalFlags{DryRun: true, StateDir: stateDir},
+		Flags:   GlobalFlags{StateDir: stateDir},
 		Driver:  dryDriver,
 	}
 	root := &cobra.Command{Use: "taxiway", SilenceUsage: true}
@@ -526,7 +537,7 @@ func TestDryRun_LabUp(t *testing.T) {
 	root.SetErr(&stderr)
 	root.AddCommand(newUpCmd(state))
 
-	root.SetArgs([]string{"up", "gastown"})
+	root.SetArgs([]string{"up", "gastown", "--dry-run"})
 	require.NoError(t, root.Execute())
 
 	// dry-run: lab should NOT exist in state
@@ -534,6 +545,69 @@ func TestDryRun_LabUp(t *testing.T) {
 	exists, err := innerDriver.Exists(ctx, "taxiway-gastown")
 	require.NoError(t, err)
 	require.False(t, exists, "dry-run must not create lab")
+}
+
+func TestDriverForRefPreservesDryRunForExistingLab(t *testing.T) {
+	ctx := context.Background()
+	stateDir := t.TempDir()
+	inner := driver.NewMockDriver(stateDir)
+	id := idName("demo")
+	require.NoError(t, inner.Create(ctx, id, driver.CreateOptions{}))
+
+	state := &RootState{
+		RepoDir: stateDir,
+		Flags:   GlobalFlags{DryRun: true, StateDir: stateDir},
+		Driver:  driver.NewDryRun(inner),
+	}
+	resolved, err := driverForRef(state, config.LabRef{Lab: "demo", Driver: "mock"})
+	require.NoError(t, err)
+	require.Same(t, state.Driver, resolved)
+
+	require.NoError(t, resolved.Delete(ctx, id))
+	exists, err := inner.Exists(ctx, id)
+	require.NoError(t, err)
+	require.True(t, exists, "resolved dry-run driver must not delete the existing lab")
+}
+
+func TestDryRunFlagIsExposedOnLabLifecycleCommands(t *testing.T) {
+	for _, command := range [][]string{
+		{"up"}, {"prepare"}, {"run"},
+		{"create"}, {"bootstrap"}, {"install"}, {"verify"},
+		{"gateway"}, {"workspace"}, {"auth"}, {"start"},
+		{"down"}, {"rm"}, {"reset"},
+	} {
+		help := runTaxiwayHelp(t, append(command, "--help")...)
+		require.Containsf(t, help, "--dry-run", "%s must expose dry-run locally", strings.Join(command, " "))
+	}
+}
+
+func TestTaxiwayHelpProcess(t *testing.T) {
+	if os.Getenv("TAXIWAY_TEST_HELP_PROCESS") != "1" {
+		return
+	}
+	separator := -1
+	for i, arg := range os.Args {
+		if arg == "--" {
+			separator = i
+			break
+		}
+	}
+	if separator == -1 {
+		os.Exit(2)
+	}
+	os.Args = append([]string{"taxiway"}, os.Args[separator+1:]...)
+	Execute()
+}
+
+func runTaxiwayHelp(t *testing.T, args ...string) string {
+	t.Helper()
+	cmdArgs := []string{"-test.run=^TestTaxiwayHelpProcess$", "--"}
+	cmdArgs = append(cmdArgs, args...)
+	cmd := exec.Command(os.Args[0], cmdArgs...)
+	cmd.Env = append(os.Environ(), "TAXIWAY_TEST_HELP_PROCESS=1")
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(out))
+	return string(out)
 }
 
 // ---- driver --driver flag ----

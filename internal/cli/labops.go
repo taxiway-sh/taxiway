@@ -408,7 +408,17 @@ func driverForRef(state *RootState, ref config.LabRef) (driver.Driver, error) {
 	if err != nil {
 		return nil, err
 	}
+	if state.Flags.DryRun {
+		d = driver.NewDryRun(d)
+	}
 	return d, nil
+}
+
+func markPhase(state *RootState, stateDir, id string, phase phases.Phase) error {
+	if state.Flags.DryRun {
+		return nil
+	}
+	return phases.Mark(stateDir, id, phase)
 }
 
 // execScriptWithRef runs a script inside the lab identified by ref.

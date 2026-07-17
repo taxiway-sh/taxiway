@@ -48,6 +48,9 @@ func workspaceConfigured(ref config.LabRef) bool {
 }
 
 func prepareWorkspaceRepository(ctx context.Context, state *RootState, ref *config.LabRef) error {
+	if state.Flags.DryRun {
+		return nil
+	}
 	if ref == nil || !workspaceConfigured(*ref) {
 		return nil
 	}

@@ -14,6 +14,9 @@ var (
 )
 
 func reconcileGateway(ctx context.Context, state *RootState, ref config.LabRef) error {
+	if state.Flags.DryRun {
+		return nil
+	}
 	if state.Driver.Name() != "mock" && !state.Flags.DryRun {
 		proxy, err := state.ensureProxyRuntime()
 		if err != nil {

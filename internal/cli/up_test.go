@@ -84,6 +84,7 @@ func buildUpTestRoot(t *testing.T) (*cobra.Command, *RootState, *driver.MockDriv
 	}
 	root.SetOut(&stdout)
 	root.SetErr(&stderr)
+	wrapTestDriverForDryRun(root, state)
 
 	root.AddCommand(
 		newVersionCmd(state),
@@ -1085,6 +1086,31 @@ func TestRunCommandShowsGatewayProgressWhenReconcilingCachedGateway(t *testing.T
 	require.Empty(t, mock.CopyLog)
 }
 
+func TestRunCommandDryRunDoesNotReconcileCachedGateway(t *testing.T) {
+	root, state, _, stdout, stderr := buildUpTestRoot(t)
+	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+	id := idName("gastown")
+
+	require.NoError(t, state.Driver.Create(testCtx(t), id, driver.CreateOptions{}))
+	require.NoError(t, state.Driver.WriteLabRef(testCtx(t), id, config.LabRef{Lab: "gastown", Orch: "gastown", Driver: "mock"}))
+	markPrepareCompleted(t, stateDir, id)
+	require.NoError(t, phases.Mark(stateDir, id, phases.PhaseGateway))
+
+	ensured := 0
+	orig := ensureLabLiteLLMSidecarForUp
+	ensureLabLiteLLMSidecarForUp = func(_ context.Context, _ *RootState, _ config.LabRef) error {
+		ensured++
+		return nil
+	}
+	t.Cleanup(func() { ensureLabLiteLLMSidecarForUp = orig })
+
+	out, _, err := execUpRoot(t, root, stdout, stderr, "run", "gastown", "--skip-workspace", "--skip-auth-check", "--dry-run")
+	require.NoError(t, err)
+	require.Zero(t, ensured)
+	require.Contains(t, out, "gateway              (dry-run)")
+	require.NotContains(t, out, "gateway              (ready)")
+}
+
 func TestGatewayCommandMarksPhaseWithoutRefreshingProxyPage(t *testing.T) {
 	root, state, _, stdout, stderr := buildUpTestRoot(t)
 	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
@@ -1390,6 +1416,33 @@ func TestDown_StopsLabLiteLLMSidecar(t *testing.T) {
 
 	require.Len(t, stopped, 1)
 	require.Equal(t, "gastown", stopped[0].Lab)
+}
+
+func TestDownDryRunKeepsLabAndSidecarRunning(t *testing.T) {
+	root, state, _, stdout, stderr := buildUpTestRoot(t)
+
+	require.NoError(t, state.Driver.Create(testCtx(t), idName("gastown"), driver.CreateOptions{}))
+	require.NoError(t, state.Driver.WriteLabRef(testCtx(t), idName("gastown"), config.LabRef{
+		Lab:    "gastown",
+		Orch:   "gastown",
+		Driver: "mock",
+	}))
+
+	sidecarRunning := true
+	orig := stopLabLiteLLMSidecarForDown
+	stopLabLiteLLMSidecarForDown = func(_ context.Context, _ *RootState, _ config.LabRef) error {
+		sidecarRunning = false
+		return nil
+	}
+	t.Cleanup(func() { stopLabLiteLLMSidecarForDown = orig })
+
+	_, _, err := execUpRoot(t, root, stdout, stderr, "down", "gastown", "--dry-run")
+	require.NoError(t, err)
+
+	st, err := state.Driver.Status(testCtx(t), idName("gastown"))
+	require.NoError(t, err)
+	require.Equal(t, "running", st.State)
+	require.True(t, sidecarRunning)
 }
 
 func TestLabUp_ResumesStoppedLabWithRecordedDriver(t *testing.T) {
@@ -2020,7 +2073,7 @@ func TestUp_RepoSwitchRefused(t *testing.T) {
 	require.Contains(t, err.Error(), "refusing to switch")
 }
 
-func TestUp_ExistingLabRepoUpdatePreservesDriver(t *testing.T) {
+func TestUp_ExistingLabDryRunLeavesRefUnchanged(t *testing.T) {
 	root, state, _, stdout, stderr := buildWorkspaceTestRoot(t)
 	id := idName("claude-code")
 	require.NoError(t, state.Driver.Create(testCtx(t), id, driver.CreateOptions{}))
@@ -2030,19 +2083,25 @@ func TestUp_ExistingLabRepoUpdatePreservesDriver(t *testing.T) {
 		Driver: "docker",
 	}))
 
-	_, _, err := execUpRoot(t, root, stdout, stderr,
+	refPath := filepath.Join(state.Flags.StateDir, config.LabDirOf(id), "ref.json")
+	before, err := os.ReadFile(refPath)
+	require.NoError(t, err)
+
+	addOrchestratorProfile(t, state, "claude-code", "budget", map[string]string{
+		"settings/config.json": `{"model":"preview"}`,
+	})
+	_, _, err = execUpRoot(t, root, stdout, stderr,
 		"up", "claude-code", "--type", "claude-code",
 		"--repo", "https://github.com/org/repo1",
+		"--set", "model=preview",
+		"--profile", "budget",
 		"--dry-run",
 	)
 	require.NoError(t, err)
 
-	ref, ok, err := state.Driver.ReadLabRef(testCtx(t), id)
+	after, err := os.ReadFile(refPath)
 	require.NoError(t, err)
-	require.True(t, ok)
-	require.Equal(t, "docker", ref.Driver)
-	require.NotNil(t, ref.Workspace)
-	require.Equal(t, "https://github.com/org/repo1", ref.Workspace.Repo)
+	require.Equal(t, before, after, "dry-run must leave ref.json byte-identical")
 }
 
 // TestUp_InvalidRepoURL: non-git URL is rejected early.

@@ -44,10 +44,11 @@ func newCreateCmd(state *RootState) *cobra.Command {
 				return err
 			}
 			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
-			return phases.Mark(stateDir, idName(ref.Lab), phases.PhaseCreate)
+			return markPhase(state, stateDir, idName(ref.Lab), phases.PhaseCreate)
 		},
 	}
 	addTypeFlag(cmd, state, &orchType)
+	addDryRunFlag(cmd, state)
 	return cmd
 }
 
@@ -99,7 +100,7 @@ func newRmCmd(state *RootState) *cobra.Command {
 				forkName := repoBasename(ref.Workspace.Fork)
 				fmt.Fprintf(cmd.OutOrStdout(), "Warning: lab %q has a workspace fork that must be deleted manually:\n  Repo: %s\n  URL:  %s\n\n", lab, forkName, ref.Workspace.Fork)
 			}
-			if !yes {
+			if !yes && !state.Flags.DryRun {
 				fmt.Fprintf(cmd.OutOrStdout(), "Delete lab %q? [y/N] ", lab)
 				scanner := bufio.NewScanner(os.Stdin)
 				scanner.Scan()
@@ -114,7 +115,7 @@ func newRmCmd(state *RootState) *cobra.Command {
 				return err
 			}
 			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
-			if labGatewayStateExists(stateDir, ref) {
+			if !state.Flags.DryRun && labGatewayStateExists(stateDir, ref) {
 				fmt.Fprintf(cmd.ErrOrStderr(), "\nStopping LiteLLM sidecar for lab %q\n", lab)
 				if err := stopLabLiteLLMSidecarForRm(ctx, state, ref); err != nil {
 					return err
@@ -133,13 +134,16 @@ func newRmCmd(state *RootState) *cobra.Command {
 				return err
 			}
 			remindManualWorkspaceForkCleanup(cmd.ErrOrStderr(), ref)
-			if err := phases.ClearAll(stateDir, id); err != nil {
-				return err
+			if !state.Flags.DryRun {
+				if err := phases.ClearAll(stateDir, id); err != nil {
+					return err
+				}
 			}
 			return nil
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompt")
+	addDryRunFlag(cmd, state)
 	return cmd
 }
 
@@ -197,11 +201,12 @@ func newStartCmd(state *RootState) *cobra.Command {
 				return err
 			}
 			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
-			return phases.Mark(stateDir, id, phases.PhaseStart)
+			return markPhase(state, stateDir, id, phases.PhaseStart)
 		},
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "reinitialize even if already initialized")
 	addSetFlags(cmd, &setValues, &clearSet)
+	addDryRunFlag(cmd, state)
 	return cmd
 }
 
@@ -218,7 +223,7 @@ func newGatewayCmd(state *RootState) *cobra.Command {
 			}
 			return validateLabArg(a[0])
 		},
-		RunE: func(_ *cobra.Command, a []string) error {
+		RunE: func(cmd *cobra.Command, a []string) error {
 			ctx := context.Background()
 			id := idName(a[0])
 			ref, err := loadLabRef(ctx, state, id)
@@ -228,14 +233,18 @@ func newGatewayCmd(state *RootState) *cobra.Command {
 			if _, err := applySettingsFromFlags(ctx, state, id, &ref, setValues, clearSet); err != nil {
 				return err
 			}
+			if state.Flags.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] Would reconcile gateway for lab %q.\n", ref.Lab)
+			}
 			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
 			if err := reconcileGateway(ctx, state, ref); err != nil {
 				return err
 			}
-			return phases.Mark(stateDir, id, phases.PhaseGateway)
+			return markPhase(state, stateDir, id, phases.PhaseGateway)
 		},
 	}
 	addSetFlags(cmd, &setValues, &clearSet)
+	addDryRunFlag(cmd, state)
 	return cmd
 }
 
@@ -275,13 +284,14 @@ func newWorkspaceCmd(state *RootState) *cobra.Command {
 			if err := runPhase(ctx, state, ref, phases.PhaseWorkspace); err != nil {
 				return err
 			}
-			return phases.Mark(stateDir, id, phases.PhaseWorkspace)
+			return markPhase(state, stateDir, id, phases.PhaseWorkspace)
 		},
 	}
 	cmd.Flags().StringVar(&repo, "repo", "", "git URL of the workspace repository")
 	cmd.Flags().StringVar(&repoRef, "repo-ref", "", "branch, tag, or SHA to check out")
 	cmd.Flags().StringVar(&repoPath, "repo-path", "", "subdirectory inside the workspace repository to use as cwd")
 	addSetFlags(cmd, &setValues, &clearSet)
+	addDryRunFlag(cmd, state)
 	return cmd
 }
 
@@ -341,10 +351,11 @@ func newInstallCmd(state *RootState) *cobra.Command {
 				return err
 			}
 			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
-			return phases.Mark(stateDir, id, phases.PhaseInstall)
+			return markPhase(state, stateDir, id, phases.PhaseInstall)
 		},
 	}
 	addSetFlags(cmd, &setValues, &clearSet)
+	addDryRunFlag(cmd, state)
 	return cmd
 }
 
@@ -390,16 +401,17 @@ func newVerifyCmd(state *RootState) *cobra.Command {
 				return err
 			}
 			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
-			return phases.Mark(stateDir, id, phases.PhaseVerify)
+			return markPhase(state, stateDir, id, phases.PhaseVerify)
 		},
 	}
 	addSetFlags(cmd, &setValues, &clearSet)
+	addDryRunFlag(cmd, state)
 	return cmd
 }
 
 // newBootstrapCmd: taxiway bootstrap <lab>
 func newBootstrapCmd(state *RootState) *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:               "bootstrap <lab>",
 		Short:             "Install system dependencies in the lab",
 		Args:              cobra.ExactArgs(1),
@@ -421,9 +433,11 @@ func newBootstrapCmd(state *RootState) *cobra.Command {
 				return err
 			}
 			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
-			return phases.Mark(stateDir, id, phases.PhaseBootstrap)
+			return markPhase(state, stateDir, id, phases.PhaseBootstrap)
 		},
 	}
+	addDryRunFlag(cmd, state)
+	return cmd
 }
 
 // newDoctorCmd: taxiway doctor <lab>
@@ -477,8 +491,10 @@ func newResetCmd(state *RootState) *cobra.Command {
 			ctx := context.Background()
 			id := idName(a[0])
 			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
-			if err := phases.ClearAll(stateDir, id); err != nil {
-				return err
+			if !state.Flags.DryRun {
+				if err := phases.ClearAll(stateDir, id); err != nil {
+					return err
+				}
 			}
 			ref, err := loadLabRef(ctx, state, id)
 			if err != nil {
@@ -492,5 +508,6 @@ func newResetCmd(state *RootState) *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompt")
+	addDryRunFlag(cmd, state)
 	return cmd
 }
