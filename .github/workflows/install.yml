@@ -333,8 +333,16 @@ jobs:
           esac
           '@
 
-          $script | wsl --distribution Ubuntu-24.04 --user root --exec bash -s -- $env:DRIVER $env:LIMA_VERSION
+          $scriptPath = Join-Path $env:RUNNER_TEMP "taxiway-install-prerequisites.sh"
+          $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+          [IO.File]::WriteAllText($scriptPath, ($script -replace "`r`n", "`n"), $utf8NoBom)
+          $wslScriptPath = (wsl.exe --distribution Ubuntu-24.04 --user root --exec wslpath -a $scriptPath).Trim()
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          wsl.exe --distribution Ubuntu-24.04 --user root --exec bash $wslScriptPath $env:DRIVER $env:LIMA_VERSION
+          $scriptExitCode = $LASTEXITCODE
+          Remove-Item -Force $scriptPath
+          if ($scriptExitCode -ne 0) { exit $scriptExitCode }
 
           wsl --terminate Ubuntu-24.04
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -369,8 +377,16 @@ jobs:
           taxiway version
           '@
 
-          $script | wsl --distribution Ubuntu-24.04 --user runner --exec bash -s -- $env:TAXIWAY_RELEASE
+          $scriptPath = Join-Path $env:RUNNER_TEMP "taxiway-install.sh"
+          $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+          [IO.File]::WriteAllText($scriptPath, ($script -replace "`r`n", "`n"), $utf8NoBom)
+          $wslScriptPath = (wsl.exe --distribution Ubuntu-24.04 --user root --exec wslpath -a $scriptPath).Trim()
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          wsl.exe --distribution Ubuntu-24.04 --user runner --exec bash $wslScriptPath $env:TAXIWAY_RELEASE
+          $scriptExitCode = $LASTEXITCODE
+          Remove-Item -Force $scriptPath
+          if ($scriptExitCode -ne 0) { exit $scriptExitCode }
 
       - name: Exercise the ${{ matrix.driver }} driver inside WSL2
         shell: pwsh
@@ -410,8 +426,16 @@ jobs:
           grep -F "$lab" /tmp/taxiway-list.txt
           '@
 
-          $script | wsl --distribution Ubuntu-24.04 --user runner --exec bash -s -- $env:DRIVER
+          $scriptPath = Join-Path $env:RUNNER_TEMP "taxiway-exercise-driver.sh"
+          $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+          [IO.File]::WriteAllText($scriptPath, ($script -replace "`r`n", "`n"), $utf8NoBom)
+          $wslScriptPath = (wsl.exe --distribution Ubuntu-24.04 --user root --exec wslpath -a $scriptPath).Trim()
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          wsl.exe --distribution Ubuntu-24.04 --user runner --exec bash $wslScriptPath $env:DRIVER
+          $scriptExitCode = $LASTEXITCODE
+          Remove-Item -Force $scriptPath
+          if ($scriptExitCode -ne 0) { exit $scriptExitCode }
 
       - name: Collect driver diagnostics inside WSL2
         if: failure()
@@ -442,7 +466,14 @@ jobs:
           exit 0
           '@
 
-          $script | wsl --distribution Ubuntu-24.04 --user runner --exec bash -s -- $env:DRIVER
+          $scriptPath = Join-Path $env:RUNNER_TEMP "taxiway-driver-diagnostics.sh"
+          $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+          [IO.File]::WriteAllText($scriptPath, ($script -replace "`r`n", "`n"), $utf8NoBom)
+          $wslScriptPath = (wsl.exe --distribution Ubuntu-24.04 --user root --exec wslpath -a $scriptPath).Trim()
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          wsl.exe --distribution Ubuntu-24.04 --user root --exec bash $wslScriptPath $env:DRIVER
+          Remove-Item -Force $scriptPath
 
       - name: Remove the WSL2 distribution
         if: always()
