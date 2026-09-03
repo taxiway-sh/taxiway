@@ -409,8 +409,27 @@ jobs:
               ;;
             lima)
               limactl --version
+              id
               if [ -c /dev/kvm ]; then
                 printf 'Lima acceleration: /dev/kvm is available\n'
+                ls -l /dev/kvm
+                test -r /dev/kvm
+                test -w /dev/kvm
+
+                set +e
+                timeout 2 qemu-system-x86_64 \
+                  -accel kvm \
+                  -machine none \
+                  -nodefaults \
+                  -display none \
+                  -S
+                qemu_status=$?
+                set -e
+                if [ "$qemu_status" -ne 124 ]; then
+                  printf 'QEMU KVM probe failed with exit code %s\n' "$qemu_status" >&2
+                  exit "$qemu_status"
+                fi
+                printf 'QEMU KVM probe succeeded\n'
               else
                 printf 'Lima acceleration: /dev/kvm is unavailable; Lima will use QEMU TCG\n'
               fi
@@ -448,19 +467,44 @@ jobs:
 
           driver="$1"
           lab="install-windows-server-2025-wsl2-${driver}"
-          export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
+          runner_home=/home/runner
+          runner_path="$runner_home/.local/bin:/usr/local/bin:/usr/bin:/bin"
 
-          if [ "$driver" = lima ]; then
-            command -v limactl
-            limactl list --format='{{.Name}} {{.Status}}'
-            for log in "$HOME/.lima/taxiway-$lab"/*.log; do
-              test -f "$log" || continue
-              printf '\n===== %s =====\n' "$log"
-              tail -n 200 "$log"
-            done
+          if ! id runner >/dev/null 2>&1; then
+            printf 'The runner user was not created; no user-level diagnostics are available.\n'
+          elif [ "$driver" = lima ]; then
+            sudo -u runner env \
+              HOME="$runner_home" \
+              PATH="$runner_path" \
+              limactl --debug list --format='{{.Name}} {{.Status}}'
+
+            instance_dir="$runner_home/.lima/taxiway-$lab"
+            printf '\n===== Lima instance files: %s =====\n' "$instance_dir"
+            find "$instance_dir" -maxdepth 2 -type f -print 2>/dev/null | sort
+
+            while IFS= read -r diagnostic; do
+              printf '\n===== %s =====\n' "$diagnostic"
+              tail -n 250 "$diagnostic"
+            done < <(
+              find "$instance_dir" -maxdepth 2 -type f \
+                \( -name '*.log' -o -name '*.yaml' -o -name '*.json' \) \
+                -print 2>/dev/null | sort
+            )
+
+            rendered_yaml="$runner_home/.taxiway/lab-state/$lab/agent-lab.yaml"
+            if [ -f "$rendered_yaml" ]; then
+              printf '\n===== %s =====\n' "$rendered_yaml"
+              cat "$rendered_yaml"
+            fi
           else
-            docker info
-            docker ps -a
+            sudo -u runner env \
+              HOME="$runner_home" \
+              PATH="$runner_path" \
+              docker info
+            sudo -u runner env \
+              HOME="$runner_home" \
+              PATH="$runner_path" \
+              docker ps -a
           fi
           df -h
           exit 0
