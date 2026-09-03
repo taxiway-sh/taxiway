@@ -21,60 +21,30 @@ env:
   TAXIWAY_RELEASE: ${{ inputs.release || 'latest' }}
 
 jobs:
-  install:
-    name: ${{ matrix.platform }} / ${{ matrix.driver }}
-    runs-on: ${{ matrix.runner }}
+  linux:
+    name: linux-x64 / ${{ matrix.driver }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - platform: linux-x64
-            runner: ubuntu-24.04
-            driver: docker
-          - platform: linux-x64
-            runner: ubuntu-24.04
-            driver: lima
-          - platform: macos-intel
-            runner: macos-15-intel
-            driver: docker
-          - platform: macos-intel
-            runner: macos-15-intel
-            driver: lima
-          - platform: windows-11-arm-wsl2
-            runner: windows-11-arm
-            driver: docker
-          - platform: windows-11-arm-wsl2
-            runner: windows-11-arm
-            driver: lima
+        driver: [docker, lima]
 
     steps:
-      - name: Start Docker on Linux
-        if: matrix.platform == 'linux-x64'
+      - name: Start Docker
         shell: bash
         run: |
           set -euxo pipefail
           sudo systemctl start docker
           docker info
 
-      - name: Install Lima on Linux
-        if: matrix.platform == 'linux-x64' && matrix.driver == 'lima'
+      - name: Install Lima
+        if: matrix.driver == 'lima'
         uses: lima-vm/lima-actions/setup@55627e31b78637bf254a8b2a14da8ea7d12564e5 # v1.1.0
         with:
           version: ${{ env.LIMA_VERSION }}
 
-      - name: Install Docker, Colima, and Lima on macOS
-        if: matrix.platform == 'macos-intel'
-        shell: bash
-        run: |
-          set -euxo pipefail
-          brew install colima docker
-          colima start --cpu 2 --memory 4 --disk 20
-          docker info
-          limactl --version
-
-      - name: Install Taxiway on Linux and macOS
-        if: matrix.platform != 'windows-11-arm-wsl2'
+      - name: Install Taxiway
         shell: bash
         run: |
           set -euxo pipefail
@@ -98,12 +68,72 @@ jobs:
           test -d "$HOME/.taxiway/runtime/orchestrators"
           "$HOME/.local/bin/taxiway" version
 
-      - name: Exercise the driver on Linux and macOS
-        if: matrix.platform != 'windows-11-arm-wsl2'
+      - name: Exercise the ${{ matrix.driver }} driver
         shell: bash
         env:
           DRIVER: ${{ matrix.driver }}
-          LAB: install-${{ matrix.platform }}-${{ matrix.driver }}
+          LAB: install-linux-x64-${{ matrix.driver }}
+        run: |
+          set -euxo pipefail
+          export PATH="$HOME/.local/bin:$PATH"
+
+          cleanup() {
+            taxiway rm "$LAB" --yes >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          taxiway create "$LAB" --type codex --driver "$DRIVER"
+          taxiway list "$LAB" | tee /tmp/taxiway-list.txt
+          grep -F "$LAB" /tmp/taxiway-list.txt
+
+  macos:
+    name: macos-intel / ${{ matrix.driver }}
+    runs-on: macos-15-intel
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        driver: [docker, lima]
+
+    steps:
+      - name: Install Docker, Colima, and Lima
+        shell: bash
+        run: |
+          set -euxo pipefail
+          brew install colima docker
+          colima start --cpu 2 --memory 4 --disk 20
+          docker info
+          limactl --version
+
+      - name: Install Taxiway
+        shell: bash
+        run: |
+          set -euxo pipefail
+          case "$TAXIWAY_RELEASE" in
+            latest)
+              install_url="https://github.com/taxiway-sh/taxiway/releases/latest/download/install.sh"
+              ;;
+            v[0-9]*)
+              install_url="https://github.com/taxiway-sh/taxiway/releases/download/${TAXIWAY_RELEASE}/install.sh"
+              ;;
+            *)
+              printf 'invalid Taxiway release: %s\n' "$TAXIWAY_RELEASE" >&2
+              exit 1
+              ;;
+          esac
+
+          curl -fsSL "$install_url" | sh
+          test -x "$HOME/.local/bin/taxiway"
+          test -d "$HOME/.taxiway/runtime/infra"
+          test -d "$HOME/.taxiway/runtime/agents"
+          test -d "$HOME/.taxiway/runtime/orchestrators"
+          "$HOME/.local/bin/taxiway" version
+
+      - name: Exercise the ${{ matrix.driver }} driver
+        shell: bash
+        env:
+          DRIVER: ${{ matrix.driver }}
+          LAB: install-macos-intel-${{ matrix.driver }}
         run: |
           set -euxo pipefail
           export PATH="$HOME/.local/bin:$PATH"
@@ -118,12 +148,21 @@ jobs:
           grep -F "$LAB" /tmp/taxiway-list.txt
 
       - name: Stop Colima
-        if: always() && matrix.platform == 'macos-intel'
+        if: always()
         shell: bash
         run: colima delete --force || true
 
-      - name: Configure Windows 11 WSL2
-        if: matrix.platform == 'windows-11-arm-wsl2'
+  windows:
+    name: windows-11-arm-wsl2 / ${{ matrix.driver }}
+    runs-on: windows-11-arm
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        driver: [docker, lima]
+
+    steps:
+      - name: Configure WSL2
         shell: pwsh
         run: |
           $wslConfig = @"
@@ -134,20 +173,16 @@ jobs:
           "@
           Set-Content -Path "$env:USERPROFILE\.wslconfig" -Value $wslConfig -Encoding ascii
 
-          wsl --update --web-download
+          wsl --install --distribution Ubuntu-24.04 --web-download --no-launch
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           wsl --set-default-version 2
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-          wsl --install --distribution Ubuntu-24.04 --web-download --no-launch
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           wsl --list --verbose
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Install prerequisites inside WSL2
-        if: matrix.platform == 'windows-11-arm-wsl2'
         shell: pwsh
         env:
           DRIVER: ${{ matrix.driver }}
@@ -217,8 +252,7 @@ jobs:
           wsl --terminate Ubuntu-24.04
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Install Taxiway and exercise the driver inside WSL2
-        if: matrix.platform == 'windows-11-arm-wsl2'
+      - name: Install Taxiway and exercise the ${{ matrix.driver }} driver inside WSL2
         shell: pwsh
         env:
           DRIVER: ${{ matrix.driver }}
@@ -282,7 +316,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Remove the WSL2 distribution
-        if: always() && matrix.platform == 'windows-11-arm-wsl2'
+        if: always()
         shell: pwsh
         run: |
           wsl --unregister Ubuntu-24.04
