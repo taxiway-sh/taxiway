@@ -22,7 +22,7 @@ env:
 
 jobs:
   linux:
-    name: linux-x64 / ${{ matrix.driver }}
+    name: Linux / ${{ matrix.driver }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     strategy:
@@ -115,7 +115,7 @@ jobs:
           taxiway rm "$LAB" --yes || true
 
   macos:
-    name: macos-intel / ${{ matrix.driver }}
+    name: macOS / ${{ matrix.driver }}
     runs-on: macos-15-intel
     timeout-minutes: 120
     strategy:
@@ -221,7 +221,7 @@ jobs:
           fi
 
   windows:
-    name: windows-server-2025-wsl2 / ${{ matrix.driver }}
+    name: Windows WSL2 / ${{ matrix.driver }}
     runs-on: windows-2025
     timeout-minutes: 120
     strategy:
