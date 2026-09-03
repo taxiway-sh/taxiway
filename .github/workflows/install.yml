@@ -153,8 +153,8 @@ jobs:
         run: colima delete --force || true
 
   windows:
-    name: windows-11-arm-wsl2 / ${{ matrix.driver }}
-    runs-on: windows-11-arm
+    name: windows-server-2025-wsl2 / ${{ matrix.driver }}
+    runs-on: windows-2025
     timeout-minutes: 120
     strategy:
       fail-fast: false
@@ -173,13 +173,16 @@ jobs:
           "@
           Set-Content -Path "$env:USERPROFILE\.wslconfig" -Value $wslConfig -Encoding ascii
 
-          wsl.exe --install
+          wsl.exe --set-default-version 2
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           wsl.exe --install --distribution Ubuntu-24.04 --web-download --no-launch
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-          wsl.exe --set-default-version 2
+          wsl.exe --status
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          wsl.exe --version
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           wsl.exe --list --verbose
@@ -197,8 +200,20 @@ jobs:
           lima_version="$2"
           export DEBIAN_FRONTEND=noninteractive
 
+          uname -a
+          uname -m
+          cat /proc/version
+
           apt-get update
-          apt-get install -y --no-install-recommends ca-certificates curl docker.io jq sudo
+          apt-get install -y --no-install-recommends ca-certificates curl docker.io jq sudo util-linux
+
+          lscpu
+          if [ -c /dev/kvm ]; then
+            printf 'WSL2 nested virtualization: /dev/kvm is available\n'
+            ls -l /dev/kvm
+          else
+            printf 'WSL2 nested virtualization: /dev/kvm is unavailable\n'
+          fi
 
           if ! id runner >/dev/null 2>&1; then
             useradd --create-home --shell /bin/bash runner
@@ -265,7 +280,7 @@ jobs:
 
           driver="$1"
           taxiway_release="$2"
-          lab="install-windows-11-arm-wsl2-${driver}"
+          lab="install-windows-server-2025-wsl2-${driver}"
           export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
 
           case "$taxiway_release" in
