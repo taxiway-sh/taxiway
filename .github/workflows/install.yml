@@ -303,7 +303,7 @@ jobs:
               usermod -aG docker runner
               ;;
             lima)
-              apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils
+              apt-get install -y --no-install-recommends ovmf qemu-system-x86 qemu-utils
 
               version="${lima_version#v}"
               archive="lima-${version}-Linux-x86_64.tar.gz"
