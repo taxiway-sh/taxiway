@@ -273,7 +273,7 @@ jobs:
           cat /proc/version
 
           apt-get update
-          apt-get install -y --no-install-recommends ca-certificates curl jq sudo util-linux
+          apt-get install -y ca-certificates curl jq sudo util-linux
 
           lscpu
           if [ -c /dev/kvm ]; then
@@ -299,11 +299,11 @@ jobs:
 
           case "$driver" in
             docker)
-              apt-get install -y --no-install-recommends docker.io
+              apt-get install -y docker.io
               usermod -aG docker runner
               ;;
             lima)
-              apt-get install -y --no-install-recommends ovmf qemu-system-x86 qemu-utils
+              apt-get install -y qemu-system-x86 qemu-utils
 
               version="${lima_version#v}"
               archive="lima-${version}-Linux-x86_64.tar.gz"
