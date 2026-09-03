@@ -31,7 +31,8 @@ jobs:
         driver: [docker, lima]
 
     steps:
-      - name: Start Docker
+      - name: Start Docker on Linux
+        if: matrix.driver == 'docker'
         shell: bash
         run: |
           set -euxo pipefail
@@ -70,6 +71,7 @@ jobs:
 
       - name: Exercise the ${{ matrix.driver }} driver
         shell: bash
+        timeout-minutes: 10
         env:
           DRIVER: ${{ matrix.driver }}
           LAB: install-linux-x64-${{ matrix.driver }}
@@ -77,14 +79,40 @@ jobs:
           set -euxo pipefail
           export PATH="$HOME/.local/bin:$PATH"
 
-          cleanup() {
-            taxiway rm "$LAB" --yes >/dev/null 2>&1 || true
-          }
-          trap cleanup EXIT
-
           taxiway create "$LAB" --type codex --driver "$DRIVER"
           taxiway list "$LAB" | tee /tmp/taxiway-list.txt
           grep -F "$LAB" /tmp/taxiway-list.txt
+
+      - name: Collect driver diagnostics
+        if: failure()
+        shell: bash
+        env:
+          DRIVER: ${{ matrix.driver }}
+          LAB: install-linux-x64-${{ matrix.driver }}
+        run: |
+          set +e
+          if [ "$DRIVER" = lima ]; then
+            limactl list --format='{{.Name}} {{.Status}}'
+            for log in "$HOME/.lima/taxiway-$LAB"/*.log; do
+              test -f "$log" || continue
+              printf '\n===== %s =====\n' "$log"
+              tail -n 200 "$log"
+            done
+          else
+            docker info
+            docker ps -a
+          fi
+          df -h
+
+      - name: Clean up the ${{ matrix.driver }} environment
+        if: always()
+        shell: bash
+        timeout-minutes: 5
+        env:
+          LAB: install-linux-x64-${{ matrix.driver }}
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          taxiway rm "$LAB" --yes || true
 
   macos:
     name: macos-intel / ${{ matrix.driver }}
@@ -96,14 +124,27 @@ jobs:
         driver: [docker, lima]
 
     steps:
-      - name: Install Docker, Colima, and Lima
+      - name: Install ${{ matrix.driver }} prerequisites
         shell: bash
+        env:
+          DRIVER: ${{ matrix.driver }}
         run: |
           set -euxo pipefail
-          brew install colima docker
-          colima start --cpu 2 --memory 4 --disk 20
-          docker info
-          limactl --version
+          case "$DRIVER" in
+            docker)
+              brew install colima docker
+              colima start --cpu 2 --memory 4 --disk 20
+              docker info
+              ;;
+            lima)
+              brew install lima
+              limactl --version
+              ;;
+            *)
+              printf 'unsupported driver: %s\n' "$DRIVER" >&2
+              exit 1
+              ;;
+          esac
 
       - name: Install Taxiway
         shell: bash
@@ -131,6 +172,7 @@ jobs:
 
       - name: Exercise the ${{ matrix.driver }} driver
         shell: bash
+        timeout-minutes: 10
         env:
           DRIVER: ${{ matrix.driver }}
           LAB: install-macos-intel-${{ matrix.driver }}
@@ -138,19 +180,45 @@ jobs:
           set -euxo pipefail
           export PATH="$HOME/.local/bin:$PATH"
 
-          cleanup() {
-            taxiway rm "$LAB" --yes >/dev/null 2>&1 || true
-          }
-          trap cleanup EXIT
-
           taxiway create "$LAB" --type codex --driver "$DRIVER"
           taxiway list "$LAB" | tee /tmp/taxiway-list.txt
           grep -F "$LAB" /tmp/taxiway-list.txt
 
-      - name: Stop Colima
+      - name: Collect driver diagnostics
+        if: failure()
+        shell: bash
+        env:
+          DRIVER: ${{ matrix.driver }}
+          LAB: install-macos-intel-${{ matrix.driver }}
+        run: |
+          set +e
+          if [ "$DRIVER" = lima ]; then
+            limactl list --format='{{.Name}} {{.Status}}'
+            for log in "$HOME/.lima/taxiway-$LAB"/*.log; do
+              test -f "$log" || continue
+              printf '\n===== %s =====\n' "$log"
+              tail -n 200 "$log"
+            done
+          else
+            docker info
+            docker ps -a
+          fi
+          df -h
+          sysctl -n hw.ncpu hw.memsize
+
+      - name: Clean up the ${{ matrix.driver }} environment
         if: always()
         shell: bash
-        run: colima delete --force || true
+        timeout-minutes: 5
+        env:
+          DRIVER: ${{ matrix.driver }}
+          LAB: install-macos-intel-${{ matrix.driver }}
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          taxiway rm "$LAB" --yes || true
+          if [ "$DRIVER" = docker ]; then
+            colima delete --force || true
+          fi
 
   windows:
     name: windows-server-2025-wsl2 / ${{ matrix.driver }}
@@ -205,7 +273,7 @@ jobs:
           cat /proc/version
 
           apt-get update
-          apt-get install -y --no-install-recommends ca-certificates curl docker.io jq sudo util-linux
+          apt-get install -y --no-install-recommends ca-certificates curl jq sudo util-linux
 
           lscpu
           if [ -c /dev/kvm ]; then
@@ -220,7 +288,6 @@ jobs:
           fi
           printf '%s\n' 'runner ALL=(ALL) NOPASSWD:ALL' >/etc/sudoers.d/runner
           chmod 0440 /etc/sudoers.d/runner
-          usermod -aG docker runner
 
           cat >/etc/wsl.conf <<'EOF'
           [boot]
@@ -232,12 +299,14 @@ jobs:
 
           case "$driver" in
             docker)
+              apt-get install -y --no-install-recommends docker.io
+              usermod -aG docker runner
               ;;
             lima)
-              apt-get install -y --no-install-recommends qemu-system-arm qemu-utils
+              apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils
 
               version="${lima_version#v}"
-              archive="lima-${version}-Linux-aarch64.tar.gz"
+              archive="lima-${version}-Linux-x86_64.tar.gz"
               base_url="https://github.com/lima-vm/lima/releases/download/${lima_version}"
               workdir="$(mktemp -d)"
               trap 'rm -rf "$workdir"' EXIT
@@ -270,17 +339,13 @@ jobs:
           wsl --terminate Ubuntu-24.04
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Install Taxiway and exercise the ${{ matrix.driver }} driver inside WSL2
+      - name: Install Taxiway inside WSL2
         shell: pwsh
-        env:
-          DRIVER: ${{ matrix.driver }}
         run: |
           $script = @'
           set -euxo pipefail
 
-          driver="$1"
-          taxiway_release="$2"
-          lab="install-windows-server-2025-wsl2-${driver}"
+          taxiway_release="$1"
           export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
 
           case "$taxiway_release" in
@@ -296,17 +361,35 @@ jobs:
               ;;
           esac
 
-          cleanup() {
-            taxiway rm "$lab" --yes >/dev/null 2>&1 || true
-          }
-          trap cleanup EXIT
+          curl -fsSL "$install_url" | sh
+          test -x "$HOME/.local/bin/taxiway"
+          test -d "$HOME/.taxiway/runtime/infra"
+          test -d "$HOME/.taxiway/runtime/agents"
+          test -d "$HOME/.taxiway/runtime/orchestrators"
+          taxiway version
+          '@
 
-          sudo systemctl start docker
-          timeout 30 sh -c 'until docker info >/dev/null 2>&1; do sleep 1; done'
-          docker info
+          $script | wsl --distribution Ubuntu-24.04 --user runner --exec bash -s -- $env:TAXIWAY_RELEASE
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Exercise the ${{ matrix.driver }} driver inside WSL2
+        shell: pwsh
+        timeout-minutes: 10
+        env:
+          DRIVER: ${{ matrix.driver }}
+        run: |
+          $script = @'
+          set -euxo pipefail
+
+          driver="$1"
+          lab="install-windows-server-2025-wsl2-${driver}"
+          export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
 
           case "$driver" in
             docker)
+              sudo systemctl start docker
+              timeout 30 sh -c 'until docker info >/dev/null 2>&1; do sleep 1; done'
+              docker info
               ;;
             lima)
               limactl --version
@@ -316,22 +399,50 @@ jobs:
                 printf 'Lima acceleration: /dev/kvm is unavailable; Lima will use QEMU TCG\n'
               fi
               ;;
+            *)
+              printf 'unsupported driver: %s\n' "$driver" >&2
+              exit 1
+              ;;
           esac
-
-          curl -fsSL "$install_url" | sh
-          test -x "$HOME/.local/bin/taxiway"
-          test -d "$HOME/.taxiway/runtime/infra"
-          test -d "$HOME/.taxiway/runtime/agents"
-          test -d "$HOME/.taxiway/runtime/orchestrators"
-          taxiway version
 
           taxiway create "$lab" --type codex --driver "$driver"
           taxiway list "$lab" | tee /tmp/taxiway-list.txt
           grep -F "$lab" /tmp/taxiway-list.txt
           '@
 
-          $script | wsl --distribution Ubuntu-24.04 --user runner --exec bash -s -- $env:DRIVER $env:TAXIWAY_RELEASE
+          $script | wsl --distribution Ubuntu-24.04 --user runner --exec bash -s -- $env:DRIVER
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Collect driver diagnostics inside WSL2
+        if: failure()
+        shell: pwsh
+        env:
+          DRIVER: ${{ matrix.driver }}
+        run: |
+          $script = @'
+          set +e
+
+          driver="$1"
+          lab="install-windows-server-2025-wsl2-${driver}"
+          export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
+
+          if [ "$driver" = lima ]; then
+            command -v limactl
+            limactl list --format='{{.Name}} {{.Status}}'
+            for log in "$HOME/.lima/taxiway-$lab"/*.log; do
+              test -f "$log" || continue
+              printf '\n===== %s =====\n' "$log"
+              tail -n 200 "$log"
+            done
+          else
+            docker info
+            docker ps -a
+          fi
+          df -h
+          exit 0
+          '@
+
+          $script | wsl --distribution Ubuntu-24.04 --user runner --exec bash -s -- $env:DRIVER
 
       - name: Remove the WSL2 distribution
         if: always()
