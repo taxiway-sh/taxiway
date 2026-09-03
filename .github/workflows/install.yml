@@ -173,13 +173,16 @@ jobs:
           "@
           Set-Content -Path "$env:USERPROFILE\.wslconfig" -Value $wslConfig -Encoding ascii
 
-          wsl --install --distribution Ubuntu-24.04 --web-download --no-launch
+          wsl.exe --install
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-          wsl --set-default-version 2
+          wsl.exe --install --distribution Ubuntu-24.04 --web-download --no-launch
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-          wsl --list --verbose
+          wsl.exe --set-default-version 2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          wsl.exe --list --verbose
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Install prerequisites inside WSL2
