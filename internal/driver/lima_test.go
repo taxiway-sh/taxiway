@@ -170,7 +170,7 @@ func TestRealLimaTemplateUsesMinimalRuntimeMounts(t *testing.T) {
 		Orch:          "gastown",
 		GitDir:        "/home/lab/state/gastown/git",
 		RecordingsDir: "/home/lab/state/gastown/recordings",
-		LabHost:       "gastown.litellm.localhost",
+		LabHost:       "gastown.litellm.internal",
 	}
 
 	require.NoError(t, renderLimaYAML(tmplPath, data, outPath))
@@ -206,7 +206,7 @@ func TestRealLimaTemplateMapsObservabilityHost(t *testing.T) {
 		Orch:          "gastown",
 		GitDir:        "/home/lab/state/gastown/git",
 		RecordingsDir: "/home/lab/state/gastown/recordings",
-		LabHost:       "gastown.litellm.localhost",
+		LabHost:       "gastown.litellm.internal",
 	}
 
 	require.NoError(t, renderLimaYAML(tmplPath, data, outPath))
@@ -216,7 +216,7 @@ func TestRealLimaTemplateMapsObservabilityHost(t *testing.T) {
 	rendered := string(renderedBytes)
 
 	require.Contains(t, rendered, "host.lima.internal")
-	require.Contains(t, rendered, "gastown.litellm.localhost")
+	require.Contains(t, rendered, "gastown.litellm.internal")
 	require.NotContains(t, rendered, "observability.taxiway.internal")
 }
 

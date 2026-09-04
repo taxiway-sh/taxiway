@@ -115,7 +115,7 @@ exit 0
 	lines := readCommandLog(t, logPath)
 	require.Equal(t, []string{
 		"volume create taxiway-taxiway-demo-lab",
-		"run -d --name taxiway-demo --add-host demo.litellm.localhost:host-gateway -e USER=taxiway -e HOME=/home/taxiway -e SHELL=/bin/bash -e LANG=C.UTF-8 -e LC_ALL=C.UTF-8 -e LC_CTYPE=C.UTF-8 -e TERM=xterm-256color -v taxiway-taxiway-demo-lab:/lab -v " + repoDir + "/infra:/lab/infra:ro -v " + repoDir + "/agents:/lab/agents:ro -v " + repoDir + "/orchestrators/gastown:/lab/orchestrators/gastown:ro -v " + gitDir + ":/lab/git -v " + recordingsDir + ":/lab/recordings ubuntu:test sleep infinity",
+		"run -d --name taxiway-demo --add-host demo.litellm.internal:host-gateway -e USER=taxiway -e HOME=/home/taxiway -e SHELL=/bin/bash -e LANG=C.UTF-8 -e LC_ALL=C.UTF-8 -e LC_CTYPE=C.UTF-8 -e TERM=xterm-256color -v taxiway-taxiway-demo-lab:/lab -v " + repoDir + "/infra:/lab/infra:ro -v " + repoDir + "/agents:/lab/agents:ro -v " + repoDir + "/orchestrators/gastown:/lab/orchestrators/gastown:ro -v " + gitDir + ":/lab/git -v " + recordingsDir + ":/lab/recordings ubuntu:test sleep infinity",
 		"exec taxiway-demo apt-get update -qq",
 		"exec taxiway-demo apt-get install -y -qq sudo",
 		"exec taxiway-demo sh -c id -u 'taxiway' >/dev/null 2>&1 || useradd -m -s '/bin/bash' 'taxiway' && usermod -aG sudo 'taxiway' && printf '%s\\n' 'taxiway ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/taxiway-taxiway && chmod 0440 /etc/sudoers.d/taxiway-taxiway && mkdir -p /lab/work /lab/git /lab/recordings && chown -R 'taxiway:taxiway' /lab/work /lab/git /lab/recordings",

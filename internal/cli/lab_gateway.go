@@ -58,7 +58,7 @@ func labGatewayDir(stateDir string, ref config.LabRef) string {
 }
 
 func labLiteLLMBaseURL(state *RootState, ref config.LabRef) string {
-	return fmt.Sprintf("http://%s:%d", labLiteLLMHost(ref.Lab), state.proxyRuntime().Port)
+	return fmt.Sprintf("http://%s:%d", config.LabLiteLLMInternalHost(ref.Lab), state.proxyRuntime().Port)
 }
 
 func ensureLabGatewayEnv(state *RootState, ref config.LabRef) error {
@@ -82,7 +82,7 @@ func ensureLabGatewayEnv(state *RootState, ref config.LabRef) error {
 		changed = true
 	}
 
-	baseURL := fmt.Sprintf("http://%s:%d", labLiteLLMHost(ref.Lab), proxy.Port)
+	baseURL := fmt.Sprintf("http://%s:%d", config.LabLiteLLMInternalHost(ref.Lab), proxy.Port)
 	if values[labLiteLLMBaseURLEnv] != baseURL {
 		values[labLiteLLMBaseURLEnv] = baseURL
 		changed = true

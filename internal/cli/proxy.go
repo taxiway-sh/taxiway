@@ -504,7 +504,7 @@ func renderProxyConfigWithPage(routes []proxyRoute, page string) []byte {
 		reverse_proxy %[3]s
 	}
 
-`, matcher, route.Host, route.Upstream)
+`, matcher, strings.Join(proxyRouteHosts(route), " "), route.Upstream)
 	}
 	out.WriteString(`	handle {
 		header Content-Type text/html
@@ -631,6 +631,15 @@ func proxyRouteMatcher(route proxyRoute) string {
 	}
 	replacer := strings.NewReplacer(":", "_", "-", "_", ".", "_")
 	return replacer.Replace(route.ID)
+}
+
+func proxyRouteHosts(route proxyRoute) []string {
+	hosts := []string{route.Host}
+	if route.Kind == "lab" {
+		lab := strings.TrimPrefix(route.ID, "lab:")
+		hosts = append(hosts, config.LabLiteLLMInternalHost(lab))
+	}
+	return hosts
 }
 
 func proxyRunCmd(state *RootState, stateDir string) *exec.Cmd {

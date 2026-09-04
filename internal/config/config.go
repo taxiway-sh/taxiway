@@ -118,6 +118,12 @@ func LabLiteLLMHost(lab string) string {
 	return slug + ".litellm.localhost"
 }
 
+// LabLiteLLMInternalHost returns the lab-specific hostname agents use to
+// reach the host gateway without .localhost resolving to the lab loopback.
+func LabLiteLLMInternalHost(lab string) string {
+	return strings.TrimSuffix(LabLiteLLMHost(lab), ".localhost") + ".internal"
+}
+
 // CreatedAtPath returns the lab creation timestamp path for a lab identifier.
 func CreatedAtPath(stateDir, id string) string {
 	return filepath.Join(stateDir, LabDirOf(id), "created_at")

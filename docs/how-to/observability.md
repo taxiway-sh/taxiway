@@ -126,7 +126,8 @@ The lab `gateway` phase is responsible for:
 
 - generating the lab-specific LiteLLM API key;
 - creating the lab LiteLLM sidecar and gateway Postgres database;
-- registering the `<lab>.litellm.localhost` route in the shared proxy;
+- registering the host-facing `<lab>.litellm.localhost` and lab-facing
+  `<lab>.litellm.internal` routes in the shared proxy;
 - generating local Langfuse ingestion keys for that lab when observability is
   initialized.
 

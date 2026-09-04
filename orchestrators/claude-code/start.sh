@@ -26,7 +26,7 @@ pass() { printf '  \033[1;32mOK\033[0m   %s\n' "$*"; }
 
 SESSION="claude-code"
 CLAUDE_CODE_MODEL="${TAXIWAY_SET_MODEL:-claude-opus-4-8}"
-TAXIWAY_LITELLM_BASE_URL="${TAXIWAY_LITELLM_BASE_URL:-http://${TAXIWAY_LAB:-lab}.litellm.localhost:4000}"
+TAXIWAY_LITELLM_BASE_URL="${TAXIWAY_LITELLM_BASE_URL:-http://${TAXIWAY_LAB:-lab}.litellm.internal:4000}"
 
 if [ -z "${TAXIWAY_LITELLM_API_KEY:-}" ]; then
     printf '  \033[1;31mERROR\033[0m LiteLLM is required for Claude Code but TAXIWAY_LITELLM_API_KEY is missing\n'

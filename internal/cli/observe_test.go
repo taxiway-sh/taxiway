@@ -842,7 +842,7 @@ func TestEnsureProxyConfigRoutesLabHostsWithCaddy(t *testing.T) {
 	require.NoError(t, err)
 	configText := string(data)
 	require.Contains(t, configText, ":4000")
-	require.Contains(t, configText, `@gastown host gastown.litellm.localhost`)
+	require.Contains(t, configText, `@gastown host gastown.litellm.localhost gastown.litellm.internal`)
 	require.Contains(t, configText, "reverse_proxy taxiway-gastown-gateway-litellm-1:4000")
 	registryData, err := os.ReadFile(filepath.Join(proxyDir, "routes.json"))
 	require.NoError(t, err)
@@ -875,7 +875,7 @@ func TestProxyDefaultPageIncludesMinimalProxyShellAndRoutes(t *testing.T) {
 	require.Contains(t, configText, `<span class="status">running</span>`)
 	require.Contains(t, configText, "This endpoint only serves Taxiway runtime routes.")
 	require.Contains(t, configText, `@observability_langfuse host langfuse.localhost`)
-	require.Contains(t, configText, `@gastown host gastown.litellm.localhost`)
+	require.Contains(t, configText, `@gastown host gastown.litellm.localhost gastown.litellm.internal`)
 }
 
 func TestReloadProxyIncludesCaddyOutputOnFailure(t *testing.T) {

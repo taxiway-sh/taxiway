@@ -1105,9 +1105,9 @@ func TestRunCommandProvisionsLabGatewayRuntimeEnv(t *testing.T) {
 	values, err := envfile.Load(labGatewayEnvPath(stateDir, config.LabRef{Lab: "gastown", Orch: "gastown", Driver: "mock"}))
 	require.NoError(t, err)
 	require.NotEmpty(t, values[labLiteLLMAPIKeyEnv])
-	require.Equal(t, "http://gastown.litellm.localhost:4000", values[labLiteLLMBaseURLEnv])
+	require.Equal(t, "http://gastown.litellm.internal:4000", values[labLiteLLMBaseURLEnv])
 	require.Contains(t, copiedEnv, "TAXIWAY_LITELLM_API_KEY='")
-	require.Contains(t, copiedEnv, "TAXIWAY_LITELLM_BASE_URL='http://gastown.litellm.localhost:4000'")
+	require.Contains(t, copiedEnv, "TAXIWAY_LITELLM_BASE_URL='http://gastown.litellm.internal:4000'")
 }
 
 func TestRunCommandWithMockDriverDoesNotCreateObservabilityRuntime(t *testing.T) {
