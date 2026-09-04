@@ -45,6 +45,11 @@ func buildUpTestRoot(t *testing.T) (*cobra.Command, *RootState, *driver.MockDriv
 	for _, p := range []string{"infra/commands"} {
 		require.NoError(t, os.MkdirAll(filepath.Join(tmp, p), 0755))
 	}
+	require.NoError(t, os.MkdirAll(filepath.Join(tmp, "infra", "workspace"), 0755))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(tmp, "infra", "workspace", "trust-mirror.sh"),
+		[]byte("#!/bin/bash\necho mirror trusted\n"), 0755,
+	))
 	for _, script := range []string{
 		"infra/commands/bootstrap.sh",
 		"infra/commands/doctor.sh",
@@ -1776,6 +1781,24 @@ func TestUp_PreparesLocalWorkspaceRepositoryBeforeWorkspaceScript(t *testing.T) 
 	require.True(t, containsSubstring(gitCommands, "clone --mirror https://github.com/acme/proj"), "workspace preparation must mirror the source repo: %v", gitCommands)
 	require.True(t, containsSubstring(gitCommands, "proj.git"), "workspace preparation must use the lab-local bare repo: %v", gitCommands)
 	require.False(t, containsSubstring(gitCommands, "work/proj"), "workspace preparation must not clone the working tree: %v", gitCommands)
+}
+
+func TestUp_TrustsLocalWorkspaceMirrorBeforeWorkspaceScript(t *testing.T) {
+	root, _, mock, stdout, stderr := buildWorkspaceTestRoot(t)
+	installFakeWorkspaceGit(t, nil)
+
+	_, _, err := execUpRoot(t, root, stdout, stderr,
+		"up", "claude-code", "--type", "claude-code",
+		"--repo", "https://github.com/acme/proj",
+	)
+	require.NoError(t, err)
+
+	trustIdx := indexOf(mock.ExecLog, "trust-mirror.sh")
+	workspaceIdx := indexOf(mock.ExecLog, "workspace.sh")
+	require.NotEqual(t, -1, trustIdx, "the shared mirror trust script must run")
+	require.NotEqual(t, -1, workspaceIdx, "the orchestrator workspace script must run")
+	require.Less(t, trustIdx, workspaceIdx, "the mirror must be trusted before the orchestrator consumes it")
+	require.Equal(t, "file:///lab/git/proj.git", mock.ExecEnvLog[trustIdx]["TAXIWAY_REPO_FORK_URL"])
 }
 
 // TestUp_GastownWorkspaceEnv: gastown gets TAXIWAY_RIG_NAME and TAXIWAY_CREW_NAME == host username.
