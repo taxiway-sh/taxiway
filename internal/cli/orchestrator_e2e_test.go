@@ -194,6 +194,9 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		runE2EAssert(t, "assert:phase-installed", func(t *testing.T) {
 			assertE2EPhase(t, stateDir, id, phases.PhaseInstall)
 		})
+		runE2EAssert(t, "assert:lab-work-trusted", func(t *testing.T) {
+			assertE2EAgentWorkspaceTrusted(t, state, id, orch, LabWorkRoot)
+		})
 	})
 
 	runE2EStep(t, "taxiway:verify", func(t *testing.T) {
@@ -221,6 +224,11 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		runE2EAssert(t, e2eWorkspaceAssertName(orch), func(t *testing.T) {
 			assertE2EFixtureWorkspace(t, state, id, orch)
 		})
+		if orch == "claude-code" || orch == "codex" {
+			runE2EAssert(t, "assert:repository-trusted", func(t *testing.T) {
+				assertE2EAgentWorkspaceTrusted(t, state, id, orch, e2eFixtureWorkspaceDir())
+			})
+		}
 		runE2EAssert(t, "assert:workspace-mirror-trusted", func(t *testing.T) {
 			assertE2EWorkspaceMirrorTrusted(t, state, id)
 		})
@@ -563,6 +571,39 @@ func assertE2EWorkspaceMirrorTrusted(t *testing.T, state *RootState, id string) 
 	require.NoError(t, err)
 	require.Equal(t, 0, res.ExitCode, "read Lab Git safe directories\nstderr:\n%s", stderr.String())
 	require.Contains(t, strings.Split(strings.TrimSpace(stdout.String()), "\n"), workspaceBareRepoPath(ref))
+}
+
+func assertE2EAgentWorkspaceTrusted(t *testing.T, state *RootState, id, orch, workspacePath string) {
+	t.Helper()
+	var argv []string
+	switch orch {
+	case "claude-code":
+		argv = []string{
+			"jq", "-e", "--arg", "path", workspacePath,
+			`.projects[$path].hasTrustDialogAccepted == true`,
+			"/home/taxiway/.claude.json",
+		}
+	case "codex":
+		argv = []string{
+			"python3", "-c",
+			`import sys, tomllib; config = tomllib.load(open(sys.argv[1], "rb")); assert config["projects"][sys.argv[2]]["trust_level"] == "trusted"`,
+			"/home/taxiway/.codex/config.toml", workspacePath,
+		}
+	default:
+		return
+	}
+
+	var stdout, stderr bytes.Buffer
+	res, err := state.Driver.Exec(context.Background(), id, driver.ExecRequest{
+		Workdir: "/lab",
+		Argv:    argv,
+		Stdout:  &stdout,
+		Stderr:  &stderr,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 0, res.ExitCode,
+		"%s must trust %s\nstdout:\n%s\nstderr:\n%s",
+		orch, workspacePath, stdout.String(), stderr.String())
 }
 
 func assertE2EShellCheck(t *testing.T, root *cobra.Command, tb *dockerTestBuf, lab, orch string) {

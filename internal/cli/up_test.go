@@ -1653,6 +1653,77 @@ func buildWorkspaceTestRoot(t *testing.T) (*cobra.Command, *RootState, *driver.M
 	return root, state, mock, stdout, stderr
 }
 
+func TestInstallRunsAgentWorkspaceTrustHookForLabWork(t *testing.T) {
+	root, state, mock, stdout, stderr := buildWorkspaceTestRoot(t)
+	setAgents(t, state, "claude-code", "claude-code")
+	addAgentLifecycleScripts(t, state, "claude-code")
+	addAgentScript(t, state, "claude-code", "trust-workspace.sh")
+
+	_, _, err := execUpRoot(t, root, stdout, stderr,
+		"up", "claude-code", "--type", "claude-code", "--prepare-only",
+	)
+	require.NoError(t, err)
+
+	trustIndex := indexOf(mock.ExecLog, "trust-workspace.sh")
+	require.Greater(t, trustIndex, indexOf(mock.ExecLog, "install.sh"))
+	require.Equal(t, LabWorkRoot, mock.ExecEnvLog[trustIndex][workspaceTrustPathEnv])
+}
+
+func TestInstallAllowsAgentWithoutWorkspaceTrustHook(t *testing.T) {
+	root, state, _, stdout, stderr := buildWorkspaceTestRoot(t)
+	setAgents(t, state, "claude-code", "claude-code")
+	addAgentLifecycleScripts(t, state, "claude-code")
+
+	_, _, err := execUpRoot(t, root, stdout, stderr,
+		"up", "claude-code", "--type", "claude-code", "--prepare-only",
+	)
+	require.NoError(t, err)
+}
+
+func TestInstallFailsWhenAgentWorkspaceTrustHookFails(t *testing.T) {
+	root, state, mock, stdout, stderr := buildWorkspaceTestRoot(t)
+	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+	id := idName("claude-code")
+	setAgents(t, state, "claude-code", "claude-code")
+	addAgentLifecycleScripts(t, state, "claude-code")
+	addAgentScript(t, state, "claude-code", "trust-workspace.sh")
+	mock.FailExec["trust-workspace.sh"] = errors.New("injected trust failure")
+
+	_, _, err := execUpRoot(t, root, stdout, stderr,
+		"up", "claude-code", "--type", "claude-code", "--prepare-only",
+	)
+	require.ErrorContains(t, err, `agent "claude-code" trust workspace "/lab/work"`)
+	require.False(t, phases.Done(stateDir, id, phases.PhaseInstall))
+}
+
+func TestWorkspaceRunsAgentTrustHookForProvisionedRepositoryBeforeStart(t *testing.T) {
+	root, state, mock, stdout, stderr := buildWorkspaceTestRoot(t)
+	setAgents(t, state, "claude-code", "claude-code")
+	addAgentLifecycleScripts(t, state, "claude-code")
+	addAgentScript(t, state, "claude-code", "trust-workspace.sh")
+
+	_, _, err := execUpRoot(t, root, stdout, stderr,
+		"up", "claude-code", "--type", "claude-code",
+		"--repo", "https://github.com/acme/proj", "--skip-auth-check",
+	)
+	require.NoError(t, err)
+
+	var trustPaths []string
+	var workspaceTrustIndex int
+	for i, script := range mock.ExecLog {
+		if script != "trust-workspace.sh" {
+			continue
+		}
+		trustPaths = append(trustPaths, mock.ExecEnvLog[i][workspaceTrustPathEnv])
+		if mock.ExecEnvLog[i][workspaceTrustPathEnv] == "/lab/work/proj" {
+			workspaceTrustIndex = i
+		}
+	}
+	require.Equal(t, []string{LabWorkRoot, "/lab/work/proj"}, trustPaths)
+	require.Greater(t, workspaceTrustIndex, indexOf(mock.ExecLog, "workspace.sh"))
+	require.Less(t, workspaceTrustIndex, indexOf(mock.ExecLog, "start.sh"))
+}
+
 // TestUp_WorkspacePhaseMarked: with workspace.sh present, phase marker is written.
 func TestUp_WorkspacePhaseMarked(t *testing.T) {
 	root, state, _, stdout, stderr := buildWorkspaceTestRoot(t)

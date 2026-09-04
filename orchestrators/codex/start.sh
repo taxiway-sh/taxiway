@@ -36,16 +36,6 @@ mkdir -p "$start_dir"
 if [ -n "${TAXIWAY_WORKSPACE_DIR:-}" ] && [ -d "${TAXIWAY_WORKSPACE_DIR}" ]; then
     start_dir="${TAXIWAY_WORKSPACE_DIR}"
 fi
-trusted_project_dirs=("/lab/work")
-if [ "$start_dir" != "/lab/work" ]; then
-    trusted_project_dirs+=("$start_dir")
-fi
-project_headers=()
-for trusted_project_dir in "${trusted_project_dirs[@]}"; do
-    toml_trusted_project_dir="${trusted_project_dir//\\/\\\\}"
-    toml_trusted_project_dir="${toml_trusted_project_dir//\"/\\\"}"
-    project_headers+=("[projects.\"${toml_trusted_project_dir}\"]")
-done
 
 # Kill existing session if any (clean restart)
 if tmux has-session -t "$SESSION" 2>/dev/null; then
@@ -72,15 +62,8 @@ tmp_config="$(mktemp)"
     printf '\n'
 } > "$tmp_config"
 if [ -f "$CODEX_CONFIG" ]; then
-    awk -v project_headers="$(printf '%s\n' "${project_headers[@]}")" '
-        BEGIN {
-            split(project_headers, headers, "\n")
-            for (i in headers) {
-                trusted_headers[headers[i]] = 1
-            }
-        }
+    awk '
         /^\[model_providers\.taxiway-litellm\]$/ { skip=1; next }
-        $0 in trusted_headers { skip=1; next }
         /^\[/ { skip=0 }
         skip { next }
         /^model_provider = / { next }
@@ -98,13 +81,6 @@ requires_openai_auth = false
 env_http_headers = { "x-litellm-api-key" = "TAXIWAY_LITELLM_API_KEY", "x-litellm-agent-id" = "TAXIWAY_LITELLM_AGENT_ID" }
 supports_websockets = false
 EOF
-for project_header in "${project_headers[@]}"; do
-    cat >> "$tmp_config" << EOF
-
-${project_header}
-trust_level = "trusted"
-EOF
-done
 mv "$tmp_config" "$CODEX_CONFIG"
 pass "Codex configured for LiteLLM subscription proxy using model ${CODEX_MODEL}"
 

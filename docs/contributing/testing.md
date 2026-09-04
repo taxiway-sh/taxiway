@@ -114,11 +114,13 @@ lab or requiring Docker. They run through `make test-scripts`:
 
 | Script | What it validates |
 |---|---|
+| `tests/scripts/agents/test_trust_workspace.sh` | Claude Code and Codex workspace-trust config creation, preservation, escaping, and idempotency. |
 | `tests/scripts/test_standalone_install.sh` | Root `install.sh` defaults, help text, runtime directory, and staged runtime replacement. |
 | `tests/scripts/test_verify_headers.sh` | Verify scripts start user-visible output with section headers before `OK` lines. |
 | `tests/scripts/infra/commands/test_reset.sh` | `infra/commands/reset.sh` confirmation behavior, cleanup, and marker preservation. |
 | `tests/scripts/infra/trace/test_events.sh` | `infra/trace/events.sh` event output, source fallback, and ignored trace env vars. |
 | `tests/scripts/infra/workspace/test_clone.sh` | `infra/workspace/clone.sh` URL rewriting, clone flow, ref checkout, and token handling. |
+| `tests/scripts/orchestrators/codex/test_start.sh` | Codex start preserves workspace trust while updating its LiteLLM provider configuration. |
 | `tests/scripts/orchestrators/gastown/test_workspace.sh` | `orchestrators/gastown/workspace.sh` skip behavior, name validation, HQ initialization, rig registration, ref checkout, and crew workspace provisioning. |
 | `tests/scripts/orchestrators/gastown/test_start.sh` | `orchestrators/gastown/start.sh` start phase behavior and contract validation. |
 

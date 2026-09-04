@@ -857,7 +857,10 @@ func runPhaseWithProfile(ctx context.Context, state *RootState, ref config.LabRe
 		if err := execScriptWithRef(ctx, state, ref, script, baseEnv); err != nil {
 			return err
 		}
-		return runAgentScripts(ctx, state, ref, "install.sh", baseEnv)
+		if err := runAgentScripts(ctx, state, ref, "install.sh", baseEnv); err != nil {
+			return err
+		}
+		return runAgentWorkspaceTrustHooks(ctx, state, ref, LabWorkRoot, baseEnv)
 
 	case phases.PhaseGateway:
 		return reconcileGateway(ctx, state, ref)
@@ -887,7 +890,10 @@ func runPhaseWithProfile(ctx context.Context, state *RootState, ref config.LabRe
 		if err := prepareOrchestratorProfileRuntime(ctx, state, ref, baseEnv, clearProfile); err != nil {
 			return err
 		}
-		return execScriptWithRef(ctx, state, ref, script, baseEnv)
+		if err := execScriptWithRef(ctx, state, ref, script, baseEnv); err != nil {
+			return err
+		}
+		return runAgentWorkspaceTrustHooks(ctx, state, ref, baseEnv["TAXIWAY_WORKSPACE_DIR"], baseEnv)
 
 	case phases.PhaseAuth:
 		return nil

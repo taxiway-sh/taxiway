@@ -168,6 +168,11 @@ Taxiway owns the lab lifecycle and calls the adapter at known phase boundaries.
 The adapter owns the details of installing, verifying, configuring, and starting
 the specific orchestrator.
 
+Agents can optionally provide `trust-workspace.sh`. Taxiway calls this hook
+after agent installation for `/lab/work`, then again after repository
+provisioning for the resolved workspace. The lifecycle owns when trust is
+granted, while each agent owns its native configuration format.
+
 ## Events and Observability
 
 Adapter and agent scripts can emit `LAB_AGENT_EVENT {json}` lines. The driver
@@ -189,7 +194,7 @@ phase events.
 | Extension | Files to add or change |
 |---|---|
 | New orchestrator adapter | `orchestrators/<type>/manifest.yaml` and phase scripts |
-| New supported agent CLI | `agents/<agent>/install.sh`, `verify.sh`, `auth.sh`, `doctor.sh` |
+| New supported agent CLI | `agents/<agent>/install.sh`, `verify.sh`, `auth.sh`, `doctor.sh`, and optional `trust-workspace.sh` |
 | New driver | Implementation of `internal/driver.Driver` and driver selection wiring |
 | New phase behavior | `internal/phases`, corresponding CLI command, and driver/adapter calls |
 | New local event sink | `internal/event` and driver execution wiring |
