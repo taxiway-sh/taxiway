@@ -290,7 +290,7 @@ jobs:
           test -d "$HOME/.taxiway/runtime/agents"
           test -d "$HOME/.taxiway/runtime/orchestrators"
           "$HOME/.local/bin/taxiway" version
-          COMPOSE_PARALLEL_LIMIT=1 "$HOME/.local/bin/taxiway" init
+          COMPOSE_PARALLEL_LIMIT=2 "$HOME/.local/bin/taxiway" init
 
       - name: Verify installation
         shell: bash
