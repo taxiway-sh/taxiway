@@ -290,7 +290,7 @@ jobs:
           test -d "$HOME/.taxiway/runtime/agents"
           test -d "$HOME/.taxiway/runtime/orchestrators"
           "$HOME/.local/bin/taxiway" version
-          "$HOME/.local/bin/taxiway" init
+          COMPOSE_PARALLEL_LIMIT=1 "$HOME/.local/bin/taxiway" init
 
       - name: Verify installation
         shell: bash
@@ -368,6 +368,13 @@ jobs:
           docker compose version
           docker info
           docker ps -a
+          colima status
+          LIMA_HOME="$HOME/.colima/_lima" limactl --debug list --format='{{.Name}} {{.Status}}'
+          for log in "$HOME/.colima/_lima/colima"/*.log; do
+            test -f "$log" || continue
+            printf '\n===== %s =====\n' "$log"
+            tail -n 250 "$log"
+          done
           if [ "$DRIVER" = lima ]; then
             limactl --debug list --format='{{.Name}} {{.Status}}'
             for log in "$HOME/.lima/taxiway-$LAB"/*.log; do
