@@ -250,7 +250,7 @@ jobs:
         run: |
           set -euxo pipefail
           brew install colima docker docker-compose
-          colima start --cpu 2 --memory 4 --disk 20
+          colima start --cpu 4 --memory 4 --disk 20
           docker info
           docker compose version
 
@@ -269,6 +269,7 @@ jobs:
 
       - name: Install Taxiway
         shell: bash
+        timeout-minutes: 20
         run: |
           set -euxo pipefail
           case "$TAXIWAY_RELEASE" in
@@ -294,7 +295,7 @@ jobs:
 
       - name: Verify installation
         shell: bash
-        timeout-minutes: 10
+        timeout-minutes: 15
         env:
           DRIVER: ${{ matrix.driver }}
           LAB: install-macos-intel-${{ matrix.driver }}
@@ -377,6 +378,12 @@ jobs:
           done
           if [ "$DRIVER" = lima ]; then
             limactl --debug list --format='{{.Name}} {{.Status}}'
+            if limactl list --format='{{.Name}}' | grep -Fxq "taxiway-$LAB"; then
+              limactl shell --tty=false "taxiway-$LAB" -- \
+                sudo tail -n 200 /var/log/cloud-init-output.log
+              limactl shell --tty=false "taxiway-$LAB" -- \
+                sudo tail -n 200 /var/log/cloud-init.log
+            fi
             for log in "$HOME/.lima/taxiway-$LAB"/*.log; do
               test -f "$log" || continue
               printf '\n===== %s =====\n' "$log"
