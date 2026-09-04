@@ -111,6 +111,9 @@ func testE2EOrchestratorPrepareRun(t *testing.T, orch string) {
 		runE2EAssert(t, e2eWorkspaceAssertName(orch), func(t *testing.T) {
 			assertE2EFixtureWorkspace(t, state, id, orch)
 		})
+		runE2EAssert(t, "assert:workspace-mirror-trusted", func(t *testing.T) {
+			assertE2EWorkspaceMirrorTrusted(t, state, id)
+		})
 		runE2EAssert(t, "assert:gateway-started", func(t *testing.T) {
 			assertE2EGatewayRuntimeRunning(t, state, lab, orch)
 		})
@@ -217,6 +220,9 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		})
 		runE2EAssert(t, e2eWorkspaceAssertName(orch), func(t *testing.T) {
 			assertE2EFixtureWorkspace(t, state, id, orch)
+		})
+		runE2EAssert(t, "assert:workspace-mirror-trusted", func(t *testing.T) {
+			assertE2EWorkspaceMirrorTrusted(t, state, id)
 		})
 	})
 
@@ -345,6 +351,9 @@ func testE2EOrchestratorUp(t *testing.T, orch string) {
 		})
 		runE2EAssert(t, e2eWorkspaceAssertName(orch), func(t *testing.T) {
 			assertE2EFixtureWorkspace(t, state, id, orch)
+		})
+		runE2EAssert(t, "assert:workspace-mirror-trusted", func(t *testing.T) {
+			assertE2EWorkspaceMirrorTrusted(t, state, id)
 		})
 		runE2EAssert(t, "assert:gateway-started", func(t *testing.T) {
 			assertE2EGatewayRuntimeRunning(t, state, lab, orch)
@@ -535,6 +544,25 @@ func assertE2EFixtureWorkspace(t *testing.T, state *RootState, id, orch string) 
 	})
 	require.NoError(t, err)
 	require.Equal(t, 0, res.ExitCode, "fixture workspace must be provisioned at %s\nstdout:\n%s\nstderr:\n%s", expected, stdout.String(), stderr.String())
+}
+
+func assertE2EWorkspaceMirrorTrusted(t *testing.T, state *RootState, id string) {
+	t.Helper()
+	ref, ok, err := state.Driver.ReadLabRef(context.Background(), id)
+	require.NoError(t, err)
+	require.True(t, ok, "lab ref must exist for %s", id)
+	require.NotNil(t, ref.Workspace)
+
+	var stdout, stderr bytes.Buffer
+	res, err := state.Driver.Exec(context.Background(), id, driver.ExecRequest{
+		Workdir: "/lab",
+		Argv:    []string{"git", "config", "--global", "--get-all", "safe.directory"},
+		Stdout:  &stdout,
+		Stderr:  &stderr,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 0, res.ExitCode, "read Lab Git safe directories\nstderr:\n%s", stderr.String())
+	require.Contains(t, strings.Split(strings.TrimSpace(stdout.String()), "\n"), workspaceBareRepoPath(ref))
 }
 
 func assertE2EShellCheck(t *testing.T, root *cobra.Command, tb *dockerTestBuf, lab, orch string) {

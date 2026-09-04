@@ -873,6 +873,10 @@ func runPhaseWithProfile(ctx context.Context, state *RootState, ref config.LabRe
 		if err != nil {
 			return err
 		}
+		trustScript := filepath.Join(repoDir, "infra", "workspace", "trust-mirror.sh")
+		if err := execScriptWithRef(ctx, state, ref, trustScript, baseEnv); err != nil {
+			return fmt.Errorf("trust workspace mirror: %w", err)
+		}
 		script, err := workspaceScript(repoDir, orch)
 		if err != nil {
 			return err
