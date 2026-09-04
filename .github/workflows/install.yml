@@ -31,19 +31,41 @@ jobs:
         driver: [docker, lima]
 
     steps:
-      - name: Start Docker on Linux
-        if: matrix.driver == 'docker'
+      - name: Install prerequisites
         shell: bash
+        env:
+          DRIVER: ${{ matrix.driver }}
         run: |
           set -euxo pipefail
-          sudo systemctl start docker
-          docker info
+          case "$DRIVER" in
+            docker)
+              sudo systemctl start docker
+              docker info
+              ;;
+            lima)
+              sudo apt-get update
+              sudo apt-get install -y qemu-system-x86 qemu-utils
 
-      - name: Install Lima
-        if: matrix.driver == 'lima'
-        uses: lima-vm/lima-actions/setup@55627e31b78637bf254a8b2a14da8ea7d12564e5 # v1.1.0
-        with:
-          version: ${{ env.LIMA_VERSION }}
+              version="${LIMA_VERSION#v}"
+              archive="lima-${version}-Linux-x86_64.tar.gz"
+              base_url="https://github.com/lima-vm/lima/releases/download/${LIMA_VERSION}"
+              workdir="$(mktemp -d)"
+              trap 'rm -rf "$workdir"' EXIT
+
+              curl -fsSL "$base_url/$archive" -o "$workdir/$archive"
+              curl -fsSL "$base_url/SHA256SUMS" -o "$workdir/SHA256SUMS"
+              expected="$(grep " $archive\$" "$workdir/SHA256SUMS" | awk '{print $1}')"
+              actual="$(sha256sum "$workdir/$archive" | awk '{print $1}')"
+              test -n "$expected"
+              test "$actual" = "$expected"
+              sudo tar -C /usr/local -xzf "$workdir/$archive"
+              limactl --version
+              ;;
+            *)
+              printf 'unsupported driver: %s\n' "$DRIVER" >&2
+              exit 1
+              ;;
+          esac
 
       - name: Install Taxiway
         shell: bash
@@ -69,7 +91,7 @@ jobs:
           test -d "$HOME/.taxiway/runtime/orchestrators"
           "$HOME/.local/bin/taxiway" version
 
-      - name: Exercise the ${{ matrix.driver }} driver
+      - name: Verify installation
         shell: bash
         timeout-minutes: 10
         env:
@@ -83,7 +105,7 @@ jobs:
           taxiway list "$LAB" | tee /tmp/taxiway-list.txt
           grep -F "$LAB" /tmp/taxiway-list.txt
 
-      - name: Collect driver diagnostics
+      - name: Collect failure diagnostics
         if: failure()
         shell: bash
         env:
@@ -104,7 +126,7 @@ jobs:
           fi
           df -h
 
-      - name: Clean up the ${{ matrix.driver }} environment
+      - name: Clean up
         if: always()
         shell: bash
         timeout-minutes: 5
@@ -124,7 +146,7 @@ jobs:
         driver: [docker, lima]
 
     steps:
-      - name: Install ${{ matrix.driver }} prerequisites
+      - name: Install prerequisites
         shell: bash
         env:
           DRIVER: ${{ matrix.driver }}
@@ -170,7 +192,7 @@ jobs:
           test -d "$HOME/.taxiway/runtime/orchestrators"
           "$HOME/.local/bin/taxiway" version
 
-      - name: Exercise the ${{ matrix.driver }} driver
+      - name: Verify installation
         shell: bash
         timeout-minutes: 10
         env:
@@ -184,7 +206,7 @@ jobs:
           taxiway list "$LAB" | tee /tmp/taxiway-list.txt
           grep -F "$LAB" /tmp/taxiway-list.txt
 
-      - name: Collect driver diagnostics
+      - name: Collect failure diagnostics
         if: failure()
         shell: bash
         env:
@@ -206,7 +228,7 @@ jobs:
           df -h
           sysctl -n hw.ncpu hw.memsize
 
-      - name: Clean up the ${{ matrix.driver }} environment
+      - name: Clean up
         if: always()
         shell: bash
         timeout-minutes: 5
@@ -230,8 +252,10 @@ jobs:
         driver: [docker, lima]
 
     steps:
-      - name: Configure WSL2
+      - name: Install prerequisites
         shell: pwsh
+        env:
+          DRIVER: ${{ matrix.driver }}
         run: |
           $wslConfig = @"
           [wsl2]
@@ -256,11 +280,6 @@ jobs:
           wsl.exe --list --verbose
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Install prerequisites inside WSL2
-        shell: pwsh
-        env:
-          DRIVER: ${{ matrix.driver }}
-        run: |
           $script = @'
           set -euxo pipefail
 
@@ -347,7 +366,7 @@ jobs:
           wsl --terminate Ubuntu-24.04
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Install Taxiway inside WSL2
+      - name: Install Taxiway
         shell: pwsh
         run: |
           $script = @'
@@ -388,7 +407,7 @@ jobs:
           Remove-Item -Force $scriptPath
           if ($scriptExitCode -ne 0) { exit $scriptExitCode }
 
-      - name: Exercise the ${{ matrix.driver }} driver inside WSL2
+      - name: Verify installation
         shell: pwsh
         timeout-minutes: 10
         env:
@@ -456,7 +475,7 @@ jobs:
           Remove-Item -Force $scriptPath
           if ($scriptExitCode -ne 0) { exit $scriptExitCode }
 
-      - name: Collect driver diagnostics inside WSL2
+      - name: Collect failure diagnostics
         if: failure()
         shell: pwsh
         env:
@@ -519,7 +538,7 @@ jobs:
           wsl.exe --distribution Ubuntu-24.04 --user root --exec bash $wslScriptPath $env:DRIVER
           Remove-Item -Force $scriptPath
 
-      - name: Remove the WSL2 distribution
+      - name: Clean up
         if: always()
         shell: pwsh
         run: |
