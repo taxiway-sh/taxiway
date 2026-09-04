@@ -304,7 +304,24 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
 
           status_file="$(mktemp)"
-          trap 'rm -f "$status_file"' EXIT
+          shim_dir=""
+          trap 'rm -f "$status_file"; if [ -n "$shim_dir" ]; then rm -rf "$shim_dir"; fi' EXIT
+
+          if [ "$DRIVER" = lima ]; then
+            TAXIWAY_REAL_LIMACTL="$(command -v limactl)"
+            export TAXIWAY_REAL_LIMACTL
+            shim_dir="$(mktemp -d)"
+            cat >"$shim_dir/limactl" <<'SH'
+          #!/bin/sh
+          if [ "$1" = start ]; then
+            shift
+            exec "$TAXIWAY_REAL_LIMACTL" start --timeout=15m "$@"
+          fi
+          exec "$TAXIWAY_REAL_LIMACTL" "$@"
+          SH
+            chmod +x "$shim_dir/limactl"
+            export PATH="$shim_dir:$PATH"
+          fi
 
           section_has_status() {
             local section="$1"
