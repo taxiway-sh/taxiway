@@ -114,7 +114,7 @@ else
 fi
 
 codex_home="$tmp_dir/codex-home"
-codex_workspace="$tmp_dir/work/repo-\"quoted"
+codex_workspace="$tmp_dir/work/repo-🚀-\"quoted"
 mkdir -p "$codex_home/.codex" "$codex_workspace"
 cat > "$codex_home/.codex/config.toml" <<'EOF'
 model = "gpt-test"
@@ -163,6 +163,45 @@ if HOME="$codex_home" TAXIWAY_WORKSPACE_TRUST_PATH="relative/path" \
     _fail "Codex hook rejects relative paths"
 else
     _pass "Codex hook rejects relative paths"
+fi
+
+if python3 - "$CODEX_HOOK" "$tmp_dir" <<'PY'
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tomllib
+
+hook, root = sys.argv[1:]
+for index, header in enumerate([
+    '[projects."/lab/work"] # keep comment',
+    "  [ projects . '/lab/work' ]  ",
+    '[projects."/lab/\\u0077ork"]',
+]):
+    config_dir = Path(root) / f"codex-format-{index}" / ".codex"
+    config_dir.mkdir(parents=True)
+    config = config_dir / "config.toml"
+    original = header + '\nnotes = """\n[not_a_table]\ntrust_level = "not_a_setting"\n"""\n"trust_level" = "untrusted"\nmarker = "keep"\n  [other]\nvalue = "keep"\n'
+    config.write_text(original)
+    env = dict(os.environ, HOME=str(config_dir.parent), TAXIWAY_WORKSPACE_TRUST_PATH="/lab/work")
+    subprocess.run(["bash", hook], env=env, check=True)
+    result = config.read_text()
+    parsed = tomllib.loads(result)
+    expected = tomllib.loads(original)
+    expected["projects"]["/lab/work"]["trust_level"] = "trusted"
+    assert parsed == expected
+    assert header in result
+    subprocess.run(["bash", hook], env=env, check=True)
+    assert config.read_text() == result
+    config.write_text("invalid = [")
+    failed = subprocess.run(["bash", hook], env=env, capture_output=True)
+    assert failed.returncode != 0
+    assert config.read_text() == "invalid = ["
+PY
+then
+    _pass "Codex hook preserves alternate TOML headers and is idempotent"
+else
+    _fail "Codex hook preserves alternate TOML headers and is idempotent"
 fi
 
 echo ""

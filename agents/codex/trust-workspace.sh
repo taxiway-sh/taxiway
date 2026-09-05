@@ -21,66 +21,63 @@ mkdir -p "$config_dir"
 tmp_config="$(mktemp "${config_path}.tmp.XXXXXX")"
 trap 'rm -f "$tmp_config"' EXIT
 
-project_header="$(python3 - "$workspace_path" <<'PY'
+python3 - "$workspace_path" "$config_path" > "$tmp_config" <<'PY'
 import json
-import sys
-
-print(f"[projects.{json.dumps(sys.argv[1])}]")
-PY
-)"
-
-if [[ -f "$config_path" ]]; then
-    CODEX_PROJECT_HEADER="$project_header" awk '
-        BEGIN {
-            target = ENVIRON["CODEX_PROJECT_HEADER"]
-            in_target = 0
-            found_target = 0
-            wrote_trust = 0
-        }
-        $0 == target {
-            in_target = 1
-            found_target = 1
-            wrote_trust = 0
-            print
-            next
-        }
-        /^\[/ {
-            if (in_target && !wrote_trust) {
-                print "trust_level = \"trusted\""
-            }
-            in_target = 0
-        }
-        in_target && /^[[:space:]]*trust_level[[:space:]]*=/ {
-            if (!wrote_trust) {
-                print "trust_level = \"trusted\""
-                wrote_trust = 1
-            }
-            next
-        }
-        { print }
-        END {
-            if (in_target && !wrote_trust) {
-                print "trust_level = \"trusted\""
-            } else if (!found_target) {
-                print ""
-                print target
-                print "trust_level = \"trusted\""
-            }
-        }
-    ' "$config_path" > "$tmp_config"
-else
-    printf '%s\ntrust_level = "trusted"\n' "$project_header" > "$tmp_config"
-fi
-
-python3 - "$tmp_config" <<'PY'
+from pathlib import Path
 import sys
 import tomllib
 
-with open(sys.argv[1], "rb") as config_file:
-    tomllib.load(config_file)
+workspace, filename = sys.argv[1:]
+path = Path(filename)
+source = path.read_bytes().decode("utf-8") if path.exists() else ""
+config = tomllib.loads(source)
+project = config.get("projects", {}).get(workspace, {})
+if project.get("trust_level") == "trusted":
+    sys.stdout.write(source)
+    sys.exit(0)
+
+# Locate complete TOML statements using the parser, not header spelling.
+# Complete prefixes keep header-like text inside multiline strings/arrays
+# from being mistaken for a real table. Preserve every unrelated byte.
+lines = source.splitlines(keepends=True)
+start = 0
+section_start = section_end = None
+trust_span = None
+for end in range(1, len(lines) + 1):
+    try:
+        tomllib.loads("".join(lines[:end]))
+    except tomllib.TOMLDecodeError:
+        continue
+    statement = "".join(lines[start:end])
+    if statement.lstrip().startswith("["):
+        if section_start is not None:
+            section_end = start
+            break
+        if tomllib.loads(statement) == {"projects": {workspace: {}}}:
+            section_start = end
+    elif section_start is not None:
+        if "trust_level" in tomllib.loads(statement):
+            trust_span = (start, end)
+    start = end
+
+trust = 'trust_level = "trusted"\n'
+if section_start is not None:
+    if trust_span is None:
+        offset = section_end if section_end is not None else len(lines)
+        trust_span = (offset, offset)
+    first, last = trust_span
+    prefix = "".join(lines[:first])
+    result = prefix + ("\n" if prefix and not prefix.endswith("\n") else "") + trust + "".join(lines[last:])
+else:
+    header = f"[projects.{json.dumps(workspace, ensure_ascii=False)}]"
+    result = source + ("\n" if source else "") + header + "\n" + trust
+
+# Fail without replacing the original file if its layout cannot be updated.
+updated = tomllib.loads(result)
+assert updated["projects"][workspace]["trust_level"] == "trusted"
+sys.stdout.write(result)
 PY
 
 chmod 0600 "$tmp_config"
 mv "$tmp_config" "$config_path"
 trap - EXIT
-
