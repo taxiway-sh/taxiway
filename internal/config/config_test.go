@@ -27,6 +27,10 @@ func TestIDOf(t *testing.T) {
 	require.Equal(t, "taxiway-gastown", IDOf("gastown"))
 }
 
+func TestLabLiteLLMInternalHostUsesPrivateInternalName(t *testing.T) {
+	require.Equal(t, "my-lab.litellm.internal", LabLiteLLMInternalHost("My Lab"))
+}
+
 func TestRuntimeIDOfUsesCurrentRuntimeContext(t *testing.T) {
 	t.Setenv("TAXIWAY_CONTEXT", "")
 	t.Setenv("TAXIWAY_CONTEXT_ID", "")

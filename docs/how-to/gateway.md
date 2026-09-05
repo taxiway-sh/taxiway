@@ -38,12 +38,21 @@ Print the lab endpoint and key:
 taxiway access
 ```
 
-Use the lab-specific hostname:
+From the host, use the lab-specific hostname printed by `taxiway access`:
 
 ```text
 http://<lab>.litellm.localhost:<proxy-port>/v1
 http://<lab>.litellm.localhost:<proxy-port>/ui/login
 ```
+
+Agents running inside the lab use the internal hostname:
+
+```text
+http://<lab>.litellm.internal:<proxy-port>
+```
+
+Labs created before this hostname was introduced must be deleted and recreated
+so their driver configuration includes the internal hostname mapping.
 
 When Taxiway is installed, the default proxy port is usually `4000`; run
 `taxiway access` to print the actual port.
@@ -56,7 +65,8 @@ For each lab, the gateway phase:
 - writes the lab gateway environment;
 - creates a lab-specific LiteLLM Compose project;
 - starts LiteLLM and a small gateway Postgres database;
-- registers `<lab>.litellm.localhost` in the shared Caddy proxy;
+- registers the host-facing `<lab>.litellm.localhost` and lab-facing
+  `<lab>.litellm.internal` routes in the shared Caddy proxy;
 - configures Langfuse export when observability has been initialized.
 
 Lab-specific gateway files live under:
@@ -128,7 +138,7 @@ model = "gpt-5.5"
 
 [model_providers.taxiway-litellm]
 name = "Taxiway LiteLLM"
-base_url = "http://<lab>.litellm.localhost:4000/v1"
+base_url = "http://<lab>.litellm.internal:4000/v1"
 wire_api = "responses"
 requires_openai_auth = true
 env_http_headers = { "x-litellm-api-key" = "TAXIWAY_LITELLM_API_KEY", "x-litellm-agent-id" = "TAXIWAY_LITELLM_AGENT_ID" }
@@ -148,7 +158,7 @@ LiteLLM and let LiteLLM forward Claude Code's OAuth `Authorization` header to
 Anthropic:
 
 ```bash
-export ANTHROPIC_BASE_URL=http://<lab>.litellm.localhost:4000
+export ANTHROPIC_BASE_URL=http://<lab>.litellm.internal:4000
 export ANTHROPIC_CUSTOM_HEADERS="x-litellm-api-key: Bearer $TAXIWAY_LITELLM_API_KEY"
 ```
 

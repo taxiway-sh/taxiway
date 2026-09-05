@@ -103,7 +103,7 @@ func (l *LimaDriver) Create(ctx context.Context, id string, opts CreateOptions) 
 		Orch:          opts.Orch,
 		GitDir:        opts.GitDir,
 		RecordingsDir: opts.RecordingsDir,
-		LabHost:       config.LabLiteLLMHost(opts.Lab),
+		LabHost:       config.LabLiteLLMInternalHost(opts.Lab),
 	}
 	if err := renderLimaYAML(opts.TemplatePath, data, yamlPath); err != nil {
 		return err

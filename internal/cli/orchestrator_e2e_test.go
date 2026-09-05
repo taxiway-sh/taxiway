@@ -946,10 +946,15 @@ func assertE2EGatewayRequestRouted(t *testing.T, state *RootState, lab, orch str
 	deadline := time.Now().Add(90 * time.Second)
 	var lastErr error
 	for time.Now().Before(deadline) {
-		content, err := callE2ELiteLLMChatCompletion(state, lab, apiKey, model)
+		hostContent, err := callE2ELiteLLMChatCompletion(state, lab, apiKey, model)
 		if err == nil {
-			require.Equal(t, e2eFakeModelResponse, content)
-			return
+			labContent, labErr := callE2ELiteLLMChatCompletionFromLab(state, ref, apiKey, model)
+			if labErr == nil {
+				require.Equal(t, e2eFakeModelResponse, hostContent)
+				require.Equal(t, e2eFakeModelResponse, labContent)
+				return
+			}
+			err = labErr
 		}
 		lastErr = err
 		time.Sleep(2 * time.Second)
@@ -993,6 +998,48 @@ func callE2ELiteLLMChatCompletion(state *RootState, lab, apiKey, model string) (
 	}
 	if len(parsed.Choices) == 0 {
 		return "", fmt.Errorf("LiteLLM response has no choices: %s", string(data))
+	}
+	return parsed.Choices[0].Message.Content, nil
+}
+
+func callE2ELiteLLMChatCompletionFromLab(state *RootState, ref config.LabRef, apiKey, model string) (string, error) {
+	body := fmt.Sprintf(`{"model":%q,"messages":[{"role":"user","content":"smoke"}],"max_tokens":8}`, model)
+	var stdout, stderr bytes.Buffer
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	result, err := state.Driver.Exec(ctx, idName(ref.Lab), driver.ExecRequest{
+		Workdir: "/lab/work",
+		Argv: []string{
+			"curl", "-fsS", "--max-time", "10",
+			"-H", "Content-Type: application/json",
+			"-H", "Authorization: Bearer " + apiKey,
+			"-H", "x-litellm-api-key: Bearer " + apiKey,
+			"-H", "x-litellm-agent-id: taxiway-e2e",
+			"--data", body,
+			labLiteLLMBaseURL(state, ref) + "/v1/chat/completions",
+		},
+		Stdout: &stdout,
+		Stderr: &stderr,
+	})
+	if err != nil {
+		return "", err
+	}
+	if result.ExitCode != 0 {
+		return "", fmt.Errorf("lab gateway request exited %d: %s", result.ExitCode, strings.TrimSpace(stderr.String()))
+	}
+
+	var parsed struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &parsed); err != nil {
+		return "", err
+	}
+	if len(parsed.Choices) == 0 {
+		return "", fmt.Errorf("LiteLLM response has no choices: %s", stdout.String())
 	}
 	return parsed.Choices[0].Message.Content, nil
 }

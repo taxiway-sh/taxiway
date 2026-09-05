@@ -215,7 +215,7 @@ func dockerRunArgs(id, volName string, opts CreateOptions, image string) []strin
 	args := []string{
 		"run", "-d",
 		"--name", id,
-		"--add-host", config.LabLiteLLMHost(opts.Lab) + ":host-gateway",
+		"--add-host", config.LabLiteLLMInternalHost(opts.Lab) + ":host-gateway",
 		"-e", "USER=" + dockerLabUser,
 		"-e", "HOME=" + dockerLabHome,
 		"-e", "SHELL=" + dockerLabShell,
