@@ -34,4 +34,3 @@ fi
 chmod 0600 "$tmp_config"
 mv "$tmp_config" "$config_path"
 trap - EXIT
-
