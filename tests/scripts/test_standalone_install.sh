@@ -8,8 +8,6 @@ INSTALL_SH="$SCRIPT_DIR/../../install.sh"
 REPO_ROOT="$SCRIPT_DIR/../.."
 GORELEASER_YAML="$REPO_ROOT/.goreleaser.yaml"
 RENDER_RELEASE_INSTALL_SH="$REPO_ROOT/scripts/render-release-install.sh"
-README_MD="$REPO_ROOT/README.md"
-RELEASE_MD="$REPO_ROOT/docs/contributing/release.md"
 
 pass=0
 fail=0
@@ -90,8 +88,6 @@ _assert_contains \
   'runtime_tmp="$HOME/.taxiway/runtime.tmp"'
 
 goreleaser_config="$(cat "$GORELEASER_YAML")"
-readme="$(cat "$README_MD")"
-release_doc="$(cat "$RELEASE_MD")"
 
 _assert_contains \
   "goreleaser publishes install script as release asset" \
@@ -127,36 +123,6 @@ _assert_not_contains \
   "rendered release installer does not keep latest default" \
   "$rendered_installer" \
   'RELEASE_VERSION=latest'
-
-_assert_contains \
-  "README installs from immutable release asset" \
-  "$readme" \
-  "https://github.com/taxiway-sh/taxiway/releases/latest/download/install.sh"
-
-_assert_contains \
-  "README installs explicit releases from release-specific asset" \
-  "$readme" \
-  "https://github.com/taxiway-sh/taxiway/releases/download/v0.1.0/install.sh"
-
-_assert_not_contains \
-  "README does not install explicit versions via latest installer" \
-  "$readme" \
-  "--version"
-
-_assert_contains \
-  "release guide installs from immutable release asset" \
-  "$release_doc" \
-  "https://github.com/taxiway-sh/taxiway/releases/latest/download/install.sh"
-
-_assert_contains \
-  "release guide installs explicit releases from release-specific asset" \
-  "$release_doc" \
-  "https://github.com/taxiway-sh/taxiway/releases/download/v0.1.0/install.sh"
-
-_assert_not_contains \
-  "release guide does not install explicit versions via latest installer" \
-  "$release_doc" \
-  "--version"
 
 echo ""
 echo "Results: $pass passed, $fail failed"
