@@ -74,11 +74,28 @@ jobs:
   goreleaser:
     needs: [core-checks, end-to-end]
     runs-on: ubuntu-latest
+    outputs:
+      release-tag: ${{ steps.release-tag.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Resolve release tag
+        id: release-tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            tag="$GITHUB_REF_NAME"
+          else
+            tag="$(git describe --tags --exact-match --match 'v[0-9]*')"
+          fi
+          case "$tag" in
+            v[0-9]*) printf 'tag=%s\n' "$tag" >> "$GITHUB_OUTPUT" ;;
+            *) echo "Expected a version tag, got: $tag" >&2; exit 1 ;;
+          esac
 
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -94,3 +111,13 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  install-integration:
+    name: Installation qualification
+    needs: goreleaser
+    permissions:
+      contents: read
+      attestations: read
+    uses: ./.github/workflows/install.yml
+    with:
+      release: ${{ needs.goreleaser.outputs.release-tag }}
