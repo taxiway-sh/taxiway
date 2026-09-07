@@ -17,8 +17,15 @@ Use Taxiway when you want to answer practical questions about agent systems:
 
 | Requirement | Used for |
 |---|---|
-| `docker` on `PATH` and a reachable Docker daemon | Taxiway proxy, LiteLLM sidecars, optional observability, and Docker-backed labs |
+| `docker` on `PATH`, a reachable Docker daemon, and `docker compose` | Taxiway host services with either driver, and Docker-backed labs |
 | `limactl` on `PATH` | Lima-backed labs |
+
+Use macOS, Linux, or Ubuntu inside Windows WSL2. Start with the prerequisite
+instructions for [macOS](docs/reference/installation.md#macos),
+[Linux](docs/reference/installation.md#linux), or
+[Windows WSL2](docs/reference/installation.md#windows-with-wsl2).
+See [Installation qualification](docs/contributing/installation-qualification.md#qualification-and-limitations)
+for tested hosts and architectures.
 
 See [Drivers](docs/README.md#drivers),
 [Gateway](docs/how-to/gateway.md), and
@@ -32,20 +39,8 @@ Install the latest GitHub Release:
 curl -fsSL https://github.com/taxiway-sh/taxiway/releases/latest/download/install.sh | sh
 ```
 
-The installer writes the `taxiway` binary to `$HOME/.local/bin` by default and
-runtime assets to `~/.taxiway/runtime`.
-
-Install a specific release:
-
-```bash
-curl -fsSL https://github.com/taxiway-sh/taxiway/releases/download/v0.1.0/install.sh | sh
-```
-
-Install to another binary directory:
-
-```bash
-curl -fsSL https://github.com/taxiway-sh/taxiway/releases/latest/download/install.sh | sh -s -- --bin-dir /usr/local/bin
-```
+See [Installation](docs/reference/installation.md) for platform prerequisites
+and setup instructions.
 
 ## Quick Start
 
@@ -140,6 +135,7 @@ See [Gateway](docs/how-to/gateway.md),
 Start with [docs/README.md](docs/README.md). The public documentation covers:
 
 - [Concepts](docs/reference/concepts.md)
+- [Installation](docs/reference/installation.md)
 - [Commands](docs/reference/commands.md)
 - [Orchestrators](docs/README.md#orchestrators)
 - [Drivers](docs/README.md#drivers)

@@ -2,7 +2,9 @@
 
 Taxiway creates isolated labs for running and comparing AI agent orchestrators
 on Lima or Docker, each with a LiteLLM gateway, Caddy proxy, and optional
-Langfuse observability. This documentation covers how to install, use,
+Langfuse observability.
+
+This documentation covers how to install, use,
 understand, and contribute to the tool.
 
 ## Reference
@@ -10,6 +12,7 @@ understand, and contribute to the tool.
 | Page | Purpose |
 |---|---|
 | [Concepts](reference/concepts.md) | Core product model |
+| [Installation](reference/installation.md) | Prerequisites and installation by platform |
 | [CLI Usage](reference/commands.md) | CLI command reference |
 | [Configuration](reference/configuration.md) | Runtime paths, drivers, and observability |
 | [Architecture](reference/architecture.md) | System design |
@@ -62,9 +65,8 @@ Typical flow:
 
 ## Contributing
 
-See the [contribution guide](contributing/README.md) for setup and how work is tracked.
-
 - [Development](contributing/development.md)
 - [Testing](contributing/testing.md)
 - [Issues](contributing/issues.md)
 - [Release](contributing/release.md)
+- [Installation qualification](contributing/installation-qualification.md)

@@ -12,6 +12,7 @@ describe('docs loader', () => {
     expect(routes['README']).toBe('/docs');
     expect(routes['reference/concepts']).toBe('/docs/reference/concepts');
     expect(routes['how-to/gateway']).toBe('/docs/how-to/gateway');
+    expect(routes['reference/installation']).toBe('/docs/reference/installation');
     expect(routes['drivers/lima']).toBe('/docs/drivers/lima');
     expect(routes['contributing/development']).toBe('/docs/contributing/development');
   });
@@ -37,7 +38,9 @@ describe('docs loader', () => {
   it('orders how-to and contributing to match the overview page', () => {
     const titlesOf = (name) => navGroups.find(g => g.name === name).pages.map(p => p.title);
     expect(titlesOf('How-to')).toEqual(['Gateway', 'Observability', 'Recordings']);
-    expect(titlesOf('Contributing')).toEqual(['Development', 'Testing', 'Release']);
+    expect(titlesOf('Contributing')).toEqual([
+      'Development', 'Testing', 'Issues', 'Release', 'Installation qualification',
+    ]);
     expect(titlesOf('Orchestrators')).toEqual(['Claude Code', 'Codex', 'Gas Town']);
   });
 
@@ -48,6 +51,28 @@ describe('docs loader', () => {
     const index = docs.find(d => d.route === '/docs');
     expect(index.title).toBe('Overview');
     expect(navGroups[0].pages[0].route).toBe('/docs');
+  });
+
+  it('places Installation between Concepts and CLI Usage in Reference', () => {
+    const pages = navGroups.find(g => g.name === 'Reference').pages;
+    expect(pages.map(p => p.rel)).toEqual([
+      'reference/concepts', 'reference/installation', 'reference/commands',
+      'reference/configuration', 'reference/architecture',
+    ]);
+  });
+
+  it('places installation qualification immediately after Release', () => {
+    const pages = navGroups.find(g => g.name === 'Contributing').pages;
+    const releaseIndex = pages.findIndex(p => p.rel === 'contributing/release');
+    expect(releaseIndex).toBeGreaterThanOrEqual(0);
+    expect(pages[releaseIndex + 1].route).toBe('/docs/contributing/installation-qualification');
+  });
+
+  it('keeps the contributing directory index out of the site pages', () => {
+    expect(docs.some(d => d.rel === 'contributing/README')).toBe(false);
+    expect(resolveDocLink('README', 'contributing/README.md')).toEqual({
+      kind: 'internal', to: '/docs#contributing',
+    });
   });
 
 });

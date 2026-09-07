@@ -18,6 +18,8 @@ export const routes = [
     path: `/docs/${cat}`,
     element: <Navigate to={`/docs#${cat}`} replace />,
   })),
+  // Preserve existing links to the GitHub directory index without a second page.
+  { path: '/docs/contributing/README', element: <Navigate to="/docs#contributing" replace /> },
   // 404: a concrete /404 route (emitted as dist/404.html for GitHub Pages) plus
   // a client-side catch-all for unknown paths.
   { path: '/404', element: <NotFound />, entry: 'src/docs/NotFound.jsx' },
