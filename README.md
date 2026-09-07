@@ -20,7 +20,7 @@ Use Taxiway when you want to answer practical questions about agent systems:
 | `docker` on `PATH`, a reachable Docker daemon, and `docker compose` | Taxiway host services with either driver, and Docker-backed labs |
 | `limactl` on `PATH` | Lima-backed labs |
 
-Use macOS, Linux, or Ubuntu inside Windows WSL2. Start with the prerequisite
+Use macOS, Linux, or Windows with WSL2. Start with the prerequisite
 instructions for [macOS](docs/reference/installation.md#macos),
 [Linux](docs/reference/installation.md#linux), or
 [Windows WSL2](docs/reference/installation.md#windows-with-wsl2).

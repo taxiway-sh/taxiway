@@ -22,10 +22,11 @@ for your distribution, including the Compose plugin. Then follow the
 
 ### Windows with WSL2
 
-Install [Ubuntu with WSL2](https://learn.microsoft.com/en-us/windows/wsl/install).
-Inside Ubuntu, follow the Linux instructions above to install Docker and Lima.
+Set up [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install) with your
+preferred Linux distribution. Inside that distribution, follow the Linux
+instructions above to install Docker and Lima.
 
-Run all the commands below in the Ubuntu terminal.
+Run all the commands below in your WSL2 terminal.
 
 ## Install Taxiway
 
@@ -45,7 +46,7 @@ The first run downloads and starts the shared services. This can take a few
 minutes.
 
 If your terminal cannot find `taxiway`, add it to your shell configuration
-(`~/.zshrc` on macOS or `~/.bashrc` on Ubuntu), then reopen the terminal:
+(`~/.zshrc` for Zsh or `~/.bashrc` for Bash), then reopen the terminal:
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"

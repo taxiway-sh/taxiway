@@ -63,7 +63,9 @@ creates a separate VM for a Lima lab. This workflow does not test Docker
 Desktop. Linux and Windows use the `LIMA_VERSION` declared in the workflow;
 macOS uses the Homebrew package.
 
-On Windows, Taxiway and all dependencies run inside Ubuntu WSL2. The workflow
+The Windows runner uses Ubuntu 24.04 inside WSL2 for Taxiway and its dependencies.
+This is the distribution selected for qualification, not an installation requirement.
+The workflow
 allocates 12 GB and four processors to WSL and enables nested virtualization;
 these are test settings, not measured user requirements. It probes KVM when
 `/dev/kvm` exists and permits QEMU software emulation (TCG) otherwise. A passing
