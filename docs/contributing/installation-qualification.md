@@ -23,9 +23,14 @@ a check of the most recent release.
 The workflow installs the published release selected by the `release` input,
 including its binary and runtime assets. It does not build Taxiway from source.
 
-The workflow also runs on pushes changing `install.yml`. It has no scheduled
-trigger and does not run on every pull request. Its driver matrices use
-`fail-fast: false`, so a failed job does not cancel the other combinations.
+The workflow also runs nightly at 03:00 UTC against `latest`, using the workflow
+on the default branch. After GoReleaser successfully publishes a release, the
+`Release` workflow calls it with the exact published tag.
+
+Installation qualification does not run on pushes or pull requests and is not
+part of the fast CI checks. Its driver matrices use `fail-fast: false`, so a
+failed job does not cancel the other combinations. A post-publication failure
+makes the release workflow fail, but does not unpublish or roll back the release.
 
 ## Scenarios
 
