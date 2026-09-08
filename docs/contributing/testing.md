@@ -101,6 +101,16 @@ They execute commands through the driver and assert their results directly.
 Do not add a separate unit-test layer for E2E assertions.
 Tests of the shipped launcher and profile remain under `tests/scripts/`.
 
+Keep Lab lifecycle checks independent of orchestrator-specific expectations.
+Agent checks follow the agents declared in the orchestrator manifest: the same
+Claude Code trust assertion applies to both the Claude Code and Gas Town
+orchestrators. Orchestrator expectations select the workspace paths and when
+they should be trusted. Standalone agents use `/lab/work/agreement-hub`; Gas
+Town uses its rig's crew workspace, trusted when the agent is launched.
+`/lab/work` is checked after installation for every declared agent supported
+by these scenarios. Gas Town session diagnostics remain separate from the
+shared `shell --check` assertion.
+
 The end-to-end suite exercises `claude-code`, `codex`, and `gastown` through
 the Docker driver, using their real orchestrator and agent assets.
 
