@@ -168,6 +168,27 @@ TAXIWAY_CREW_NAME="demo_crew" \
 bash "$START_SH" >/dev/null
 
 gt_output="$(cat "$gt_log")"
+if python3 - "$hq/settings/agents.json" "$hq/settings/config.json" "$hq" <<'PY'
+import json
+import sys
+
+registry = json.load(open(sys.argv[1]))
+settings = json.load(open(sys.argv[2]))
+agent = registry["agents"]["claude-code-litellm"]
+assert agent["provider"] == "claude"
+assert agent["command"] == "/lab/orchestrators/gastown/launch-agent.sh"
+assert agent["args"] == ["claude", "--model", "claude-opus-4-8", "--dangerously-skip-permissions"]
+assert agent["process_names"] == ["claude", "node"]
+assert agent["env"]["TAXIWAY_WORKSPACE_TRUST_ROOT"] == sys.argv[3]
+assert settings["default_agent"] == "claude-code-litellm"
+for role in ("boot", "crew", "deacon", "dog", "mayor", "polecat", "refinery", "witness"):
+    assert settings["role_agents"][role] == "claude-code-litellm"
+PY
+then
+  _pass "all Gastown roles use the launcher and recognize the final Claude process"
+else
+  _fail "all Gastown roles use the launcher and recognize the final Claude process"
+fi
 _assert_contains "checks daemon status" "$gt_output" "gt daemon status"
 _assert_contains "starts daemon before gt up when heartbeat is absent" "$gt_output" "gt daemon start"
 _assert_contains "checks daemon logs for heartbeat" "$gt_output" "gt daemon logs -n 1000"

@@ -22,6 +22,7 @@ Kubernetes and heavyweight infrastructure are out of scope.
 ## Working Rules
 
 - Prefer the existing code and documentation structure over new process.
+- Test product behavior directly; do not add a separate test layer for test assertions.
 - Do not add PRDs, ADRs, approval gates, run manifests, or agent workflow docs
   unless explicitly requested.
 - Do not commit working plans, scratch files, local run logs, generated lab

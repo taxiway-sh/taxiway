@@ -25,6 +25,18 @@ runtime routing keys needed for LiteLLM:
 - `settings/agents.json` defines that preset with the LiteLLM base URL and
   authentication headers.
 
+The preset launches Claude through `orchestrators/gastown/launch-agent.sh`.
+Before each launch, the launcher calls the Claude workspace-trust hook to trust
+the current directory in `~/.claude.json`, then replaces itself with Claude,
+preserving the arguments and environment. The hook only approves a supplied
+path; it does not launch agents. This also covers dynamically created workers
+using the preset. The preset explicitly declares `claude` and `node` as its
+`process_names` so Gas Town recognizes the final process rather than treating
+the completed launcher as a dead agent.
+Automatic trust is restricted to the configured Gas Town directory (normally
+`/lab/work/gt`); directories outside it, including symlink escapes, are rejected.
+This does not change Codex configuration or other Claude permission dialogs.
+
 ## Settings
 
 The adapter exposes these settings through `--set`:

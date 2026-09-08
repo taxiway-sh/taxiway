@@ -96,6 +96,21 @@ and orchestrator workspace/start scripts. `make test-scripts` discovers
 
 ### End-to-end
 
+Session checks are Go helper functions in `internal/cli/orchestrator_e2e_test.go`.
+They execute commands through the driver and assert their results directly.
+Do not add a separate unit-test layer for E2E assertions.
+Tests of the shipped launcher and profile remain under `tests/scripts/`.
+
+Keep Lab lifecycle checks independent of orchestrator-specific expectations.
+Agent checks follow the agents declared in the orchestrator manifest: the same
+Claude Code trust assertion applies to both the Claude Code and Gas Town
+orchestrators. Orchestrator expectations select the workspace paths and when
+they should be trusted. Standalone agents use `/lab/work/agreement-hub`; Gas
+Town uses its rig's crew workspace, trusted when the agent is launched.
+`/lab/work` is checked after installation for every declared agent supported
+by these scenarios. Gas Town session diagnostics remain separate from the
+shared `shell --check` assertion.
+
 The end-to-end suite exercises `claude-code`, `codex`, and `gastown` through
 the Docker driver, using their real orchestrator and agent assets.
 
@@ -105,6 +120,13 @@ removal. They mirror the public `manufacture-dev/agreement-hub` fixture into a
 lab-local bare Git repository, then clone the working tree from that isolated
 remote. After start and restart, `taxiway shell <lab> --check` verifies that
 the session target is ready without opening an interactive shell.
+
+For Gas Town, the same scenarios also compare present persistent agent sessions
+with `gt status --json` and inspect the zombie check from `gt doctor` (without
+`--fix`). They inspect the startup doctor log as well, so deleting falsely
+classified zombies during startup cannot turn the check green. These assertions
+do not require Boot or idle agents to be present, and do not yet prove that an
+interactive model request completes.
 
 Tests use `--skip-auth-check`. They do not run interactive authentication,
 use real API keys, or exercise browser/device login. Authenticated execution

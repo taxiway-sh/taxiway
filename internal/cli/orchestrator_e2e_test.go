@@ -32,6 +32,51 @@ import (
 const e2eFixtureRepoURL = "https://github.com/manufacture-dev/agreement-hub.git"
 const e2eFakeModelResponse = "taxiway e2e fake upstream"
 
+// Orchestrators own workspace layout and session behavior. Agent assertions are
+// selected separately from the agents declared in the orchestrator manifest.
+type e2eOrchestratorExpectations struct {
+	model                       string
+	recordInput                 string
+	workspaceAssertion          string
+	workspace                   func(*testing.T) e2eFixtureWorkspace
+	workspaceTrustedBeforeStart bool
+	assertSessions              func(*testing.T, *RootState, string)
+}
+
+type e2eFixtureWorkspace struct {
+	checkCommand string
+	description  string
+	repository   string
+}
+
+func e2eExpectations(t *testing.T, orch string) e2eOrchestratorExpectations {
+	t.Helper()
+	switch orch {
+	case "claude-code":
+		return e2eOrchestratorExpectations{
+			model: "claude-opus-4-8", recordInput: "/status",
+			workspaceAssertion: "assert:workspace-cloned", workspace: e2ePlainFixtureWorkspace,
+			workspaceTrustedBeforeStart: true,
+		}
+	case "codex":
+		return e2eOrchestratorExpectations{
+			model: "gpt-5.5", recordInput: "/status",
+			workspaceAssertion: "assert:workspace-cloned", workspace: e2ePlainFixtureWorkspace,
+			workspaceTrustedBeforeStart: true,
+		}
+	case "gastown":
+		return e2eOrchestratorExpectations{
+			model: "claude-opus-4-8", recordInput: "gt status",
+			workspaceAssertion: "assert:workspace-provisioned", workspace: e2eGastownFixtureWorkspace,
+			// Gastown approves each working directory when its agent launches.
+			workspaceTrustedBeforeStart: false, assertSessions: assertE2EGastownSessions,
+		}
+	default:
+		t.Fatalf("unsupported E2E orchestrator %q", orch)
+		return e2eOrchestratorExpectations{}
+	}
+}
+
 func TestE2E_OrchestratorCodex_Up(t *testing.T) {
 	testE2EOrchestratorUp(t, "codex")
 }
@@ -70,6 +115,7 @@ func TestE2E_OrchestratorGastown_PhaseByPhase(t *testing.T) {
 
 func testE2EOrchestratorPrepareRun(t *testing.T, orch string) {
 	t.Helper()
+	expectations := e2eExpectations(t, orch)
 	requireDockerOrSkip(t)
 
 	scope := e2eOrchestratorScope(orch, "prepare-run")
@@ -108,7 +154,7 @@ func testE2EOrchestratorPrepareRun(t *testing.T, orch string) {
 		runE2EAssert(t, "assert:lab-listed", func(t *testing.T) {
 			assertE2EList(t, root, tb, lab, orch, "running", "started")
 		})
-		runE2EAssert(t, e2eWorkspaceAssertName(orch), func(t *testing.T) {
+		runE2EAssert(t, expectations.workspaceAssertion, func(t *testing.T) {
 			assertE2EFixtureWorkspace(t, state, id, orch)
 		})
 		runE2EAssert(t, "assert:workspace-mirror-trusted", func(t *testing.T) {
@@ -128,6 +174,7 @@ func testE2EOrchestratorPrepareRun(t *testing.T, orch string) {
 	runE2EStep(t, e2eCommandStepAt("after-start", "shell", "--check"), func(t *testing.T) {
 		assertE2EShellCheck(t, root, tb, lab, orch)
 	})
+	assertE2EStartedAgents(t, state, id, orch, "after-start")
 
 	runE2EStep(t, e2eCommandStepAt("after-start", "doctor"), func(t *testing.T) {
 		runE2ECommand(t, root, tb, "doctor", lab)
@@ -152,6 +199,7 @@ func testE2EOrchestratorPrepareRun(t *testing.T, orch string) {
 
 func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 	t.Helper()
+	expectations := e2eExpectations(t, orch)
 	requireDockerOrSkip(t)
 
 	scope := e2eOrchestratorScope(orch, "phase-by-phase")
@@ -195,7 +243,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 			assertE2EPhase(t, stateDir, id, phases.PhaseInstall)
 		})
 		runE2EAssert(t, "assert:lab-work-trusted", func(t *testing.T) {
-			assertE2EAgentWorkspaceTrusted(t, state, id, orch, LabWorkRoot)
+			assertE2EAgentsWorkspaceTrusted(t, state, id, orch, LabWorkRoot)
 		})
 	})
 
@@ -221,12 +269,12 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		runE2EAssert(t, "assert:phase-workspace-created", func(t *testing.T) {
 			assertE2EPhase(t, stateDir, id, phases.PhaseWorkspace)
 		})
-		runE2EAssert(t, e2eWorkspaceAssertName(orch), func(t *testing.T) {
+		runE2EAssert(t, expectations.workspaceAssertion, func(t *testing.T) {
 			assertE2EFixtureWorkspace(t, state, id, orch)
 		})
-		if orch == "claude-code" || orch == "codex" {
+		if expectations.workspaceTrustedBeforeStart {
 			runE2EAssert(t, "assert:repository-trusted", func(t *testing.T) {
-				assertE2EAgentWorkspaceTrusted(t, state, id, orch, e2eFixtureWorkspaceDir())
+				assertE2EAgentsWorkspaceTrusted(t, state, id, orch, expectations.workspace(t).repository)
 			})
 		}
 		runE2EAssert(t, "assert:workspace-mirror-trusted", func(t *testing.T) {
@@ -269,6 +317,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 	runE2EStep(t, e2eCommandStepAt("after-start", "shell", "--check"), func(t *testing.T) {
 		assertE2EShellCheck(t, root, tb, lab, orch)
 	})
+	assertE2EStartedAgents(t, state, id, orch, "after-start")
 
 	runE2EStep(t, e2eCommandStepAt("after-start", "doctor"), func(t *testing.T) {
 		runE2ECommand(t, root, tb, "doctor", lab)
@@ -297,6 +346,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 	runE2EStep(t, e2eCommandStepAt("after-up", "shell", "--check"), func(t *testing.T) {
 		assertE2EShellCheck(t, root, tb, lab, orch)
 	})
+	assertE2EStartedAgents(t, state, id, orch, "after-up")
 
 	runE2EStep(t, e2eCommandStepAt("after-up", "doctor"), func(t *testing.T) {
 		runE2ECommand(t, root, tb, "doctor", lab)
@@ -330,6 +380,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 
 func testE2EOrchestratorUp(t *testing.T, orch string) {
 	t.Helper()
+	expectations := e2eExpectations(t, orch)
 	requireDockerOrSkip(t)
 
 	scope := e2eOrchestratorScope(orch, "up")
@@ -357,7 +408,7 @@ func testE2EOrchestratorUp(t *testing.T, orch string) {
 		runE2EAssert(t, "assert:lab-listed", func(t *testing.T) {
 			assertE2EList(t, root, tb, lab, orch, "running", "started")
 		})
-		runE2EAssert(t, e2eWorkspaceAssertName(orch), func(t *testing.T) {
+		runE2EAssert(t, expectations.workspaceAssertion, func(t *testing.T) {
 			assertE2EFixtureWorkspace(t, state, id, orch)
 		})
 		runE2EAssert(t, "assert:workspace-mirror-trusted", func(t *testing.T) {
@@ -377,6 +428,7 @@ func testE2EOrchestratorUp(t *testing.T, orch string) {
 	runE2EStep(t, "taxiway:shell[--check]", func(t *testing.T) {
 		assertE2EShellCheck(t, root, tb, lab, orch)
 	})
+	assertE2EStartedAgents(t, state, id, orch, "after-start")
 
 	runE2EStep(t, "taxiway:doctor", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "doctor", lab)
@@ -538,20 +590,20 @@ func configureE2EFixtureWorkspace(t *testing.T, state *RootState, id string) {
 
 func assertE2EFixtureWorkspace(t *testing.T, state *RootState, id, orch string) {
 	t.Helper()
-	checkCommand, expected := e2eFixtureWorkspaceCheck(t, orch)
+	workspace := e2eExpectations(t, orch).workspace(t)
 	var stdout, stderr bytes.Buffer
 	res, err := state.Driver.Exec(context.Background(), id, driver.ExecRequest{
 		Workdir: "/lab",
 		Argv: []string{
 			"bash",
 			"-lc",
-			checkCommand,
+			workspace.checkCommand,
 		},
 		Stdout: &stdout,
 		Stderr: &stderr,
 	})
 	require.NoError(t, err)
-	require.Equal(t, 0, res.ExitCode, "fixture workspace must be provisioned at %s\nstdout:\n%s\nstderr:\n%s", expected, stdout.String(), stderr.String())
+	require.Equal(t, 0, res.ExitCode, "fixture workspace must be provisioned at %s\nstdout:\n%s\nstderr:\n%s", workspace.description, stdout.String(), stderr.String())
 }
 
 func assertE2EWorkspaceMirrorTrusted(t *testing.T, state *RootState, id string) {
@@ -573,10 +625,21 @@ func assertE2EWorkspaceMirrorTrusted(t *testing.T, state *RootState, id string) 
 	require.Contains(t, strings.Split(strings.TrimSpace(stdout.String()), "\n"), workspaceBareRepoPath(ref))
 }
 
-func assertE2EAgentWorkspaceTrusted(t *testing.T, state *RootState, id, orch, workspacePath string) {
+func assertE2EAgentsWorkspaceTrusted(t *testing.T, state *RootState, id, orch, workspacePath string) {
+	t.Helper()
+	agents := e2eAgents(t, state.RepoDir, orch)
+	require.NotEmpty(t, agents, "orchestrator must declare its agents")
+	for _, agent := range agents {
+		runE2EAssert(t, "agent:"+agent, func(t *testing.T) {
+			assertE2EAgentWorkspaceTrusted(t, state, id, agent, workspacePath)
+		})
+	}
+}
+
+func assertE2EAgentWorkspaceTrusted(t *testing.T, state *RootState, id, agent, workspacePath string) {
 	t.Helper()
 	var argv []string
-	switch orch {
+	switch agent {
 	case "claude-code":
 		argv = []string{
 			"jq", "-e", "--arg", "path", workspacePath,
@@ -590,6 +653,7 @@ func assertE2EAgentWorkspaceTrusted(t *testing.T, state *RootState, id, orch, wo
 			"/home/taxiway/.codex/config.toml", workspacePath,
 		}
 	default:
+		t.Fatalf("unsupported E2E workspace trust assertion for agent %q", agent)
 		return
 	}
 
@@ -603,7 +667,25 @@ func assertE2EAgentWorkspaceTrusted(t *testing.T, state *RootState, id, orch, wo
 	require.NoError(t, err)
 	require.Equal(t, 0, res.ExitCode,
 		"%s must trust %s\nstdout:\n%s\nstderr:\n%s",
-		orch, workspacePath, stdout.String(), stderr.String())
+		agent, workspacePath, stdout.String(), stderr.String())
+}
+
+func assertE2EStartedAgents(t *testing.T, state *RootState, id, orch, stage string) {
+	t.Helper()
+	expectations := e2eExpectations(t, orch)
+	runE2EStep(t, "agents:workspace-trust@"+stage, func(t *testing.T) {
+		runE2EAssert(t, "assert:lab-work-trusted", func(t *testing.T) {
+			assertE2EAgentsWorkspaceTrusted(t, state, id, orch, LabWorkRoot)
+		})
+		runE2EAssert(t, "assert:repository-trusted", func(t *testing.T) {
+			assertE2EAgentsWorkspaceTrusted(t, state, id, orch, expectations.workspace(t).repository)
+		})
+	})
+	if expectations.assertSessions != nil {
+		runE2EStep(t, "orchestrator:sessions@"+stage, func(t *testing.T) {
+			expectations.assertSessions(t, state, id)
+		})
+	}
 }
 
 func assertE2EShellCheck(t *testing.T, root *cobra.Command, tb *dockerTestBuf, lab, orch string) {
@@ -611,6 +693,87 @@ func assertE2EShellCheck(t *testing.T, root *cobra.Command, tb *dockerTestBuf, l
 	out := runE2ECommand(t, root, tb, "shell", lab, "--check")
 	require.Contains(t, out, "Shell target ready:")
 	require.Contains(t, out, orch)
+}
+
+func assertE2EGastownSessions(t *testing.T, state *RootState, id string) {
+	t.Helper()
+	runE2EAssert(t, "assert:orchestrator-present-sessions-healthy", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		defer cancel()
+		run := func(allowCheckFailure bool, argv ...string) string {
+			var stdout, stderr bytes.Buffer
+			// Docker Exec does not load a shell profile. Match the Gastown
+			// scripts' PATH so gt and its user-local dependencies are available.
+			command := append([]string{"bash", "-c", `export PATH="$HOME/.local/bin:$PATH"; exec "$@"`, "gastown-e2e"}, argv...)
+			res, err := state.Driver.Exec(ctx, id, driver.ExecRequest{
+				Workdir: "/lab/work/gt", Argv: command,
+				Stdout: &stdout, Stderr: &stderr,
+			})
+			require.NoError(t, err, "%v: %s\n%s", argv, stdout.String(), stderr.String())
+			if allowCheckFailure {
+				// Doctor may fail unrelated checks; inspect its zombie check below.
+				return stdout.String() + "\n" + stderr.String()
+			}
+			require.Equal(t, 0, res.ExitCode, "%v: %s\n%s", argv, stdout.String(), stderr.String())
+			return stdout.String()
+		}
+
+		type agentStatus struct {
+			Session string `json:"session"`
+			Role    string `json:"role"`
+			Running bool   `json:"running"`
+		}
+		var status struct {
+			Agents []agentStatus `json:"agents"`
+			Rigs   []struct {
+				Agents []agentStatus `json:"agents"`
+			} `json:"rigs"`
+			Tmux struct {
+				Socket string `json:"socket"`
+			} `json:"tmux"`
+		}
+		statusJSON := run(false, "gt", "status", "--json")
+		require.NoError(t, json.Unmarshal([]byte(statusJSON), &status), "gt status: %s", statusJSON)
+		require.NotEmpty(t, status.Tmux.Socket, "Gastown must identify its tmux socket")
+		sessions := strings.Fields(run(false, "tmux", "-L", status.Tmux.Socket, "list-sessions", "-F", "#{session_name}"))
+		startup := run(false, "cat", "/lab/work/gt/.runtime/doctor-fix.log")
+		doctor := run(true, "gt", "doctor") // Never --fix: this check must not repair the Lab.
+
+		zombies := regexp.MustCompile(`Found [1-9][0-9]* zombie session`)
+		healthy := regexp.MustCompile(`All [1-9][0-9]* Gas Town sessions have running Claude processes`)
+		for _, check := range []struct{ phase, output string }{{"startup", startup}, {"doctor", doctor}} {
+			var lines []string
+			for _, line := range strings.FieldsFunc(check.output, func(r rune) bool { return r == '\n' || r == '\r' }) {
+				if strings.Contains(line, "zombie-sessions") {
+					lines = append(lines, line)
+				}
+			}
+			result := strings.Join(lines, "\n")
+			// Preserve the initial finding even when startup doctor later says "fixed".
+			require.False(t, zombies.MatchString(result), "%s: %s", check.phase, result)
+			require.True(t, strings.Contains(result, "No zombie sessions found") || healthy.MatchString(result),
+				"%s: missing or unsuccessful zombie check: %s", check.phase, result)
+		}
+
+		agents := status.Agents
+		for _, rig := range status.Rigs {
+			agents = append(agents, rig.Agents...)
+		}
+		present := make(map[string]bool, len(sessions))
+		for _, session := range sessions {
+			present[session] = true
+		}
+		checked := 0
+		for _, agent := range agents {
+			// Boot/dogs can finish normally; absent idle agents are not required.
+			if !present[agent.Session] || agent.Role == "boot" || agent.Role == "dog" {
+				continue
+			}
+			checked++
+			require.True(t, agent.Running, "Present session %s is not recognized as running by Gastown", agent.Session)
+		}
+		require.Positive(t, checked, "No persistent agent session was checked")
+	})
 }
 
 func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, state *RootState, lab, orch string) {
@@ -635,7 +798,7 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 		})
 	})
 
-	statusInput := e2eRecordStatusInput(t, orch)
+	statusInput := e2eExpectations(t, orch).recordInput
 	runE2EStep(t, fmt.Sprintf("taxiway:shell[--input=%s]", statusInput), func(t *testing.T) {
 		out := runE2ECommand(t, root, tb, "shell", lab, "--input", statusInput)
 		runE2EAssert(t, "assert:shell-input-sent", func(t *testing.T) {
@@ -686,21 +849,6 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 	})
 }
 
-func e2eRecordStatusInput(t *testing.T, orch string) string {
-	t.Helper()
-	switch orch {
-	case "codex":
-		return "/status"
-	case "claude-code":
-		return "/status"
-	case "gastown":
-		return "gt status"
-	default:
-		t.Fatalf("unsupported e2e record orchestrator %q", orch)
-		return ""
-	}
-}
-
 func requireE2ERecordingSession(t *testing.T, state *RootState, lab, name string) recording.Session {
 	t.Helper()
 	store := recording.NewStore(config.StateDir(state.Flags.StateDir, state.RepoDir), lab)
@@ -739,35 +887,34 @@ func assertE2EAsciicastFile(t *testing.T, path string) {
 	require.Equal(t, 2, header.Version)
 }
 
-func e2eWorkspaceAssertName(orch string) string {
-	if orch == "gastown" {
-		return "assert:workspace-provisioned"
-	}
-	return "assert:workspace-cloned"
-}
-
-func e2eFixtureWorkspaceCheck(t *testing.T, orch string) (string, string) {
+func e2eGastownFixtureWorkspace(t *testing.T) e2eFixtureWorkspace {
 	t.Helper()
-	if orch == "gastown" {
-		rawCrew, err := userLookup()
-		require.NoError(t, err)
-		crewName := sanitizeIdentifier(rawCrew)
-		hqMarker := "/lab/work/gt/.taxiway-hq-initialized"
-		rigDir := "/lab/work/gt/agreement_hub"
-		crewDir := rigDir + "/crew/" + crewName
-		return strings.Join([]string{
+	rawCrew, err := userLookup()
+	require.NoError(t, err)
+	crewName := sanitizeIdentifier(rawCrew)
+	hqMarker := "/lab/work/gt/.taxiway-hq-initialized"
+	rigDir := "/lab/work/gt/agreement_hub"
+	crewDir := rigDir + "/crew/" + crewName
+	return e2eFixtureWorkspace{
+		checkCommand: strings.Join([]string{
 			"test -f '" + hqMarker + "'",
 			"test -d '" + rigDir + "'",
 			"test -d '" + crewDir + "'",
 			"git -C '" + crewDir + "' rev-parse --is-inside-work-tree >/dev/null",
-		}, " && "), hqMarker + ", " + rigDir + ", and git workspace " + crewDir
+		}, " && "),
+		description: hqMarker + ", " + rigDir + ", and git workspace " + crewDir,
+		repository:  crewDir,
 	}
-	workspaceDir := e2eFixtureWorkspaceDir()
-	return "test -d '" + workspaceDir + "/.git'", workspaceDir + "/.git"
 }
 
-func e2eFixtureWorkspaceDir() string {
-	return "/lab/work/agreement-hub"
+func e2ePlainFixtureWorkspace(t *testing.T) e2eFixtureWorkspace {
+	t.Helper()
+	const workspaceDir = "/lab/work/agreement-hub"
+	return e2eFixtureWorkspace{
+		checkCommand: "test -d '" + workspaceDir + "/.git'",
+		description:  workspaceDir + "/.git",
+		repository:   workspaceDir,
+	}
 }
 
 func ensureE2ERuntimeInitialized(t *testing.T, root *cobra.Command, tb *dockerTestBuf) {
@@ -982,7 +1129,7 @@ func assertE2EGatewayRequestRouted(t *testing.T, state *RootState, lab, orch str
 	require.NoError(t, err)
 	apiKey := values[labLiteLLMAPIKeyEnv]
 	require.NotEmpty(t, apiKey)
-	model := e2ELiteLLMSmokeModel(orch)
+	model := e2eExpectations(t, orch).model
 
 	deadline := time.Now().Add(90 * time.Second)
 	var lastErr error
@@ -1178,13 +1325,6 @@ func assertE2EObservabilityTraceIngested(t *testing.T, state *RootState, lab, or
 		time.Sleep(2 * time.Second)
 	}
 	require.Failf(t, "Langfuse trace not ingested", "project_id=%s last_count=%q", projectID, last)
-}
-
-func e2ELiteLLMSmokeModel(orch string) string {
-	if orch == "codex" {
-		return "gpt-5.5"
-	}
-	return "claude-opus-4-8"
 }
 
 func assertE2EPhase(t *testing.T, stateDir, id string, phase phases.Phase) {

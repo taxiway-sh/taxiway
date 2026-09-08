@@ -4,6 +4,10 @@
 set -euo pipefail
 
 workspace_path="${TAXIWAY_WORKSPACE_TRUST_PATH:-}"
+if (( $# > 0 )); then
+    echo "trust-workspace.sh accepts no arguments; set TAXIWAY_WORKSPACE_TRUST_PATH" >&2
+    exit 1
+fi
 if [[ -z "$workspace_path" || "$workspace_path" != /* ]]; then
     echo "TAXIWAY_WORKSPACE_TRUST_PATH must be an absolute path" >&2
     exit 1
@@ -15,22 +19,35 @@ case "$workspace_path" in
         ;;
 esac
 
-config_path="${HOME}/.claude.json"
-mkdir -p "$(dirname "$config_path")"
-tmp_config="$(mktemp "${config_path}.tmp.XXXXXX")"
-trap 'rm -f "$tmp_config"' EXIT
+python3 - "$HOME/.claude.json" "$workspace_path" <<'PY'
+import fcntl
+import json
+import os
+from pathlib import Path
+import sys
+import tempfile
 
-if [[ -f "$config_path" ]]; then
-    jq --arg path "$workspace_path" '
-        .projects = (.projects // {})
-        | .projects[$path] = ((.projects[$path] // {}) + {hasTrustDialogAccepted: true})
-    ' "$config_path" > "$tmp_config"
-else
-    jq -n --arg path "$workspace_path" '
-        {projects: {($path): {hasTrustDialogAccepted: true}}}
-    ' > "$tmp_config"
-fi
-
-chmod 0600 "$tmp_config"
-mv "$tmp_config" "$config_path"
-trap - EXIT
+config = Path(sys.argv[1])
+workspace = sys.argv[2]
+config.parent.mkdir(parents=True, exist_ok=True)
+# A separate inode keeps the lock stable across atomic replacements. This
+# serializes Taxiway hooks, not writes made by Claude Code itself.
+with os.fdopen(os.open(str(config) + ".taxiway.lock", os.O_CREAT | os.O_RDWR, 0o600), "w") as lock:
+    fcntl.flock(lock, fcntl.LOCK_EX)
+    data = json.loads(config.read_text(encoding="utf-8")) if config.exists() else {}
+    projects = data.get("projects") or {}
+    project = projects.get(workspace) or {}
+    if project.get("hasTrustDialogAccepted") is not True:
+        project["hasTrustDialogAccepted"] = True
+        projects[workspace] = project
+        data["projects"] = projects
+        fd, temporary = tempfile.mkstemp(prefix=config.name + ".tmp.", dir=config.parent)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as output:
+                json.dump(data, output, indent=2)
+                output.write("\n")
+            os.replace(temporary, config)
+        finally:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
+PY
