@@ -126,7 +126,7 @@ func testE2EOrchestratorPrepareRun(t *testing.T, orch string) {
 	})
 
 	runE2EStep(t, e2eCommandStepAt("after-start", "shell", "--check"), func(t *testing.T) {
-		assertE2EShellCheck(t, root, tb, lab, orch)
+		assertE2EShellCheck(t, root, tb, state, id, lab, orch)
 	})
 
 	runE2EStep(t, e2eCommandStepAt("after-start", "doctor"), func(t *testing.T) {
@@ -267,7 +267,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 	})
 
 	runE2EStep(t, e2eCommandStepAt("after-start", "shell", "--check"), func(t *testing.T) {
-		assertE2EShellCheck(t, root, tb, lab, orch)
+		assertE2EShellCheck(t, root, tb, state, id, lab, orch)
 	})
 
 	runE2EStep(t, e2eCommandStepAt("after-start", "doctor"), func(t *testing.T) {
@@ -295,7 +295,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 	})
 
 	runE2EStep(t, e2eCommandStepAt("after-up", "shell", "--check"), func(t *testing.T) {
-		assertE2EShellCheck(t, root, tb, lab, orch)
+		assertE2EShellCheck(t, root, tb, state, id, lab, orch)
 	})
 
 	runE2EStep(t, e2eCommandStepAt("after-up", "doctor"), func(t *testing.T) {
@@ -375,7 +375,7 @@ func testE2EOrchestratorUp(t *testing.T, orch string) {
 	})
 
 	runE2EStep(t, "taxiway:shell[--check]", func(t *testing.T) {
-		assertE2EShellCheck(t, root, tb, lab, orch)
+		assertE2EShellCheck(t, root, tb, state, id, lab, orch)
 	})
 
 	runE2EStep(t, "taxiway:doctor", func(t *testing.T) {
@@ -606,12 +606,54 @@ func assertE2EAgentWorkspaceTrusted(t *testing.T, state *RootState, id, orch, wo
 		orch, workspacePath, stdout.String(), stderr.String())
 }
 
-func assertE2EShellCheck(t *testing.T, root *cobra.Command, tb *dockerTestBuf, lab, orch string) {
+func assertE2EShellCheck(t *testing.T, root *cobra.Command, tb *dockerTestBuf, state *RootState, id, lab, orch string) {
 	t.Helper()
 	out := runE2ECommand(t, root, tb, "shell", lab, "--check")
 	require.Contains(t, out, "Shell target ready:")
 	require.Contains(t, out, orch)
+	if orch == "gastown" {
+		runE2EAssert(t, "assert:gastown-present-sessions-healthy", func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+			defer cancel()
+			var stdout, stderr bytes.Buffer
+			res, err := state.Driver.Exec(ctx, id, driver.ExecRequest{
+				Workdir: "/lab/work/gt",
+				Argv:    []string{"python3", "-c", gastownSessionEvidenceScript},
+				Stdout:  &stdout, Stderr: &stderr,
+			})
+			require.NoError(t, err)
+			require.Equal(t, 0, res.ExitCode, "Gastown session diagnostics failed: %s", stderr.String())
+			evidence := stdout.String()
+			var got struct {
+				Status   json.RawMessage `json:"status"`
+				Sessions []string        `json:"sessions"`
+				Startup  string          `json:"startup"`
+				Doctor   string          `json:"doctor"`
+			}
+			require.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(evidence)), &got), "Gastown evidence: %s", evidence)
+			require.NoError(t, validateGastownSessionEvidence(got.Status, got.Sessions, got.Startup, got.Doctor))
+		})
+	}
 }
+
+// Do not require idle/ephemeral agents to exist, or make unrelated doctor
+// warnings fail this regression check. Never run doctor with --fix here.
+const gastownSessionEvidenceScript = `
+import json, pathlib, subprocess
+town = pathlib.Path("/lab/work/gt")
+def run(args):
+    return subprocess.check_output(args, cwd=town, text=True, timeout=60)
+def zombie_check(output):
+    return "\n".join(line for line in output.splitlines() if "zombie-sessions" in line)
+status = json.loads(run(["gt", "status", "--json"]))
+socket = status["tmux"]["socket"]
+sessions = run(["tmux", "-L", socket, "list-sessions", "-F", "#{session_name}"]).splitlines()
+doctor = subprocess.run(["gt", "doctor"], cwd=town, text=True, stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT, timeout=60)
+print(json.dumps({"status": status, "sessions": sessions,
+    "startup": zombie_check((town/".runtime/doctor-fix.log").read_text()),
+    "doctor": zombie_check(doctor.stdout)}))
+`
 
 func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, state *RootState, lab, orch string) {
 	t.Helper()

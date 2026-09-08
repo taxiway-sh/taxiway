@@ -5,22 +5,8 @@ set -euo pipefail
 
 workspace_path="${TAXIWAY_WORKSPACE_TRUST_PATH:-}"
 if (( $# > 0 )); then
-    if [[ "$1" != --exec || $# -lt 2 ]]; then
-        echo "Usage: trust-workspace.sh [--exec command [args...]]" >&2
-        exit 1
-    fi
-    shift
-    trust_root="${TAXIWAY_WORKSPACE_TRUST_ROOT:-}"
-    if [[ "$trust_root" != /* || "$trust_root" == / ]]; then
-        echo "TAXIWAY_WORKSPACE_TRUST_ROOT must be an absolute workspace directory" >&2
-        exit 1
-    fi
-    trust_root="$(cd -- "$trust_root" && pwd -P)"
-    workspace_path="$(pwd -P)"
-    if [[ "$trust_root" == / || ( "$workspace_path" != "$trust_root" && "$workspace_path" != "$trust_root/"* ) ]]; then
-        echo "Current directory is outside TAXIWAY_WORKSPACE_TRUST_ROOT" >&2
-        exit 1
-    fi
+    echo "trust-workspace.sh accepts no arguments; set TAXIWAY_WORKSPACE_TRUST_PATH" >&2
+    exit 1
 fi
 if [[ -z "$workspace_path" || "$workspace_path" != /* ]]; then
     echo "TAXIWAY_WORKSPACE_TRUST_PATH must be an absolute path" >&2
@@ -65,7 +51,3 @@ with os.fdopen(os.open(str(config) + ".taxiway.lock", os.O_CREAT | os.O_RDWR, 0o
             if os.path.exists(temporary):
                 os.unlink(temporary)
 PY
-
-if (( $# > 0 )); then
-    exec "$@"
-fi

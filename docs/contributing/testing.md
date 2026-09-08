@@ -106,6 +106,13 @@ lab-local bare Git repository, then clone the working tree from that isolated
 remote. After start and restart, `taxiway shell <lab> --check` verifies that
 the session target is ready without opening an interactive shell.
 
+For Gas Town, the same scenarios also compare present persistent agent sessions
+with `gt status --json` and inspect the zombie check from `gt doctor` (without
+`--fix`). They inspect the startup doctor log as well, so deleting falsely
+classified zombies during startup cannot turn the check green. These assertions
+do not require Boot or idle agents to be present, and do not yet prove that an
+interactive model request completes.
+
 Tests use `--skip-auth-check`. They do not run interactive authentication,
 use real API keys, or exercise browser/device login. Authenticated execution
 depends on external accounts and interactive state and is outside this suite.

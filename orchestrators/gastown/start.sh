@@ -103,14 +103,15 @@ if not isinstance(agents, dict):
     agents = {}
 agents[agent_name] = {
     "provider": "claude",
-    "command": "/lab/agents/claude-code/trust-workspace.sh",
+    "command": "/lab/orchestrators/gastown/launch-agent.sh",
     "args": [
-        "--exec",
         "claude",
         "--model",
         model,
         "--dangerously-skip-permissions",
     ],
+    # The launcher execs Claude: liveness checks must not look for the script.
+    "process_names": ["claude", "node"],
     "env": {
         "TAXIWAY_WORKSPACE_TRUST_ROOT": os.environ["TAXIWAY_WORKSPACE_TRUST_ROOT"],
         "ANTHROPIC_BASE_URL": base_url,
