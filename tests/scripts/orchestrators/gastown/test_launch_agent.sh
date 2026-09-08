@@ -23,18 +23,25 @@ class TrustExecTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.base = Path(self.temp.name).resolve()
         self.user_home = self.base / "home"
-        self.hq = self.base / "town"
+        self.hq = self.base / "town with 'quotes'"
         self.workspace = self.hq / 'rig/crew/person with "quotes"'
         self.user_home.mkdir()
         self.workspace.mkdir(parents=True)
         self.config = self.user_home / ".claude.json"
+        managed = self.user_home / ".config/taxiway/env"
+        managed.parent.mkdir(parents=True)
+        managed.write_text("TAXIWAY_LITELLM_BASE_URL=http://gateway.example:4000/\n"
+                           "TAXIWAY_LITELLM_API_KEY=test-only-key\n")
         self.env = dict(os.environ, HOME=str(self.user_home),
-                        TAXIWAY_WORKSPACE_TRUST_ROOT=str(self.hq),
                         TAXIWAY_WORKSPACE_TRUST_PATH="/stale/path",
                         TRUST_TEST_ENV="preserved")
+        self.env.pop("TAXIWAY_WORKSPACE_TRUST_ROOT", None)
+        for name in ("ANTHROPIC_BASE_URL", "ANTHROPIC_CUSTOM_HEADERS",
+                     "TAXIWAY_LITELLM_BASE_URL", "TAXIWAY_LITELLM_API_KEY"):
+            self.env.pop(name, None)
 
     def run_hook(self, args, cwd=None, env=None):
-        return subprocess.run(["bash", LAUNCHER, *args], cwd=cwd or self.workspace,
+        return subprocess.run(["bash", LAUNCHER, str(self.hq), *args], cwd=cwd or self.workspace,
                               env=env or self.env, capture_output=True, text=True)
 
     def test_exec_trusts_actual_cwd_and_preserves_args_env_pid_and_exit(self):
@@ -45,11 +52,13 @@ c = json.loads((pathlib.Path.home()/".claude.json").read_text())
 assert c["projects"][os.getcwd()]["hasTrustDialogAccepted"] is True
 assert "/stale/path" not in c["projects"]
 assert os.environ["TRUST_TEST_ENV"] == "preserved"
+assert os.environ["ANTHROPIC_BASE_URL"] == "http://gateway.example:4000"
+assert os.environ["ANTHROPIC_CUSTOM_HEADERS"] == "x-litellm-api-key: Bearer test-only-key"
 assert sys.argv[1:] == ["--model", "model with spaces", "$(not-a-command)"]
 print(os.getpid())
 sys.exit(23)
 '''
-        process = subprocess.Popen(["bash", LAUNCHER, sys.executable, "-c", program,
+        process = subprocess.Popen(["bash", LAUNCHER, str(self.hq), sys.executable, "-c", program,
                                     "--model", "model with spaces", "$(not-a-command)"],
                                    cwd=link, env=self.env, stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE, text=True)
@@ -70,12 +79,10 @@ sys.exit(23)
     def test_rejects_missing_command_or_root_and_unknown_options(self):
         for args in ([], ["--unknown"]):
             self.assertNotEqual(self.run_hook(args).returncode, 0)
-        env = dict(self.env)
-        env.pop("TAXIWAY_WORKSPACE_TRUST_ROOT")
-        self.assertNotEqual(self.run_hook(["true"], env=env).returncode, 0)
-        for root in ("/", "relative", str(self.base / "missing")):
-            env["TAXIWAY_WORKSPACE_TRUST_ROOT"] = root
-            self.assertNotEqual(self.run_hook(["true"], env=env).returncode, 0)
+        for root in ("", "/", "relative", str(self.base / "missing")):
+            result = subprocess.run(["bash", LAUNCHER, root, "true"],
+                                    cwd=self.workspace, env=self.env, capture_output=True)
+            self.assertNotEqual(result.returncode, 0)
         self.assertFalse(self.config.exists())
 
     def test_already_trusted_config_is_not_rewritten(self):
@@ -86,6 +93,19 @@ sys.exit(23)
         self.assertEqual(self.run_hook(["true"]).returncode, 0)
         self.assertEqual(self.config.read_text(), original)
         self.assertEqual(self.config.stat().st_mtime_ns, before)
+
+    def test_argument_root_wins_over_stale_environment(self):
+        env = dict(self.env, TAXIWAY_WORKSPACE_TRUST_ROOT="/stale/town")
+        for _ in range(2):
+            result = self.run_hook(["true"], env=env)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_missing_gateway_config_does_not_launch(self):
+        (self.user_home / ".config/taxiway/env").unlink()
+        marker = self.base / "unexpected-launch"
+        result = self.run_hook(["touch", str(marker)])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(marker.exists())
 
     def test_invalid_config_does_not_launch_command_or_replace_file(self):
         self.config.write_text("not json")

@@ -41,6 +41,7 @@ type e2eOrchestratorExpectations struct {
 	workspace                   func(*testing.T) e2eFixtureWorkspace
 	workspaceTrustedBeforeStart bool
 	assertSessions              func(*testing.T, *RootState, string)
+	checkHandoff                func(*testing.T, *RootState, string)
 }
 
 type e2eFixtureWorkspace struct {
@@ -70,6 +71,7 @@ func e2eExpectations(t *testing.T, orch string) e2eOrchestratorExpectations {
 			workspaceAssertion: "assert:workspace-provisioned", workspace: e2eGastownFixtureWorkspace,
 			// Gastown approves each working directory when its agent launches.
 			workspaceTrustedBeforeStart: false, assertSessions: assertE2EGastownSessions,
+			checkHandoff: assertE2EGastownHandoff,
 		}
 	default:
 		t.Fatalf("unsupported E2E orchestrator %q", orch)
@@ -347,6 +349,11 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		assertE2EShellCheck(t, root, tb, lab, orch)
 	})
 	assertE2EStartedAgents(t, state, id, orch, "after-up")
+	if expectations.checkHandoff != nil {
+		runE2EStep(t, "orchestrator:handoff", func(t *testing.T) {
+			expectations.checkHandoff(t, state, id)
+		})
+	}
 
 	runE2EStep(t, e2eCommandStepAt("after-up", "doctor"), func(t *testing.T) {
 		runE2ECommand(t, root, tb, "doctor", lab)
@@ -774,6 +781,72 @@ func assertE2EGastownSessions(t *testing.T, state *RootState, id string) {
 		}
 		require.Positive(t, checked, "No persistent agent session was checked")
 	})
+}
+
+// Exercise Gastown's real respawn path, not a Lab down/up. The command is
+// directed at a session without attaching a client or asking Claude to act.
+func assertE2EGastownHandoff(t *testing.T, state *RootState, id string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+	run := func(argv ...string) string {
+		var stdout, stderr bytes.Buffer
+		command := append([]string{"bash", "-c", `export PATH="$HOME/.local/bin:$PATH"; exec "$@"`, "gastown-e2e"}, argv...)
+		res, err := state.Driver.Exec(ctx, id, driver.ExecRequest{
+			Workdir: "/lab/work/gt", Argv: command, Stdout: &stdout, Stderr: &stderr,
+		})
+		require.NoError(t, err, "%v: %s", argv, stderr.String())
+		require.Equal(t, 0, res.ExitCode, "%v: %s\n%s", argv, stdout.String(), stderr.String())
+		return strings.TrimSpace(stdout.String())
+	}
+	var status struct {
+		Tmux struct {
+			Socket string `json:"socket"`
+		} `json:"tmux"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(run("gt", "status", "--json")), &status))
+	require.NotEmpty(t, status.Tmux.Socket)
+	// Initiate from Mayor (no patrol cooldown): repeat remote refinery handoff,
+	// then exercise Mayor's self-handoff through the same restart builder.
+	for _, target := range []string{"ah-refinery", "ah-refinery", "hq-mayor"} {
+		before := run("tmux", "-L", status.Tmux.Socket, "display-message", "-p", "-t", target, "#{pane_pid}")
+		role := "agreement_hub/refinery"
+		if target == "hq-mayor" {
+			role = "mayor"
+		}
+		// Handoff requires a tmux caller context. run-shell supplies TMUX but
+		// not TMUX_PANE; expand the target pane ID explicitly. No client attach.
+		run("tmux", "-L", status.Tmux.Socket, "run-shell", "-b", "-t", "hq-mayor",
+			`cd /lab/work/gt && export PATH="$HOME/.local/bin:$PATH" GT_ROLE=mayor TMUX_PANE='#{pane_id}'; gt handoff `+role+` --watch=false --yes --no-git-check`)
+		deadline := time.Now().Add(45 * time.Second)
+		var pane string
+		for time.Now().Before(deadline) {
+			pane = run("tmux", "-L", status.Tmux.Socket, "display-message", "-p", "-t", target,
+				"#{pane_pid}|#{pane_dead}|#{pane_current_command}")
+			parts := strings.Split(pane, "|")
+			if len(parts) == 3 && parts[0] != before && parts[1] == "0" && (parts[2] == "claude" || parts[2] == "node") {
+				break
+			}
+			time.Sleep(time.Second)
+		}
+		parts := strings.Split(pane, "|")
+		require.Len(t, parts, 3, "handoff %s: %s", target, pane)
+		require.NotEqual(t, before, parts[0], "handoff must replace %s", target)
+		require.Equal(t, "0", parts[1], "replacement %s must be alive", target)
+		require.Contains(t, []string{"claude", "node"}, parts[2], "replacement %s must execute Claude", target)
+		// Compare in the guest without printing credentials in test output.
+		run("python3", "-c", `import json, pathlib, sys
+p = pathlib.Path('/proc') / sys.argv[1]
+env = dict(entry.split(b'=', 1) for entry in (p / 'environ').read_bytes().split(b'\0') if b'=' in entry)
+agent = json.loads(pathlib.Path('/lab/work/gt/settings/agents.json').read_text())['agents']['claude-code-litellm']
+for key in ('ANTHROPIC_BASE_URL', 'ANTHROPIC_CUSTOM_HEADERS'):
+    assert env.get(key.encode()) == agent['env'][key].encode(), 'handoff lost gateway configuration'
+args = (p / 'cmdline').read_bytes().split(b'\0')
+assert b'--model' in args, 'handoff lost model selection'
+assert args[args.index(b'--model') + 1] == sys.argv[2].encode(), 'handoff changed model'
+`, parts[0], e2eExpectations(t, "gastown").model)
+	}
+	assertE2EGastownSessions(t, state, id)
 }
 
 func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, state *RootState, lab, orch string) {

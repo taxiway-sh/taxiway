@@ -35,6 +35,10 @@ using the preset. The preset explicitly declares `claude` and `node` as its
 the completed launcher as a dead agent.
 Automatic trust is restricted to the configured Gas Town directory (normally
 `/lab/work/gt`); directories outside it, including symlink escapes, are rejected.
+The preset passes this root as a launcher argument so it survives `gt handoff`.
+On every launch, including handoff, the launcher reloads the managed Lab gateway
+configuration from `~/.config/taxiway/env`. Gateway credentials are not placed
+in command arguments, and missing gateway configuration stops the launch.
 This does not change Codex configuration or other Claude permission dialogs.
 
 ## Settings
