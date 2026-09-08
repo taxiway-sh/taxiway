@@ -128,6 +128,11 @@ classified zombies during startup cannot turn the check green. These assertions
 do not require Boot or idle agents to be present, and do not yet prove that an
 interactive model request completes.
 
+The Gas Town phase-by-phase scenario also renews the refinery twice and the
+Mayor once with `gt handoff`. It checks that Claude replaces the previous
+process and retains its configured model and gateway environment. This covers
+session renewal separately from stopping and starting the Lab.
+
 Tests use `--skip-auth-check`. They do not run interactive authentication,
 use real API keys, or exercise browser/device login. Authenticated execution
 depends on external accounts and interactive state and is outside this suite.

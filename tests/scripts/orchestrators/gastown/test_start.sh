@@ -177,9 +177,9 @@ settings = json.load(open(sys.argv[2]))
 agent = registry["agents"]["claude-code-litellm"]
 assert agent["provider"] == "claude"
 assert agent["command"] == "/lab/orchestrators/gastown/launch-agent.sh"
-assert agent["args"] == ["claude", "--model", "claude-opus-4-8", "--dangerously-skip-permissions"]
+assert agent["args"] == [sys.argv[3], "claude", "--model", "claude-opus-4-8", "--dangerously-skip-permissions"]
 assert agent["process_names"] == ["claude", "node"]
-assert agent["env"]["TAXIWAY_WORKSPACE_TRUST_ROOT"] == sys.argv[3]
+assert "TAXIWAY_WORKSPACE_TRUST_ROOT" not in agent["env"]
 assert settings["default_agent"] == "claude-code-litellm"
 for role in ("boot", "crew", "deacon", "dog", "mayor", "polecat", "refinery", "witness"):
     assert settings["role_agents"][role] == "claude-code-litellm"
