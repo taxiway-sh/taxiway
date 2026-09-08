@@ -52,6 +52,7 @@ configure_litellm_town_settings() {
     GASTOWN_SETTINGS_DIR="$HQ_DIR/settings" \
     GASTOWN_LITELLM_AGENT="$GASTOWN_LITELLM_AGENT" \
     GASTOWN_MODEL="$GASTOWN_MODEL" \
+    TAXIWAY_WORKSPACE_TRUST_ROOT="$HQ_DIR" \
     TAXIWAY_LITELLM_BASE_URL="$TAXIWAY_LITELLM_BASE_URL" \
     TAXIWAY_LITELLM_API_KEY="$TAXIWAY_LITELLM_API_KEY" \
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="${CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC:-1}" \
@@ -102,13 +103,16 @@ if not isinstance(agents, dict):
     agents = {}
 agents[agent_name] = {
     "provider": "claude",
-    "command": "claude",
+    "command": "/lab/agents/claude-code/trust-workspace.sh",
     "args": [
+        "--exec",
+        "claude",
         "--model",
         model,
         "--dangerously-skip-permissions",
     ],
     "env": {
+        "TAXIWAY_WORKSPACE_TRUST_ROOT": os.environ["TAXIWAY_WORKSPACE_TRUST_ROOT"],
         "ANTHROPIC_BASE_URL": base_url,
         "ANTHROPIC_CUSTOM_HEADERS": f"x-litellm-api-key: Bearer {api_key}",
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": os.environ["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"],

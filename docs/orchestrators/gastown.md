@@ -25,6 +25,14 @@ runtime routing keys needed for LiteLLM:
 - `settings/agents.json` defines that preset with the LiteLLM base URL and
   authentication headers.
 
+The preset launches Claude through the existing Claude workspace-trust script
+in `--exec` mode. Before each launch, it trusts the process's current directory
+in `~/.claude.json`, then replaces itself with Claude, preserving the arguments
+and environment. This also covers dynamically created workers using the preset.
+Automatic trust is restricted to the configured Gas Town directory (normally
+`/lab/work/gt`); directories outside it, including symlink escapes, are rejected.
+This does not change Codex configuration or other Claude permission dialogs.
+
 ## Settings
 
 The adapter exposes these settings through `--set`:
