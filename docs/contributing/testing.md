@@ -96,10 +96,9 @@ and orchestrator workspace/start scripts. `make test-scripts` discovers
 
 ### End-to-end
 
-Orchestrator-specific session checks live in
-`tests/e2e/orchestrators/<name>/check_sessions.py`. The Go lifecycle scenarios
-execute these scripts through the driver and check their exit code. Keep their
-assertions in the script; do not add a separate unit-test layer for E2E assertions.
+Session checks are Go helper functions in `internal/cli/orchestrator_e2e_test.go`.
+They execute commands through the driver and assert their results directly.
+Do not add a separate unit-test layer for E2E assertions.
 Tests of the shipped launcher and profile remain under `tests/scripts/`.
 
 The end-to-end suite exercises `claude-code`, `codex`, and `gastown` through

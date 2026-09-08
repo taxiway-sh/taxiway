@@ -617,27 +617,84 @@ func assertE2EShellCheck(t *testing.T, root *cobra.Command, tb *dockerTestBuf, l
 	require.Contains(t, out, orch)
 }
 
-// Orchestrator-specific assertions live with the E2E assets, not in the CLI.
 func assertE2EOrchestratorSessions(t *testing.T, state *RootState, id, orch string) {
 	t.Helper()
-	path := filepath.Join(findRepoRoot(t), "tests", "e2e", "orchestrators", orch, "check_sessions.py")
-	script, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
-		t.Logf("No session E2E check provided for %s", orch)
+	if orch != "gastown" {
 		return
 	}
-	require.NoError(t, err)
 	runE2EAssert(t, "assert:orchestrator-present-sessions-healthy", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer cancel()
-		var stdout, stderr bytes.Buffer
-		res, err := state.Driver.Exec(ctx, id, driver.ExecRequest{
-			Workdir: "/lab",
-			Argv:    []string{"python3", "-c", string(script)},
-			Stdout:  &stdout, Stderr: &stderr,
-		})
-		require.NoError(t, err, "%s session check: %s\n%s", orch, stdout.String(), stderr.String())
-		require.Equal(t, 0, res.ExitCode, "%s session check: %s\n%s", orch, stdout.String(), stderr.String())
+		run := func(allowCheckFailure bool, argv ...string) string {
+			var stdout, stderr bytes.Buffer
+			res, err := state.Driver.Exec(ctx, id, driver.ExecRequest{
+				Workdir: "/lab/work/gt", Argv: argv,
+				Stdout: &stdout, Stderr: &stderr,
+			})
+			require.NoError(t, err, "%v: %s\n%s", argv, stdout.String(), stderr.String())
+			if allowCheckFailure {
+				// Doctor may fail unrelated checks; inspect its zombie check below.
+				return stdout.String() + "\n" + stderr.String()
+			}
+			require.Equal(t, 0, res.ExitCode, "%v: %s\n%s", argv, stdout.String(), stderr.String())
+			return stdout.String()
+		}
+
+		type agentStatus struct {
+			Session string `json:"session"`
+			Role    string `json:"role"`
+			Running bool   `json:"running"`
+		}
+		var status struct {
+			Agents []agentStatus `json:"agents"`
+			Rigs   []struct {
+				Agents []agentStatus `json:"agents"`
+			} `json:"rigs"`
+			Tmux struct {
+				Socket string `json:"socket"`
+			} `json:"tmux"`
+		}
+		statusJSON := run(false, "gt", "status", "--json")
+		require.NoError(t, json.Unmarshal([]byte(statusJSON), &status), "gt status: %s", statusJSON)
+		require.NotEmpty(t, status.Tmux.Socket, "Gastown must identify its tmux socket")
+		sessions := strings.Fields(run(false, "tmux", "-L", status.Tmux.Socket, "list-sessions", "-F", "#{session_name}"))
+		startup := run(false, "cat", "/lab/work/gt/.runtime/doctor-fix.log")
+		doctor := run(true, "gt", "doctor") // Never --fix: this check must not repair the Lab.
+
+		zombies := regexp.MustCompile(`Found [1-9][0-9]* zombie session`)
+		healthy := regexp.MustCompile(`All [1-9][0-9]* Gas Town sessions have running Claude processes`)
+		for _, check := range []struct{ phase, output string }{{"startup", startup}, {"doctor", doctor}} {
+			var lines []string
+			for _, line := range strings.FieldsFunc(check.output, func(r rune) bool { return r == '\n' || r == '\r' }) {
+				if strings.Contains(line, "zombie-sessions") {
+					lines = append(lines, line)
+				}
+			}
+			result := strings.Join(lines, "\n")
+			// Preserve the initial finding even when startup doctor later says "fixed".
+			require.False(t, zombies.MatchString(result), "%s: %s", check.phase, result)
+			require.True(t, strings.Contains(result, "No zombie sessions found") || healthy.MatchString(result),
+				"%s: missing or unsuccessful zombie check: %s", check.phase, result)
+		}
+
+		agents := status.Agents
+		for _, rig := range status.Rigs {
+			agents = append(agents, rig.Agents...)
+		}
+		present := make(map[string]bool, len(sessions))
+		for _, session := range sessions {
+			present[session] = true
+		}
+		checked := 0
+		for _, agent := range agents {
+			// Boot/dogs can finish normally; absent idle agents are not required.
+			if !present[agent.Session] || agent.Role == "boot" || agent.Role == "dog" {
+				continue
+			}
+			checked++
+			require.True(t, agent.Running, "Present session %s is not recognized as running by Gastown", agent.Session)
+		}
+		require.Positive(t, checked, "No persistent agent session was checked")
 	})
 }
 
