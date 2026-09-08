@@ -109,7 +109,7 @@ func (l *LimaDriver) Create(ctx context.Context, id string, opts CreateOptions) 
 		return err
 	}
 
-	if err := exec.Command("limactl", "start", "--name="+id, yamlPath).Run(); err != nil {
+	if err := l.startInstance(ctx, id, "--name="+id, yamlPath); err != nil {
 		return err
 	}
 	if err := l.prepareInternalDirs(ctx, id); err != nil {
@@ -120,10 +120,37 @@ func (l *LimaDriver) Create(ctx context.Context, id string, opts CreateOptions) 
 }
 
 func (l *LimaDriver) Start(ctx context.Context, id string) error {
-	if err := exec.Command("limactl", "start", id).Run(); err != nil {
+	if err := l.startInstance(ctx, id, id); err != nil {
 		return err
 	}
 	return l.prepareInternalDirs(ctx, id)
+}
+
+// startInstance applies the same startup policy on every host, for both new
+// and existing VMs. Bound the process as well as Lima's own readiness wait so
+// downloads and a stuck limactl cannot wait indefinitely.
+func (l *LimaDriver) startInstance(ctx context.Context, id string, args ...string) error {
+	timeout := 15 * time.Minute
+	if value := os.Getenv("TAXIWAY_LIMA_START_TIMEOUT"); value != "" {
+		parsed, err := time.ParseDuration(value)
+		if err != nil || parsed <= 0 {
+			return fmt.Errorf("lima: TAXIWAY_LIMA_START_TIMEOUT must be a positive duration (for example 15m), got %q", value)
+		}
+		timeout = parsed
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "limactl", append([]string{"start", "--timeout=" + timeout.String()}, args...)...)
+	// Do not wait forever for output pipes inherited by Lima subprocesses.
+	cmd.WaitDelay = time.Second
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		return nil
+	}
+	if ctx.Err() != nil {
+		err = ctx.Err()
+	}
+	return fmt.Errorf("lima: start %s (timeout %s): %w\n%s\nInspect the instance with: limactl list", id, timeout, err, strings.TrimSpace(string(out)))
 }
 
 func (l *LimaDriver) Stop(_ context.Context, id string) error {

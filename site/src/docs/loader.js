@@ -1,7 +1,7 @@
 // Eagerly import every docs/*.md as raw text, then build the page + nav model.
 // Path is relative to this file: src/docs -> repo root is ../../../.
 const modules = import.meta.glob(
-  '../../../docs/**/*.md',
+  ['../../../docs/**/*.md', '!../../../docs/contributing/README.md'],
   { query: '?raw', import: 'default', eager: true },
 );
 
@@ -28,6 +28,8 @@ function groupFor(rel) {
 }
 
 function routeFor(rel) {
+  // The GitHub directory README shares the overview section on the site.
+  if (rel === 'contributing/README') return '/docs#contributing';
   // Folder path == URL path: /docs/<category>/<page>. The index (README) is /docs.
   return rel === 'README' ? '/docs' : `/docs/${rel}`;
 }
@@ -63,11 +65,12 @@ export function resolveDocLink(currentRel, href) {
 // listed falls back to the end, alphabetically.
 const PAGE_ORDER = [
   'README',
-  'reference/concepts', 'reference/commands', 'reference/configuration', 'reference/architecture',
+  'reference/concepts', 'reference/installation', 'reference/commands', 'reference/configuration', 'reference/architecture',
   'drivers/lima', 'drivers/docker',
   'orchestrators/claude-code', 'orchestrators/codex', 'orchestrators/gastown',
   'how-to/gateway', 'how-to/observability', 'how-to/recordings',
-  'contributing/development', 'contributing/testing', 'contributing/release',
+  'contributing/development', 'contributing/testing', 'contributing/issues', 'contributing/release',
+  'contributing/installation-qualification',
 ];
 const orderIndex = (rel) => {
   const i = PAGE_ORDER.indexOf(rel);

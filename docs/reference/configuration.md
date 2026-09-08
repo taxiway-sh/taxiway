@@ -61,6 +61,24 @@ Driver resolution order is:
 
 See [Drivers](../README.md#drivers) for Lima and Docker details.
 
+### Lima startup timeout
+
+Taxiway allows up to 15 minutes for each Lima VM start, on all platforms.
+This applies to both lab creation and restarting an existing VM. A ready VM
+returns immediately; the timeout is a maximum, not a delay.
+
+Override it for a slow machine or first-time downloads:
+
+```bash
+TAXIWAY_LIMA_START_TIMEOUT=20m taxiway up mylab --driver lima
+```
+
+The value must be a positive duration such as `90s` or `20m`. Taxiway passes it
+to Lima and bounds the startup process, honoring an earlier caller deadline or
+cancellation. On failure, the error includes Lima's output and the instance
+name. A timeout does not delete the VM; inspect it with `limactl list` before
+retrying or removing the lab.
+
 ## Gateway
 
 Taxiway starts host-local gateway pieces automatically from lab commands such as

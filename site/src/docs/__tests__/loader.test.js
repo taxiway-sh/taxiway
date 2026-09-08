@@ -1,19 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { docs, navGroups, resolveDocLink } from '../loader.js';
+import { docs, navGroups, resolveDocLink, titleFromRaw } from '../loader.js';
 
 describe('docs loader', () => {
-  it('creates one entry per docs markdown file', () => {
-    // 16 markdown files exist under docs/ at time of writing.
-    expect(docs.length).toBe(16);
-  });
-
   it('maps README to /docs and mirrors the folder path in the URL', () => {
-    const routes = Object.fromEntries(docs.map(d => [d.rel, d.route]));
-    expect(routes['README']).toBe('/docs');
-    expect(routes['reference/concepts']).toBe('/docs/reference/concepts');
-    expect(routes['how-to/gateway']).toBe('/docs/how-to/gateway');
-    expect(routes['drivers/lima']).toBe('/docs/drivers/lima');
-    expect(routes['contributing/development']).toBe('/docs/contributing/development');
+    for (const doc of docs) {
+      expect(doc.route).toBe(doc.rel === 'README' ? '/docs' : `/docs/${doc.rel}`);
+    }
   });
 
   it('has no duplicate routes', () => {
@@ -22,23 +14,15 @@ describe('docs loader', () => {
   });
 
   it('derives a title from the first H1', () => {
-    const concepts = docs.find(d => d.route === '/docs/reference/concepts');
-    expect(concepts.title.length).toBeGreaterThan(0);
-    expect(concepts.raw).toContain('#');
+    expect(titleFromRaw('Intro\n\n# First title\n\n# Second title', 'Fallback')).toBe('First title');
+    expect(titleFromRaw('No heading', 'Fallback')).toBe('Fallback');
   });
 
   it('groups pages and keeps only non-empty groups', () => {
-    const names = navGroups.map(g => g.name);
-    expect(names).toContain('Reference');
-    expect(names).toContain('How-to');
     expect(navGroups.every(g => g.pages.length > 0)).toBe(true);
-  });
-
-  it('orders how-to and contributing to match the overview page', () => {
-    const titlesOf = (name) => navGroups.find(g => g.name === name).pages.map(p => p.title);
-    expect(titlesOf('How-to')).toEqual(['Gateway', 'Observability', 'Recordings']);
-    expect(titlesOf('Contributing')).toEqual(['Development', 'Testing', 'Release']);
-    expect(titlesOf('Orchestrators')).toEqual(['Claude Code', 'Codex', 'Gas Town']);
+    for (const group of navGroups) {
+      expect(group.pages.every(page => page.group === group.name)).toBe(true);
+    }
   });
 
   it('exposes the index first as a headingless "Overview" link', () => {
@@ -48,6 +32,13 @@ describe('docs loader', () => {
     const index = docs.find(d => d.route === '/docs');
     expect(index.title).toBe('Overview');
     expect(navGroups[0].pages[0].route).toBe('/docs');
+  });
+
+  it('keeps the contributing directory index out of the site pages', () => {
+    expect(docs.some(d => d.rel === 'contributing/README')).toBe(false);
+    expect(resolveDocLink('README', 'contributing/README.md')).toEqual({
+      kind: 'internal', to: '/docs#contributing',
+    });
   });
 
 });

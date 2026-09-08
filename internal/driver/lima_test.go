@@ -3,9 +3,11 @@ package driver
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -246,7 +248,7 @@ exit 0
 	require.NoError(t, err)
 	require.Equal(t, "repo: /repo\norch: gastown\ngit: /state/demo/git\nrecordings: /state/demo/recordings\n", string(rendered))
 	require.Equal(t, []string{
-		"start --name=taxiway-demo " + renderedPath,
+		"start --timeout=15m0s --name=taxiway-demo " + renderedPath,
 		`shell --workdir=/ taxiway-demo -- sh -c sudo mkdir -p /lab/work && sudo chown "$(id -u):$(id -g)" /lab/work`,
 	}, readCommandLog(t, logPath))
 	require.FileExists(t, filepath.Join(stateDir, "demo", "created_at"))
@@ -312,7 +314,100 @@ func installFakeLimactl(t *testing.T, script string) string {
 	require.NoError(t, os.WriteFile(path, []byte(script), 0o755))
 	t.Setenv("PATH", binDir)
 	t.Setenv("TAXIWAY_FAKE_LIMACTL_LOG", logPath)
+	t.Setenv("TAXIWAY_LIMA_START_TIMEOUT", "")
 	return logPath
+}
+
+func TestLimaStartTimeout(t *testing.T) {
+	for _, tc := range []struct{ value, want string }{{"", "15m0s"}, {"20m", "20m0s"}, {"90s", "1m30s"}} {
+		t.Run(tc.want, func(t *testing.T) {
+			logPath := installFakeLimactl(t, "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$TAXIWAY_FAKE_LIMACTL_LOG\"\n")
+			t.Setenv("TAXIWAY_LIMA_START_TIMEOUT", tc.value)
+			require.NoError(t, NewLimaDriver(t.TempDir()).Start(context.Background(), "taxiway-demo"))
+			calls := readCommandLog(t, logPath)
+			require.Len(t, calls, 2)
+			require.Equal(t, "start --timeout="+tc.want+" taxiway-demo", calls[0])
+			require.Contains(t, calls[1], "shell --workdir=/ taxiway-demo")
+		})
+	}
+}
+
+func TestLimaStartRejectsInvalidTimeout(t *testing.T) {
+	for _, value := range []string{"bad", "0s", "-1m", "999999999999999999h"} {
+		t.Run(value, func(t *testing.T) {
+			logPath := installFakeLimactl(t, "#!/bin/sh\nprintf invoked > \"$TAXIWAY_FAKE_LIMACTL_LOG\"\n")
+			t.Setenv("TAXIWAY_LIMA_START_TIMEOUT", value)
+			err := NewLimaDriver(t.TempDir()).Start(context.Background(), "taxiway-demo")
+			require.ErrorContains(t, err, "TAXIWAY_LIMA_START_TIMEOUT")
+			require.NoFileExists(t, logPath)
+		})
+	}
+}
+
+func TestLimaStartReportsFailureWithoutPreparingDirectories(t *testing.T) {
+	logPath := installFakeLimactl(t, `#!/bin/sh
+printf '%s\n' "$*" >> "$TAXIWAY_FAKE_LIMACTL_LOG"
+printf 'guest provisioning failed\n' >&2
+exit 7
+`)
+	err := NewLimaDriver(t.TempDir()).Start(context.Background(), "taxiway-demo")
+	require.ErrorContains(t, err, "taxiway-demo")
+	require.ErrorContains(t, err, "guest provisioning failed")
+	var exitErr *exec.ExitError
+	require.ErrorAs(t, err, &exitErr)
+	require.Equal(t, 7, exitErr.ExitCode())
+	require.Len(t, readCommandLog(t, logPath), 1)
+}
+
+func TestLimaStartHonorsDeadline(t *testing.T) {
+	// exec avoids leaving a shell child holding the output pipe open.
+	installFakeLimactl(t, "#!/bin/sh\nexec /bin/sleep 30\n")
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	started := time.Now()
+	err := NewLimaDriver(t.TempDir()).Start(ctx, "taxiway-demo")
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	require.Less(t, time.Since(started), 5*time.Second)
+}
+
+func TestLimaStartHonorsConfiguredTimeout(t *testing.T) {
+	installFakeLimactl(t, "#!/bin/sh\nexec /bin/sleep 30\n")
+	t.Setenv("TAXIWAY_LIMA_START_TIMEOUT", "100ms")
+	started := time.Now()
+	err := NewLimaDriver(t.TempDir()).Start(context.Background(), "taxiway-demo")
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	require.ErrorContains(t, err, "100ms")
+	require.Less(t, time.Since(started), 5*time.Second)
+}
+
+func TestLimaStartHonorsCancellation(t *testing.T) {
+	logPath := installFakeLimactl(t, "#!/bin/sh\nprintf invoked > \"$TAXIWAY_FAKE_LIMACTL_LOG\"\n")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := NewLimaDriver(t.TempDir()).Start(ctx, "taxiway-demo")
+	require.ErrorIs(t, err, context.Canceled)
+	require.NoFileExists(t, logPath)
+}
+
+func TestLimaCreateFailurePreservesTemplateWithoutCreatedMarker(t *testing.T) {
+	logPath := installFakeLimactl(t, `#!/bin/sh
+printf '%s\n' "$*" >> "$TAXIWAY_FAKE_LIMACTL_LOG"
+printf 'guest provisioning failed\n' >&2
+exit 7
+`)
+	t.Setenv("TAXIWAY_LIMA_START_TIMEOUT", "20m")
+	stateDir := t.TempDir()
+	templatePath := filepath.Join(t.TempDir(), "template.yaml")
+	require.NoError(t, os.WriteFile(templatePath, []byte("mounts: []\n"), 0o644))
+	err := NewLimaDriver(stateDir).Create(context.Background(), "taxiway-demo", CreateOptions{
+		Lab: "demo", Orch: "codex", RepoDir: "/repo", GitDir: "/git",
+		RecordingsDir: "/recordings", TemplatePath: templatePath,
+	})
+	require.ErrorContains(t, err, "guest provisioning failed")
+	renderedPath := filepath.Join(stateDir, "demo", "agent-lab.yaml")
+	require.FileExists(t, renderedPath)
+	require.NoFileExists(t, filepath.Join(stateDir, "demo", "created_at"))
+	require.Equal(t, []string{"start --timeout=20m0s --name=taxiway-demo " + renderedPath}, readCommandLog(t, logPath))
 }
 
 // findRepoRoot walks up from the current working directory until it finds

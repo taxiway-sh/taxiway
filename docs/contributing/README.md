@@ -8,6 +8,7 @@ How to set up, build, test, and track work on Taxiway.
 | [Testing](testing.md) | Test categories and how to run them |
 | [Issues](issues.md) | How work is tracked: issue scope, labels, and triage |
 | [Release](release.md) | The release process |
+| [Installation qualification](installation-qualification.md) | Verify published releases across platforms and drivers |
 
 ## At a glance
 
