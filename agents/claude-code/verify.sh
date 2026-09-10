@@ -28,22 +28,25 @@ log "claude --help"
 pass "help OK"
 
 log "claude auth status"
-cc_config="$(mktemp -t cc-config.XXXXXX)"
+cc_auth_status="$(mktemp -t cc-auth-status.XXXXXX)"
+cc_auth_error="$(mktemp -t cc-auth-error.XXXXXX)"
 set +e
-env -u ANTHROPIC_API_KEY "$CLAUDE" config list >"$cc_config" 2>&1
+"$CLAUDE" auth status --json >"$cc_auth_status" 2>"$cc_auth_error"
 exit_code=$?
 set -e
 
-if [ $exit_code -eq 0 ]; then
-  pass "config readable (logged in or API key set)"
-elif grep -qi "not logged in\|please run.*login\|unauthenticated" "$cc_config"; then
+if [ "$exit_code" -eq 0 ] &&
+  jq -e '.loggedIn == true and (.authMethod | type == "string") and (.apiProvider | type == "string")' "$cc_auth_status" >/dev/null; then
+  pass "claude authentication status readable (logged in)"
+elif [ "$exit_code" -eq 1 ] &&
+  jq -e '.loggedIn == false and (.authMethod | type == "string") and (.apiProvider | type == "string")' "$cc_auth_status" >/dev/null; then
   pass "claude installed (not yet authenticated)"
 else
-  cat "$cc_config" >&2
-  rm -f "$cc_config"
-  fail "claude config list failed unexpectedly"
+  cat "$cc_auth_status" "$cc_auth_error" >&2
+  rm -f "$cc_auth_status" "$cc_auth_error"
+  fail "claude auth status failed unexpectedly"
 fi
-rm -f "$cc_config"
+rm -f "$cc_auth_status" "$cc_auth_error"
 
 log "Auth status check"
 if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
