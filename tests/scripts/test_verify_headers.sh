@@ -33,7 +33,7 @@ write_fake_bin bd 'case "${1:-}" in version|--version) echo "bd version test";; 
 write_fake_bin dolt 'case "${1:-}" in version|--version) echo "dolt version test";; *) echo "dolt: unsupported $*" >&2; exit 1;; esac'
 write_fake_bin sqlite3 'case "${1:-}" in --version) echo "sqlite3 version test";; *) echo "sqlite3: unsupported $*" >&2; exit 1;; esac'
 write_fake_bin codex 'case "${1:-}" in --version) echo "codex version test";; --help) echo "codex help test";; *) echo "codex: unsupported $*" >&2; exit 1;; esac'
-write_fake_bin claude 'case "${1:-}" in --version) echo "claude version test";; --help) echo "claude help test";; config) [ "${2:-}" = "list" ] && echo "claude config test" || { echo "claude: unsupported $*" >&2; exit 1; };; *) echo "claude: unsupported $*" >&2; exit 1;; esac'
+write_fake_bin claude 'case "${1:-}" in --version) echo "claude version test";; --help) echo "claude help test";; auth) [ "${2:-}" = "status" ] && [ "${3:-}" = "--json" ] && echo "{\"loggedIn\":true,\"authMethod\":\"test\",\"apiProvider\":\"test\"}" || { echo "claude: unsupported $*" >&2; exit 1; };; *) echo "claude: unsupported $*" >&2; exit 1;; esac'
 
 first_content_line() {
   awk 'NF && $0 !~ /^LAB_AGENT_EVENT / { print; exit }'
