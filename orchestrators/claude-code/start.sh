@@ -5,7 +5,6 @@
 # claude is still launched — it will prompt for login interactively.
 # The browser OAuth flow works via Lima's transparent localhost forwarding.
 #
-# Attach to the session with: taxiway shell claude-code
 
 set -euo pipefail
 
@@ -51,7 +50,6 @@ if [ -f "${HOME}/.claude/.credentials.json" ]; then
 else
     printf '  \033[1;33mWARN\033[0m No Claude Code OAuth credentials found\n'
     printf '       claude will prompt for login on first use\n'
-    printf '       Attach with: taxiway shell claude-code\n'
 fi
 
 # Launch claude in a detached tmux session.
@@ -83,6 +81,5 @@ fi
 agent_cmd="claude --model \"$CLAUDE_CODE_MODEL\""
 tmux new-session -d -s "$SESSION" -c "$start_dir" "${tmux_env_args[@]}" "$agent_cmd"
 pass "Claude Code started in tmux session '$SESSION' using model ${CLAUDE_CODE_MODEL}"
-printf '  Attach with: taxiway shell claude-code\n'
 
 lab_emit_event phase done
