@@ -16,11 +16,6 @@ on:
         required: true
         default: latest
         type: string
-      branch_compose:
-        description: Test the selected commit's Langfuse Compose instead of the release Compose (not release qualification)
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: read
@@ -29,7 +24,6 @@ permissions:
 env:
   LIMA_VERSION: v2.1.1
   TAXIWAY_RELEASE: ${{ inputs.release || 'latest' }}
-  TAXIWAY_COMPOSE_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.branch_compose && github.sha || '' }}
 
 jobs:
   linux:
@@ -106,11 +100,6 @@ jobs:
           test -d "$HOME/.taxiway/runtime/agents"
           test -d "$HOME/.taxiway/runtime/orchestrators"
           "$HOME/.local/bin/taxiway" version
-          if [ -n "$TAXIWAY_COMPOSE_SHA" ]; then
-            printf 'Testing release with Langfuse Compose from commit %s (not release qualification)\n' "$TAXIWAY_COMPOSE_SHA"
-            curl -fsSL "https://raw.githubusercontent.com/taxiway-sh/taxiway/$TAXIWAY_COMPOSE_SHA/infra/observability/langfuse.compose.yml" \
-              -o "$HOME/.taxiway/runtime/infra/observability/langfuse.compose.yml"
-          fi
           "$HOME/.local/bin/taxiway" init
 
       - name: Verify installation
@@ -307,11 +296,6 @@ jobs:
           test -d "$HOME/.taxiway/runtime/agents"
           test -d "$HOME/.taxiway/runtime/orchestrators"
           "$HOME/.local/bin/taxiway" version
-          if [ -n "$TAXIWAY_COMPOSE_SHA" ]; then
-            printf 'Testing release with Langfuse Compose from commit %s (not release qualification)\n' "$TAXIWAY_COMPOSE_SHA"
-            curl -fsSL "https://raw.githubusercontent.com/taxiway-sh/taxiway/$TAXIWAY_COMPOSE_SHA/infra/observability/langfuse.compose.yml" \
-              -o "$HOME/.taxiway/runtime/infra/observability/langfuse.compose.yml"
-          fi
           COMPOSE_PARALLEL_LIMIT=2 "$HOME/.local/bin/taxiway" init
 
       - name: Verify installation
@@ -607,7 +591,6 @@ jobs:
           set -euxo pipefail
 
           taxiway_release="$1"
-          compose_sha="${2:-}"
           export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
 
           case "$taxiway_release" in
@@ -629,11 +612,6 @@ jobs:
           test -d "$HOME/.taxiway/runtime/agents"
           test -d "$HOME/.taxiway/runtime/orchestrators"
           taxiway version
-          if [ -n "$compose_sha" ]; then
-            printf 'Testing release with Langfuse Compose from commit %s (not release qualification)\n' "$compose_sha"
-            curl -fsSL "https://raw.githubusercontent.com/taxiway-sh/taxiway/$compose_sha/infra/observability/langfuse.compose.yml" \
-              -o "$HOME/.taxiway/runtime/infra/observability/langfuse.compose.yml"
-          fi
           taxiway init
           '@
 
@@ -643,7 +621,7 @@ jobs:
           $wslScriptPath = (wsl.exe --distribution Ubuntu-24.04 --user root --exec wslpath -a $scriptPath).Trim()
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-          wsl.exe --distribution Ubuntu-24.04 --user runner --exec bash $wslScriptPath $env:TAXIWAY_RELEASE $env:TAXIWAY_COMPOSE_SHA
+          wsl.exe --distribution Ubuntu-24.04 --user runner --exec bash $wslScriptPath $env:TAXIWAY_RELEASE
           $scriptExitCode = $LASTEXITCODE
           Remove-Item -Force $scriptPath
           if ($scriptExitCode -ne 0) { exit $scriptExitCode }
