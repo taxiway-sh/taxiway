@@ -471,6 +471,18 @@ type runUpOpts struct {
 	profileClear            bool
 }
 
+
+// shellAttachHint is the shared next-action line after a successful start.
+// The lab name is the public taxiway shell argument; orchestrator/tmux names
+// must not appear here (taxiway-sh/taxiway#75).
+func shellAttachHint(lab string) string {
+	return "  Attach with: taxiway shell " + lab
+}
+
+func printShellAttachHint(w io.Writer, lab string) {
+	fmt.Fprintln(w, shellAttachHint(lab))
+}
+
 func runUp(ctx context.Context, state *RootState, ref config.LabRef, id, stateDir string, opts runUpOpts) error {
 	if opts.out == nil {
 		opts.out = os.Stdout
@@ -564,6 +576,9 @@ func runUp(ctx context.Context, state *RootState, ref config.LabRef, id, stateDi
 				continue
 			}
 			fmt.Fprintf(opts.out, "  ✓  %-20s (cached)\n", phase)
+			if phase == phases.PhaseStart {
+				printShellAttachHint(opts.out, ref.Lab)
+			}
 			continue
 		}
 
@@ -589,6 +604,9 @@ func runUp(ctx context.Context, state *RootState, ref config.LabRef, id, stateDi
 		}
 
 		fmt.Fprintf(opts.out, "  ✓  %-20s\n", phase)
+		if phase == phases.PhaseStart {
+			printShellAttachHint(opts.out, ref.Lab)
+		}
 	}
 
 	return nil

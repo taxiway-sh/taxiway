@@ -3,7 +3,6 @@
 #
 # Codex authentication is managed by LiteLLM; labs only need the LiteLLM key.
 #
-# Attach to the session with: taxiway shell codex
 
 set -euo pipefail
 
@@ -102,6 +101,5 @@ done
 agent_cmd="codex resume --last || codex"
 tmux new-session -d -s "$SESSION" -c "$start_dir" "${tmux_env_args[@]}" "$agent_cmd"
 pass "Codex started in tmux session '$SESSION'"
-printf '  Attach with: taxiway shell codex\n'
 
 lab_emit_event phase done
