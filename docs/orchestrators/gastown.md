@@ -50,6 +50,13 @@ The adapter exposes these settings through `--set`:
 | `version` | Gas Town version or tag to install from release archive | `latest` |
 | `beads-version` | [Beads](https://github.com/gastownhall/beads) (Gas Town's Git-backed work-tracking unit) version override; omitted uses the Gas Town compatibility matrix | Adapter default |
 | `model` | Claude Code model name passed through LiteLLM | `claude-opus-4-8` |
+| `tool-search` | Load MCP tool definitions on demand: `true`, `false`, `auto`, or `auto:N` | `true` |
+| `claudeai-mcp-servers` | Import Claude.ai connectors: `true` or `false` | `false` |
+
+Settings persist with the lab; `--clear-set` restores the default. MCP settings
+apply at each agent launch, including handoffs. Already running agents must
+restart or handoff to pick up changes. See [Claude Code settings](claude-code.md#settings)
+for connector examples.
 
 Example:
 

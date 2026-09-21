@@ -28,3 +28,20 @@ settings:
       - claude-haiku-4-5-20251001
     phases:
       - start
+  - name: tool-search
+    description: Load MCP tool definitions on demand. Use false to disable tool search or auto:N for a context percentage threshold.
+    default: "true"
+    examples:
+      - "true"
+      - "false"
+      - "auto:5"
+    phases:
+      - start
+  - name: claudeai-mcp-servers
+    description: Import connected Claude.ai MCP servers. Disabled by default; set true to opt in.
+    default: "false"
+    examples:
+      - "false"
+      - "true"
+    phases:
+      - start

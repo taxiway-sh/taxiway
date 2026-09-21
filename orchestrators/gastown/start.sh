@@ -10,6 +10,10 @@ if [ -f "${HOME}/.config/taxiway/env" ]; then
     set +a
 fi
 
+# shellcheck source=../../agents/claude-code/env.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../agents/claude-code/env.sh"
+claude_code_write_env "${TAXIWAY_SET_TOOL_SEARCH:-true}" "${TAXIWAY_SET_CLAUDEAI_MCP_SERVERS:-false}"
+
 HQ_DIR="${TAXIWAY_HQ_DIR:-/lab/work/gt}"
 FORCE="${TAXIWAY_FORCE:-false}"
 MARKER="$HQ_DIR/.taxiway-hq-initialized"

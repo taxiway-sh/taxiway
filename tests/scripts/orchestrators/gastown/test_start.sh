@@ -157,6 +157,10 @@ touch "$hq/.taxiway-hq-initialized"
 PATH="$fake_bin:$PATH" \
 HOME="$home" \
 GT_LOG="$gt_log" \
+ENABLE_TOOL_SEARCH=false \
+ENABLE_CLAUDEAI_MCP_SERVERS=true \
+TAXIWAY_SET_TOOL_SEARCH=auto:5 \
+TAXIWAY_SET_CLAUDEAI_MCP_SERVERS= \
 TMUX_LOG="$tmux_log" \
 GT_DAEMON_STATUS=1 \
 GT_DAEMON_STATUS_OUTPUT="Daemon is not running" \
@@ -197,6 +201,39 @@ _assert_order "starts daemon before gt up" "$gt_output" "gt daemon start" "gt up
 _assert_order "waits for heartbeat before gt up" "$gt_output" "gt daemon logs -n 1000" "gt up"
 _assert_count "does not retry gt up" "$gt_output" 1 "gt up"
 _assert_not_contains "does not print old retry diagnostic" "$gt_output" "Gastown startup failed on attempt"
+
+echo "=== gastown restart applies overrides and restores defaults ==="
+for value in false true ''; do
+  PATH="$fake_bin:$PATH" HOME="$home" GT_LOG="$gt_log" TMUX_LOG="$tmux_log" \
+  GT_DAEMON_STATUS_AFTER_START_OUTPUT="Daemon is running. Last heartbeat: now" \
+  GT_DAEMON_LOGS_OUTPUT="Heartbeat complete (#1)" \
+  TAXIWAY_HQ_DIR="$hq" TAXIWAY_LITELLM_API_KEY="test-key" \
+  TAXIWAY_SET_TOOL_SEARCH="$value" TAXIWAY_SET_CLAUDEAI_MCP_SERVERS="$value" \
+  bash "$START_SH" >/dev/null
+  if python3 - "$START_SH" "$home" "$hq" "$value" <<'PY'
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+launcher = Path(sys.argv[1]).with_name("launch-agent.sh")
+env = dict(os.environ, HOME=sys.argv[2], ENABLE_TOOL_SEARCH="stale",
+           ENABLE_CLAUDEAI_MCP_SERVERS="stale",
+           TAXIWAY_LITELLM_BASE_URL="http://gateway.example:4000",
+           TAXIWAY_LITELLM_API_KEY="test-key")
+result = subprocess.run(
+    ["bash", str(launcher), sys.argv[3], sys.executable, "-c",
+     'import json, os; print(json.dumps([os.environ.get("ENABLE_TOOL_SEARCH"), os.environ.get("ENABLE_CLAUDEAI_MCP_SERVERS")]))'],
+    cwd=sys.argv[3], env=env, capture_output=True, text=True, check=True)
+assert json.loads(result.stdout) == [sys.argv[4] or "true", sys.argv[4] or "false"]
+PY
+  then
+    _pass "restart applies MCP settings (${value:-defaults})"
+  else
+    _fail "restart applies MCP settings (${value:-defaults})"
+  fi
+done
 
 echo "=== gastown start logs daemon output when gt up fails ==="
 

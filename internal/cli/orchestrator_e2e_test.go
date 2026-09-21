@@ -58,6 +58,7 @@ func e2eExpectations(t *testing.T, orch string) e2eOrchestratorExpectations {
 			model: "claude-opus-4-8", recordInput: "/status",
 			workspaceAssertion: "assert:workspace-cloned", workspace: e2ePlainFixtureWorkspace,
 			workspaceTrustedBeforeStart: true,
+			assertSessions:              assertE2EClaudeCodeSession,
 		}
 	case "codex":
 		return e2eOrchestratorExpectations{
@@ -702,6 +703,40 @@ func assertE2EShellCheck(t *testing.T, root *cobra.Command, tb *dockerTestBuf, l
 	require.Contains(t, out, orch)
 }
 
+func assertE2EClaudeCodeSession(t *testing.T, state *RootState, id string) {
+	t.Helper()
+	assertE2EClaudeMCPEnvironment(t, state, id, "", "claude-code")
+}
+
+// Inspect the actual Claude process, not the tmux server or its launching shell.
+// Shared by standalone sessions, Gastown roles, and Gastown handoffs.
+func assertE2EClaudeMCPEnvironment(t *testing.T, state *RootState, id, socket, session string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
+	defer cancel()
+	var stderr bytes.Buffer
+	res, err := state.Driver.Exec(ctx, id, driver.ExecRequest{
+		Argv: []string{"python3", "-c", `import pathlib, subprocess, sys, time
+tmux = ['tmux'] + (['-L', sys.argv[1]] if sys.argv[1] else [])
+deadline = time.monotonic() + 30
+while True:
+    pane = subprocess.check_output(tmux + ['display-message', '-p', '-t', sys.argv[2],
+        '#{pane_pid}|#{pane_dead}|#{pane_current_command}'], text=True).strip().split('|')
+    assert len(pane) == 3 and pane[1] == '0', 'Claude pane must be alive'
+    if pane[2] in ('claude', 'node'):
+        break
+    assert time.monotonic() < deadline, 'pane did not start Claude'
+    time.sleep(0.2)
+env = dict(entry.split(b'=', 1) for entry in (pathlib.Path('/proc') / pane[0] / 'environ').read_bytes().split(b'\0') if b'=' in entry)
+assert env.get(b'ENABLE_TOOL_SEARCH') == b'true', 'Claude lost tool search default'
+assert env.get(b'ENABLE_CLAUDEAI_MCP_SERVERS') == b'false', 'Claude must disable connector import by default'
+`, socket, session},
+		Stderr: &stderr,
+	})
+	require.NoError(t, err, "Claude MCP environment in %s: %s", session, stderr.String())
+	require.Equal(t, 0, res.ExitCode, "Claude MCP environment in %s: %s", session, stderr.String())
+}
+
 func assertE2EGastownSessions(t *testing.T, state *RootState, id string) {
 	t.Helper()
 	runE2EAssert(t, "assert:orchestrator-present-sessions-healthy", func(t *testing.T) {
@@ -778,6 +813,7 @@ func assertE2EGastownSessions(t *testing.T, state *RootState, id string) {
 			}
 			checked++
 			require.True(t, agent.Running, "Present session %s is not recognized as running by Gastown", agent.Session)
+			assertE2EClaudeMCPEnvironment(t, state, id, status.Tmux.Socket, agent.Session)
 		}
 		require.Positive(t, checked, "No persistent agent session was checked")
 	})
@@ -845,6 +881,7 @@ args = (p / 'cmdline').read_bytes().split(b'\0')
 assert b'--model' in args, 'handoff lost model selection'
 assert args[args.index(b'--model') + 1] == sys.argv[2].encode(), 'handoff changed model'
 `, parts[0], e2eExpectations(t, "gastown").model)
+		assertE2EClaudeMCPEnvironment(t, state, id, status.Tmux.Socket, target)
 	}
 	assertE2EGastownSessions(t, state, id)
 }
