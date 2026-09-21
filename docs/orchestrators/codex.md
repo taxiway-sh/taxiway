@@ -19,15 +19,6 @@ writes the `taxiway-litellm` provider and default `gpt-5.5` model into Codex's
 local config during `start`. Run `taxiway observe up` separately when you also
 want Langfuse traces.
 
-Override the lab model with:
-
-```bash
-taxiway up mylab --type codex --set model=gpt-5.4
-```
-
-The model name should match a Codex model name declared in LiteLLM, such as
-`gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, or `gpt-5.3-codex-spark`.
-
 Subscription authentication with Codex Pro uses host Codex OAuth converted for
 LiteLLM. Run the host login once, then let Taxiway prepare the LiteLLM auth
 file:
@@ -39,6 +30,25 @@ taxiway credentials codex
 
 The host `~/.codex/auth.json` file is not copied into labs. Codex labs only
 receive `TAXIWAY_LITELLM_API_KEY` and talk to LiteLLM.
+
+## Settings
+
+The adapter exposes this setting through `--set`:
+
+| Setting | Description | Default |
+|---|---|---|
+| `model` | Codex model name passed through LiteLLM | `gpt-5.5` |
+
+The model name should match a Codex model name declared in LiteLLM, such as
+`gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, or `gpt-5.3-codex-spark`.
+
+```bash
+taxiway start mylab --set model=gpt-5.4
+taxiway start mylab --clear-set model
+```
+
+Settings persist with the lab; `--clear-set` restores the default.
+`taxiway start` restarts the Codex session with the updated settings.
 
 ## Agent CLI
 
