@@ -30,6 +30,29 @@ copy them into the lab during `taxiway auth`. Claude Code Max still needs
 a Claude Code OAuth token in the lab so LiteLLM can forward the
 `Authorization` header to Anthropic.
 
+## Settings
+
+The adapter exposes these settings through `--set`:
+
+| Setting | Description | Default |
+|---|---|---|
+| `model` | Claude Code model name passed through LiteLLM | `claude-opus-4-8` |
+| `tool-search` | Load MCP tool definitions on demand: `true`, `false`, `auto`, or `auto:N` | `true` |
+| `claudeai-mcp-servers` | Import Claude.ai connectors: `true` or `false` | `false` |
+
+Tool search reduces context pressure when many MCP tools are available.
+Claude.ai connector import is disabled by default. Enable it explicitly when
+the lab needs access to connected services. Other configured MCP servers remain
+available. Clearing the setting disables Claude.ai connector import again.
+
+```bash
+taxiway start mylab --set claudeai-mcp-servers=true
+taxiway start mylab --clear-set claudeai-mcp-servers
+```
+
+Settings persist with the lab; `--clear-set` restores the default.
+`taxiway start` restarts the Claude Code session with the updated settings.
+
 ## Agent CLI
 
 The adapter uses the `claude-code` agent, which installs the npm package

@@ -133,6 +133,12 @@ Mayor once with `gt handoff`. It checks that Claude replaces the previous
 process and retains its configured model and gateway environment. This covers
 session renewal separately from stopping and starting the Lab.
 
+Claude Code and Gas Town share an assertion that reads the actual Claude
+process environment after initial start and after Lab restart. It verifies that
+tool search is enabled and Claude.ai connector import is disabled by default.
+The same assertion runs after each Gas Town handoff. Overrides and clearing
+settings are covered by the runtime script tests.
+
 Tests use `--skip-auth-check`. They do not run interactive authentication,
 use real API keys, or exercise browser/device login. Authenticated execution
 depends on external accounts and interactive state and is outside this suite.
