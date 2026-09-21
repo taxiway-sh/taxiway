@@ -19,6 +19,10 @@ if [ -f "${HOME}/.config/taxiway/env" ]; then
     set +a
 fi
 
+# shellcheck source=../../agents/claude-code/env.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../agents/claude-code/env.sh"
+claude_code_write_env "${TAXIWAY_SET_TOOL_SEARCH:-true}" "${TAXIWAY_SET_CLAUDEAI_MCP_SERVERS:-false}"
+
 lab_emit_event phase start
 
 log()  { printf '\n\033[1;34m[claude-code-start]\033[0m %s\n' "$*"; }
@@ -80,7 +84,8 @@ mkdir -p "$start_dir"
 if [ -n "${TAXIWAY_WORKSPACE_DIR:-}" ] && [ -d "${TAXIWAY_WORKSPACE_DIR}" ]; then
     start_dir="${TAXIWAY_WORKSPACE_DIR}"
 fi
-agent_cmd="claude --model \"$CLAUDE_CODE_MODEL\""
+launcher="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/launch-agent.sh"
+printf -v agent_cmd 'bash %q claude --model %q' "$launcher" "$CLAUDE_CODE_MODEL"
 tmux new-session -d -s "$SESSION" -c "$start_dir" "${tmux_env_args[@]}" "$agent_cmd"
 pass "Claude Code started in tmux session '$SESSION' using model ${CLAUDE_CODE_MODEL}"
 printf '  Attach with: taxiway shell claude-code\n'

@@ -44,6 +44,20 @@ class TrustExecTests(unittest.TestCase):
         return subprocess.run(["bash", LAUNCHER, str(self.hq), *args], cwd=cwd or self.workspace,
                               env=env or self.env, capture_output=True, text=True)
 
+    def test_handoff_reloads_settings_and_clears_stale_environment(self):
+        settings = self.user_home / ".config/taxiway/agents/claude-code.env"
+        settings.parent.mkdir(parents=True)
+        self.env.update(ENABLE_TOOL_SEARCH="false", ENABLE_CLAUDEAI_MCP_SERVERS="true")
+        program = 'import os; print(os.environ.get("ENABLE_TOOL_SEARCH")); print(os.environ.get("ENABLE_CLAUDEAI_MCP_SERVERS", "unset"))'
+        for content, expected in [
+            ("export ENABLE_TOOL_SEARCH=true\nexport ENABLE_CLAUDEAI_MCP_SERVERS=false\n", "true\nfalse\n"),
+            ("export ENABLE_TOOL_SEARCH=auto:5\nexport ENABLE_CLAUDEAI_MCP_SERVERS=true\n", "auto:5\ntrue\n"),
+        ]:
+            settings.write_text(content)
+            result = self.run_hook([sys.executable, "-c", program])
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, expected)
+
     def test_exec_trusts_actual_cwd_and_preserves_args_env_pid_and_exit(self):
         link = self.base / "workspace-link"
         link.symlink_to(self.workspace, target_is_directory=True)

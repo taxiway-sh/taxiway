@@ -28,6 +28,24 @@ settings:
 	require.Contains(t, out, "--set version=1.1.0")
 }
 
+func TestDescribeClaudeMCPOrchestratorSettings(t *testing.T) {
+	for _, orch := range []string{"claude-code", "gastown"} {
+		t.Run(orch, func(t *testing.T) {
+			root, state, _, stdout, stderr := buildUpTestRoot(t)
+			var err error
+			state.RepoDir, err = filepath.Abs(filepath.Join("..", ".."))
+			require.NoError(t, err)
+			out, _, err := execUpRoot(t, root, stdout, stderr, "describe", orch)
+			require.NoError(t, err)
+			require.Contains(t, out, "--set tool-search=true")
+			require.Contains(t, out, "Default: true")
+			require.Contains(t, out, "--set claudeai-mcp-servers=false")
+			require.Contains(t, out, "\n    Default: false\n")
+			require.NotContains(t, out, "--set claude-code.")
+		})
+	}
+}
+
 func TestDescribeWithoutSettingsShowsNone(t *testing.T) {
 	root, state, _, stdout, stderr := buildUpTestRoot(t)
 	setManifest(t, state, "gastown", "name: gastown\ndescription: Gas Town\n")

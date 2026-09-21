@@ -36,6 +36,9 @@ export ANTHROPIC_CUSTOM_HEADERS="x-litellm-api-key: Bearer ${TAXIWAY_LITELLM_API
 export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="${CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC:-1}"
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+# shellcheck source=../../agents/claude-code/env.sh
+source "$script_dir/../../agents/claude-code/env.sh"
+claude_code_load_env
 TAXIWAY_WORKSPACE_TRUST_PATH="$workspace_path" \
     bash "$script_dir/../../agents/claude-code/trust-workspace.sh"
 exec "$@"

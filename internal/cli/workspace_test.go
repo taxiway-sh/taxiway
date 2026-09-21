@@ -487,7 +487,8 @@ func TestClaudeCodeStartPropagatesLiteLLMEnvironment(t *testing.T) {
 	require.NotContains(t, script, `ANTHROPIC_MODEL`)
 	require.Contains(t, script, `TAXIWAY_LITELLM_API_KEY`)
 	require.Contains(t, script, `export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="${CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC:-1}"`)
-	require.Contains(t, script, `agent_cmd="claude --model \"$CLAUDE_CODE_MODEL\""`)
+	// The actual launch command and model arguments are exercised by
+	// tests/scripts/orchestrators/claude-code/test_start.sh.
 	require.Contains(t, script, `"$agent_cmd"`)
 	require.Contains(t, script, `tmux_env_args+=(-e "${name}=${!name}")`)
 }
