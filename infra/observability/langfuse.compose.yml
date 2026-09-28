@@ -6,7 +6,7 @@ services:
     depends_on: &langfuse-depends-on
       postgres:
         condition: service_healthy
-      minio:
+      seaweedfs:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -29,26 +29,26 @@ services:
       LANGFUSE_OCI_AUTH_TYPE: workload_identity
       LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
       LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
-      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: minio
-      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_MINIO_ROOT_PASSWORD:-miniosecret}
-      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://${TAXIWAY_OBSERVABILITY_MINIO_DNS:-minio}:9000
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: taxiway
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_S3_SECRET_ACCESS_KEY:-}
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://${TAXIWAY_OBSERVABILITY_SEAWEEDFS_DNS:-seaweedfs}:9000
       LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
       LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
       LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
       LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
-      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: minio
-      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_MINIO_ROOT_PASSWORD:-miniosecret}
-      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://${TAXIWAY_OBSERVABILITY_MINIO_DNS:-minio}:9000
+      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: taxiway
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_S3_SECRET_ACCESS_KEY:-}
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://${TAXIWAY_OBSERVABILITY_SEAWEEDFS_DNS:-seaweedfs}:9000
       LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
       LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
       LANGFUSE_S3_BATCH_EXPORT_ENABLED: "false"
       LANGFUSE_S3_BATCH_EXPORT_BUCKET: langfuse
       LANGFUSE_S3_BATCH_EXPORT_PREFIX: exports/
       LANGFUSE_S3_BATCH_EXPORT_REGION: auto
-      LANGFUSE_S3_BATCH_EXPORT_ENDPOINT: http://${TAXIWAY_OBSERVABILITY_MINIO_DNS:-minio}:9000
-      LANGFUSE_S3_BATCH_EXPORT_EXTERNAL_ENDPOINT: http://${TAXIWAY_OBSERVABILITY_MINIO_DNS:-minio}:9000
-      LANGFUSE_S3_BATCH_EXPORT_ACCESS_KEY_ID: minio
-      LANGFUSE_S3_BATCH_EXPORT_SECRET_ACCESS_KEY: ${LANGFUSE_MINIO_ROOT_PASSWORD:-miniosecret}
+      LANGFUSE_S3_BATCH_EXPORT_ENDPOINT: http://${TAXIWAY_OBSERVABILITY_SEAWEEDFS_DNS:-seaweedfs}:9000
+      LANGFUSE_S3_BATCH_EXPORT_EXTERNAL_ENDPOINT: http://${TAXIWAY_OBSERVABILITY_SEAWEEDFS_DNS:-seaweedfs}:9000
+      LANGFUSE_S3_BATCH_EXPORT_ACCESS_KEY_ID: taxiway
+      LANGFUSE_S3_BATCH_EXPORT_SECRET_ACCESS_KEY: ${LANGFUSE_S3_SECRET_ACCESS_KEY:-}
       LANGFUSE_S3_BATCH_EXPORT_FORCE_PATH_STYLE: "true"
       LANGFUSE_INGESTION_QUEUE_DELAY_MS: ${LANGFUSE_INGESTION_QUEUE_DELAY_MS:-}
       LANGFUSE_INGESTION_CLICKHOUSE_WRITE_INTERVAL_MS: ${LANGFUSE_INGESTION_CLICKHOUSE_WRITE_INTERVAL_MS:-}
@@ -103,25 +103,31 @@ services:
       retries: 10
       start_period: 1s
 
-  minio:
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
-    entrypoint: sh
-    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.47
+    # Validate the secret at startup so stop/down also work without an .env file.
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        : "$${AWS_SECRET_ACCESS_KEY:?Run taxiway init to generate storage credentials}"
+        exec weed mini -dir=/data -ip=127.0.0.1 -ip.bind=0.0.0.0 \
+          -s3.port=9000 -bucket=langfuse -admin.ui=false -webdav=false \
+          -s3.port.iceberg=0 -s3.port.lance=0
     environment:
-      MINIO_ROOT_USER: minio
-      MINIO_ROOT_PASSWORD: ${LANGFUSE_MINIO_ROOT_PASSWORD:-miniosecret}
+      AWS_ACCESS_KEY_ID: taxiway
+      AWS_SECRET_ACCESS_KEY: ${LANGFUSE_S3_SECRET_ACCESS_KEY:-}
     volumes:
-      - langfuse_minio_data:/data
+      - langfuse_seaweedfs_data:/data
     networks:
       default:
         aliases:
-          - ${TAXIWAY_OBSERVABILITY_MINIO_DNS:-minio}
+          - ${TAXIWAY_OBSERVABILITY_SEAWEEDFS_DNS:-seaweedfs}
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:9000/status"]
       interval: 1s
       timeout: 5s
-      retries: 5
-      start_period: 1s
+      retries: 30
+      start_period: 5s
 
   redis:
     image: redis:7
@@ -164,5 +170,5 @@ volumes:
   langfuse_postgres_data:
   langfuse_clickhouse_data:
   langfuse_clickhouse_logs:
-  langfuse_minio_data:
+  langfuse_seaweedfs_data:
   langfuse_redis_data:
