@@ -135,7 +135,7 @@ func TestObserveEnsureEnvFile_IdempotentPartial(t *testing.T) {
 	assert.Contains(t, content, "LANGFUSE_INIT_USER_PASSWORD=")
 	assert.Contains(t, content, "LANGFUSE_POSTGRES_PASSWORD=")
 	assert.Contains(t, content, "LANGFUSE_CLICKHOUSE_PASSWORD=")
-	assert.Contains(t, content, "LANGFUSE_MINIO_ROOT_PASSWORD=")
+	assert.Contains(t, content, "LANGFUSE_S3_SECRET_ACCESS_KEY=")
 	assert.Contains(t, content, "LANGFUSE_REDIS_AUTH=")
 	assert.NotContains(t, content, "LANGFUSE_INIT_PROJECT_")
 
@@ -2225,7 +2225,7 @@ exit 1
 	out := stdout.String()
 	assert.Contains(t, out, "Status: partial")
 	assert.Contains(t, out, "postgres: running")
-	assert.Contains(t, out, "minio: missing")
+	assert.Contains(t, out, "seaweedfs: missing")
 	assert.Empty(t, stderr.String())
 }
 
@@ -2683,7 +2683,7 @@ func TestObservabilityComposeFilesOnlyIncludesLangfuse(t *testing.T) {
 
 func TestObservabilityComposeServicesOnlyIncludesLangfuseStack(t *testing.T) {
 	assert.Equal(t, []string{
-		"minio",
+		"seaweedfs",
 		"postgres",
 		"redis",
 		"clickhouse",

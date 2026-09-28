@@ -40,7 +40,7 @@ func observabilityComposeFiles(state *RootState) []string {
 
 func observabilityComposeServices() []string {
 	return []string{
-		"minio",
+		"seaweedfs",
 		"postgres",
 		"redis",
 		"clickhouse",
@@ -698,7 +698,7 @@ func ensureEnvFile(envPath string) (created bool, err error) {
 			func() (string, error) { return generateSecret(24) },
 		},
 		{
-			"LANGFUSE_MINIO_ROOT_PASSWORD",
+			"LANGFUSE_S3_SECRET_ACCESS_KEY",
 			func() (string, error) { return generateSecret(24) },
 		},
 		{

@@ -4,7 +4,7 @@ Taxiway's observability stack is the optional Langfuse runtime used to store and
 inspect model traces. It is separate from lab gateways:
 
 - **Observability stack:** Langfuse web, Langfuse worker, Postgres,
-  ClickHouse, Redis, and MinIO.
+  ClickHouse, Redis, and SeaweedFS (S3 object storage).
 - **Gateway path:** the shared Caddy proxy plus one LiteLLM sidecar per lab.
 
 The observability stack does not proxy model traffic. Lab gateways can export
