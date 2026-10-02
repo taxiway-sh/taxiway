@@ -1,0 +1,124 @@
+"""Opt-in live Codex tests against an existing Taxiway dev/e2e lab."""
+
+import argparse
+from datetime import datetime, timezone
+import json
+import os
+import shlex
+import subprocess
+import sys
+import time
+
+from test_claude_models import command, guest
+
+
+def metrics(lab, since):
+    runtime = f"taxiway-{os.environ['TAXIWAY_CONTEXT']}-{os.environ['TAXIWAY_CONTEXT_ID']}-{lab}"
+    # Only models, token counts and counts of distinct sessions leave the DB.
+    rows = ('FROM "LiteLLM_SpendLogs" WHERE "startTime" >= '
+            f"TIMESTAMP '{since}' AND completion_tokens > 0 ")
+    query = ('SELECT model, count(DISTINCT session_id), sum(completion_tokens) '
+             + rows + "GROUP BY model UNION ALL SELECT '__sessions__', "
+             "count(DISTINCT session_id), sum(completion_tokens) " + rows)
+    output = command(["docker", "exec", runtime + "-gateway-postgres-1",
+                      "psql", "-U", "litellm", "-d", "litellm", "-At", "-c", query])
+    result = {name.removeprefix("chatgpt/"): (int(sessions), int(tokens))
+              for name, sessions, tokens in (line.split("|") for line in output.decode().splitlines())}
+    sessions = result.pop("__sessions__", (0, 0))[0]
+    return result, sessions
+
+
+def child_models(lab, parent):
+    script = "python3 - " + shlex.quote(parent) + " <<'PY'\n" + '''
+from pathlib import Path
+import json, sys
+children = []
+for path in (Path.home()/".codex/sessions").rglob("*.jsonl"):
+    meta, model = {}, None
+    for line in path.read_text().splitlines():
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        if entry.get("type") == "session_meta":
+            meta = entry["payload"]
+        elif entry.get("type") == "turn_context":
+            model = entry.get("payload", {}).get("model")
+    if meta.get("parent_thread_id") == sys.argv[1]:
+        children.append({"model": model, "provider": meta.get("model_provider")})
+print(json.dumps(children))
+PY'''
+    return json.loads(guest(lab, script))
+
+
+def check(lab, label, model, prompt, expected, *, expected_children=None):
+    agents = expected_children is not None
+    since = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")
+    argv = ["codex", "exec", "--skip-git-repo-check", "--json",
+            "-s", "read-only", "-m", model, "-c", 'model_reasoning_effort="low"',
+            "-c", "features.multi_agent_v2=true" if agents else "agents.enabled=false", prompt]
+    script = """set -euo pipefail
+set -a
+source "$HOME/.config/taxiway/env"
+set +a
+exec timeout --kill-after=10s 180s """ + shlex.join(argv)
+    output = guest(lab, script)
+    events = [json.loads(line) for line in output.splitlines() if line.startswith(b"{")]
+    assert any(e.get("type") == "turn.completed" for e in events), "Turn did not complete"
+    assert not any(e.get("type") in ("error", "turn.failed") for e in events), "Client reported an error"
+    assert any("TAXIWAY_MODEL_OK" in e.get("item", {}).get("text", "") for e in events), "Expected answer marker missing"
+    parent = next(e["thread_id"] for e in events if e.get("type") == "thread.started")
+    observed = {}
+    # Spend logs are written asynchronously. Do not accept an answer alone as evidence.
+    for _ in range(20):
+        observed, sessions = metrics(lab, since)
+        if expected <= observed.keys():
+            break
+        time.sleep(1)
+    assert expected <= observed.keys(), f"Expected models {sorted(expected)}; observed {sorted(observed)}"
+    children = child_models(lab, parent)
+    if agents:
+        assert len(children) == len(expected_children), "Unexpected number of subagent sessions"
+        assert expected_children <= {c["model"] for c in children}, "Subagent session models not confirmed"
+        assert all(c["provider"] == "taxiway-litellm" for c in children), "A subagent bypassed the gateway"
+    else:
+        assert not children, "Unexpected subagent session"
+    print(f"PASS {label}: models={','.join(sorted(observed))}; subagents={len(children)}; sessions={sessions}", flush=True)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--lab", required=True)
+    args = parser.parse_args()
+    for key in ("TAXIWAY_CONTEXT", "TAXIWAY_CONTEXT_ID", "TAXIWAY_LAB_STATE_DIR"):
+        if not os.environ.get(key):
+            parser.error(f"{key} must be set; run through direnv exec .")
+    if os.environ["TAXIWAY_CONTEXT"] not in ("dev", "e2e"):
+        parser.error("Live tests require a dev or e2e context")
+    main_model = guest(args.lab, "python3 -c 'import pathlib,tomllib; "
+                       "print(tomllib.loads((pathlib.Path.home()/\".codex/config.toml\").read_text())[\"model\"])'").decode().strip()
+    check(args.lab, "principal", main_model,
+          "Reply exactly TAXIWAY_MODEL_OK. Do not use any tools.", {main_model})
+    check(args.lab, "alternate principal", "gpt-6-luna",
+          "Reply exactly TAXIWAY_MODEL_OK. Do not use any tools.", {"gpt-6-luna"})
+    check(args.lab, "inherited subagent", main_model,
+          "Spawn exactly one subagent with fresh context. Do not specify its model or reasoning: "
+          "it must inherit yours. Ask it to reply exactly TAXIWAY_MODEL_OK without tools. "
+          "Wait for its completion and then reply exactly TAXIWAY_MODEL_OK. "
+          "Do not use shell, browser, file, or MCP tools.", {main_model}, expected_children={main_model})
+    check(args.lab, "two different subagent models", main_model,
+          "Spawn exactly two subagents with fresh context, one using gpt-6-luna "
+          "and one using gpt-6-sol, both with low reasoning effort. Explicitly choose "
+          "fork_turns none or fork_context false when spawning. Each must reply exactly "
+          "TAXIWAY_MODEL_OK without tools. Wait for both to finish, then reply exactly "
+          "TAXIWAY_MODEL_OK. Do not use shell, browser, file, or MCP tools.",
+          {main_model, "gpt-6-luna", "gpt-6-sol"}, expected_children={"gpt-6-luna", "gpt-6-sol"})
+    print("All 4 live Codex cases passed. Reference lab preserved.")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (AssertionError, RuntimeError, subprocess.TimeoutExpired) as error:
+        print("FAIL: timeout" if isinstance(error, subprocess.TimeoutExpired) else f"FAIL: {error}", file=sys.stderr)
+        sys.exit(1)

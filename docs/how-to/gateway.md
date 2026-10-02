@@ -104,10 +104,13 @@ Changes take effect after `taxiway gateway <lab>` and `taxiway start <lab>`.
 Codex keeps its own client catalog and capability metadata; gateway exposure
 does not replace that catalog or enable an unsupported client model.
 
-The bundled LiteLLM version is 1.103.2. A small compatibility shim preserves
-signed thinking blocks with omitted text during Anthropic tool replay. Isolated
+The bundled LiteLLM version is 1.103.2. Compatibility shims preserve signed
+thinking blocks with omitted text during Anthropic tool replay and the explicit
+`parallel_tool_calls` value required by Codex Responses Lite. Isolated
 Docker tests exercise both Anthropic Messages and ChatGPT Responses without
 external networking or provider credentials.
+For live principal/subagent tests with reusable authentication, see
+[testing model gateways](../contributing/model-gateway-tests.md).
 
 New releases and explicit retirement announcements are checked by the daily
 [catalog update workflow](../contributing/model-catalog.md). It prepares a draft
