@@ -167,7 +167,7 @@ def run_codex_checks(models):
                 content=[dict(type="output_text", text="Hello", annotations=[])])
     for model in models:
         payload = dict(model=model, stream=True, input=[dict(role="user", content="Hello")],
-                       reasoning=dict(effort="medium"))
+                       reasoning=dict(effort="medium"), parallel_tool_calls=False)
         responses.put((200, "text/event-stream", codex_events(model, [text])))
         raw = request(payload, "/v1/responses").decode()
         events = [json.loads(line[6:]) for line in raw.splitlines() if line.startswith("data: ") and line[6:] != "[DONE]"]
@@ -180,6 +180,7 @@ def run_codex_checks(models):
         assert upstream["model"] == model, upstream
         assert upstream["input"] == payload["input"], upstream
         assert upstream["reasoning"] == payload["reasoning"], upstream
+        assert upstream.get("parallel_tool_calls") is False, "Codex Responses Lite requires parallel_tool_calls=false"
         assert upstream["stream"] is True and upstream["store"] is False, upstream
         assert "reasoning.encrypted_content" in upstream["include"], upstream
         headers = {k.lower(): v for k, v in headers.items()}
@@ -193,7 +194,8 @@ def run_codex_checks(models):
     tool = dict(type="function_call", id="fc_fixture", call_id="call_fixture", name="read_file",
                 arguments='{"path":"README.md"}', status="completed")
     payload = dict(model=model, stream=True, input=[dict(role="user", content="Read README")],
-                   tools=[dict(type="function", name="read_file", parameters=dict(type="object", properties={}))])
+                   tools=[dict(type="function", name="read_file", parameters=dict(type="object", properties={}))],
+                   parallel_tool_calls=True)
     responses.put((200, "text/event-stream", codex_events(model, [reasoning, tool])))
     raw = request(payload, "/v1/responses").decode()
     events = [json.loads(line[6:]) for line in raw.splitlines() if line.startswith("data: ") and line[6:] != "[DONE]"]
@@ -209,6 +211,7 @@ def run_codex_checks(models):
     _, _, upstream = received.get(timeout=2)
     assert upstream["input"] == payload["input"], upstream
     assert upstream["tools"] == payload["tools"], upstream
+    assert upstream.get("parallel_tool_calls") is True, "Explicit parallel tool calls must also be preserved"
     print("PASS Codex streaming, encrypted reasoning and tool replay", flush=True)
     run_error_checks(models[-2:], "/v1/responses")
 
@@ -219,7 +222,9 @@ with open("/test/config.yaml") as source:
     config = yaml.safe_load(source)
 # These checks isolate the provider protocol; persistence and telemetry are tested separately.
 config["general_settings"].pop("database_url", None)
-config["litellm_settings"]["callbacks"] = [] if auth_mode == "chatgpt" else ["anthropic_protocol.proxy_handler_instance"]
+config["litellm_settings"]["callbacks"] = [
+    callback for callback in config["litellm_settings"]["callbacks"] if callback != "langfuse_otel"
+]
 models = []
 for entry in config["model_list"]:
     provider = "chatgpt/" if auth_mode == "chatgpt" else "anthropic/"

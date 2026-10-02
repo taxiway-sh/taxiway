@@ -45,7 +45,7 @@ func runGatewayProtocol(t *testing.T, orch string, modes []string) {
 	require.NoError(t, yaml.Unmarshal(compose, &services))
 	models, err := labLiteLLMModelNames(state, ref)
 	require.NoError(t, err)
-	data, err := renderLiteLLMConfig(state, true, false, models)
+	data, err := renderLiteLLMConfig(state, true, orch == "codex", models)
 	require.NoError(t, err)
 	configPath := filepath.Join(dir, "protocol.yaml")
 	require.NoError(t, os.WriteFile(configPath, data, 0600))
@@ -66,6 +66,7 @@ func runGatewayProtocol(t *testing.T, orch string, modes []string) {
 				"-v", configPath+":/test/config.yaml:ro",
 				"-v", filepath.Join(repo, "internal", "cli", "testdata", "gateway_protocol.py")+":/test/protocol.py:ro",
 				"-v", filepath.Join(repo, "infra", "gateway", "litellm", "callbacks", "anthropic_protocol.py")+":/app/anthropic_protocol.py:ro",
+				"-v", liteLLMCodexSessionMapperAssetPath(state)+":/app/codex_session_mapper.py:ro",
 				"--entrypoint", "python", services.Services[files.Service].Image, "/test/protocol.py")
 			output, err := cmd.CombinedOutput()
 			t.Log(string(output))
