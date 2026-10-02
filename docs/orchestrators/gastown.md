@@ -49,7 +49,7 @@ The adapter exposes these settings through `--set`:
 |---|---|---|
 | `version` | Gas Town version or tag to install from release archive | `latest` |
 | `beads-version` | [Beads](https://github.com/gastownhall/beads) (Gas Town's Git-backed work-tracking unit) version override; omitted uses the Gas Town compatibility matrix | Adapter default |
-| `model` | Claude Code model name passed through LiteLLM | `claude-opus-4-8` |
+| `model` | Claude Code model name passed through LiteLLM | `claude-opus-5-5` |
 | `tool-search` | Load MCP tool definitions on demand: `true`, `false`, `auto`, or `auto:N` | `true` |
 | `claudeai-mcp-servers` | Import Claude.ai connectors: `true` or `false` | `false` |
 
