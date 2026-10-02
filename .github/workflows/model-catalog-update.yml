@@ -1,0 +1,87 @@
+name: Prepare model catalog update
+
+on:
+  schedule:
+    - cron: '23 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: model-catalog-update
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Prepare from complete public sources
+        run: go run ./cmd/model-catalog-update -write -report "$RUNNER_TEMP/model-catalog-review.md" > "$RUNNER_TEMP/model-catalog-output.txt"
+
+      # Run CI here: pull requests created with GITHUB_TOKEN do not trigger CI events.
+      # Lifecycle changes affecting a default must still be visible in the draft PR.
+      - name: Build
+        id: build
+        continue-on-error: true
+        run: go build ./...
+      - name: Test
+        id: unit
+        continue-on-error: true
+        run: make test-unit
+      - name: Test scripts
+        id: scripts
+        continue-on-error: true
+        run: make test-scripts
+      - name: Lint Go
+        id: gofmt
+        continue-on-error: true
+        run: |
+          out=$(find . -name '*.go' -not -path './vendor/*' -not -name 'provision.go' | xargs gofmt -l)
+          if [ -n "$out" ]; then
+            echo "$out"
+            exit 1
+          fi
+      - name: Lint scripts
+        id: lint
+        continue-on-error: true
+        run: make lint-scripts
+      - name: Gateway protocol smoke tests
+        id: protocol
+        continue-on-error: true
+        run: go test -tags=e2e ./internal/cli -run '^TestE2E_Gateway.*Protocol$' -count=1
+      - name: Include validation results
+        env:
+          BUILD: ${{ steps.build.outcome }}
+          UNIT: ${{ steps.unit.outcome }}
+          SCRIPTS: ${{ steps.scripts.outcome }}
+          GOFMT: ${{ steps.gofmt.outcome }}
+          LINT: ${{ steps.lint.outcome }}
+          PROTOCOL: ${{ steps.protocol.outcome }}
+        run: |
+          {
+            printf '\n### Validation on the proposed catalog\n\n'
+            printf -- '- Build: %s\n- Unit: %s\n- Scripts: %s\n- Go formatting: %s\n- Script lint: %s\n- Gateway protocol: %s\n' "$BUILD" "$UNIT" "$SCRIPTS" "$GOFMT" "$LINT" "$PROTOCOL"
+            printf '\nReview failures and explicitly repair retired defaults before marking ready or merging.\n'
+          } >> "$RUNNER_TEMP/model-catalog-review.md"
+          cat "$RUNNER_TEMP/model-catalog-review.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Create or update the single review PR
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: automation/model-catalog
+          base: main
+          commit-message: 'chore: update public model catalog'
+          title: 'chore: review public model catalog updates'
+          body-path: ${{ runner.temp }}/model-catalog-review.md
+          add-paths: infra/gateway/litellm/models.yaml
+          draft: always-true
+          delete-branch: true
+      - name: Fail validation visibly after preparing review
+        if: steps.build.outcome != 'success' || steps.unit.outcome != 'success' || steps.scripts.outcome != 'success' || steps.gofmt.outcome != 'success' || steps.lint.outcome != 'success' || steps.protocol.outcome != 'success'
+        run: exit 1
