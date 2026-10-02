@@ -739,10 +739,10 @@ func TestObserveLiteLLMAssets_ExposeAgentNativeModelNames(t *testing.T) {
 	configText := string(config)
 
 	for _, modelName := range []string{
-		"model_name: gpt-5.5",
-		"model_name: gpt-5.4",
-		"model_name: gpt-5.4-mini",
-		"model_name: gpt-5.3-codex-spark",
+		"model_name: gpt-6.1-sol",
+		"model_name: gpt-6-astra",
+		"model_name: gpt-6-luna",
+		"model_name: gpt-5.6-sol",
 		"model_name: claude-opus-4-8",
 		"model_name: claude-sonnet-4-6",
 		"model_name: claude-haiku-4-5-20251001",

@@ -1,35 +1,185 @@
+# Public agent models; provider availability still depends on the account and client.
+defaults:
+  anthropic:
+    opus: claude-opus-5-5
+    sonnet: claude-sonnet-5-5
+    haiku: claude-haiku-4-5-20251001
+    fable: claude-fable-5-1
 models:
+  - name: gpt-6.1-sol
+    provider: chatgpt
+    upstream: gpt-6.1-sol
+    api: responses
+    status: active
+    source: https://learn.chatgpt.com/docs/models
+
+  - name: gpt-6-astra
+    provider: chatgpt
+    upstream: gpt-6-astra
+    api: responses
+    status: active
+    source: https://learn.chatgpt.com/docs/models
+
+  - name: gpt-6-sol
+    provider: chatgpt
+    upstream: gpt-6-sol
+    api: responses
+    status: active
+    source: https://learn.chatgpt.com/docs/models
+
+  - name: gpt-6-luna
+    provider: chatgpt
+    upstream: gpt-6-luna
+    api: responses
+    status: active
+    source: https://learn.chatgpt.com/docs/models
+
+  - name: gpt-5.6-sol
+    provider: chatgpt
+    upstream: gpt-5.6-sol
+    api: responses
+    status: active
+    source: https://learn.chatgpt.com/docs/models
+
+  - name: gpt-5.6-terra
+    provider: chatgpt
+    upstream: gpt-5.6-terra
+    api: responses
+    status: active
+    source: https://learn.chatgpt.com/docs/models
+
+  - name: gpt-5.6-luna
+    provider: chatgpt
+    upstream: gpt-5.6-luna
+    api: responses
+    status: active
+    source: https://learn.chatgpt.com/docs/models
+
   - name: gpt-5.5
     provider: chatgpt
     upstream: gpt-5.5
     api: responses
+    status: deprecated
+    retirement_date: '2026-10-14'
+    replacement: gpt-6.1-sol
+    source: https://learn.chatgpt.com/docs/models
 
   - name: gpt-5.4
     provider: chatgpt
     upstream: gpt-5.4
     api: responses
+    status: retired
+    retirement_date: '2026-08-31'
+    replacement: gpt-6-sol
+    source: https://learn.chatgpt.com/docs/models
 
   - name: gpt-5.4-mini
     provider: chatgpt
     upstream: gpt-5.4-mini
     api: responses
+    status: retired
+    retirement_date: '2026-08-31'
+    replacement: gpt-6-luna
+    source: https://learn.chatgpt.com/docs/models
 
   - name: gpt-5.3-codex-spark
     provider: chatgpt
     upstream: gpt-5.3-codex-spark
     api: responses
+    status: retired
+    retirement_date: '2026-09-14'
+    replacement: gpt-6.1-sol
+    source: https://learn.chatgpt.com/docs/models
+
+  - name: claude-fable-5-1
+    provider: anthropic
+    upstream: claude-fable-5-1
+    forward_client_headers: true
+    status: active
+    source: https://platform.claude.com/docs/en/about-claude/model-deprecations
+
+  - name: claude-fable-5
+    provider: anthropic
+    upstream: claude-fable-5
+    forward_client_headers: true
+    status: active
+    source: https://platform.claude.com/docs/en/about-claude/model-deprecations
+
+  - name: claude-opus-5-5
+    provider: anthropic
+    upstream: claude-opus-5-5
+    forward_client_headers: true
+    status: active
+    source: https://platform.claude.com/docs/en/about-claude/model-deprecations
+
+  - name: claude-opus-5
+    provider: anthropic
+    upstream: claude-opus-5
+    forward_client_headers: true
+    status: active
+    source: https://platform.claude.com/docs/en/about-claude/model-deprecations
 
   - name: claude-opus-4-8
     provider: anthropic
     upstream: claude-opus-4-8
     forward_client_headers: true
+    status: active
+    source: https://platform.claude.com/docs/en/about-claude/model-deprecations
+
+  - name: claude-opus-4-7
+    provider: anthropic
+    upstream: claude-opus-4-7
+    forward_client_headers: true
+    status: active
+    source: https://platform.claude.com/docs/en/about-claude/model-deprecations
+
+  - name: claude-opus-4-6
+    provider: anthropic
+    upstream: claude-opus-4-6
+    forward_client_headers: true
+    status: active
+    source: https://platform.claude.com/docs/en/about-claude/model-deprecations
+
+  - name: claude-opus-4-5-20251101
+    provider: anthropic
+    upstream: claude-opus-4-5-20251101
+    forward_client_headers: true
+    status: active
+    source: https://platform.claude.com/docs/en/about-claude/model-deprecations
+
+  - name: claude-sonnet-5-5
+    provider: anthropic
+    upstream: claude-sonnet-5-5
+    forward_client_headers: true
+    status: active
+    source: https://platform.claude.com/docs/en/about-claude/model-deprecations
+
+  - name: claude-sonnet-5
+    provider: anthropic
+    upstream: claude-sonnet-5
+    forward_client_headers: true
+    status: active
+    source: https://platform.claude.com/docs/en/about-claude/model-deprecations
 
   - name: claude-sonnet-4-6
     provider: anthropic
     upstream: claude-sonnet-4-6
     forward_client_headers: true
+    status: active
+    source: https://platform.claude.com/docs/en/about-claude/model-deprecations
 
   - name: claude-haiku-4-5-20251001
     provider: anthropic
     upstream: claude-haiku-4-5-20251001
     forward_client_headers: true
+    status: active
+    source: https://platform.claude.com/docs/en/about-claude/model-deprecations
+
+  - name: claude-sonnet-4-5-20250929
+    provider: anthropic
+    upstream: claude-sonnet-4-5-20250929
+    forward_client_headers: true
+    status: deprecated
+    retirement_date: '2026-11-30'
+    replacement: claude-sonnet-5-5
+    source: https://platform.claude.com/docs/en/about-claude/model-deprecations

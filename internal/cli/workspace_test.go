@@ -109,7 +109,7 @@ func TestBuildBaseEnv_DoesNotInjectHostHQDirByDefault(t *testing.T) {
 	t.Setenv("TAXIWAY_HQ_DIR", "")
 
 	ref := config.LabRef{Lab: "mylab", Orch: "gastown"}
-	env, err := buildBaseEnv(ref)
+	env, err := buildBaseEnv(t.TempDir(), ref)
 	require.NoError(t, err)
 	require.NotContains(t, env, "TAXIWAY_HQ_DIR",
 		"TAXIWAY_HQ_DIR defaults must be resolved inside the lab, not on the host")
@@ -119,7 +119,7 @@ func TestBuildBaseEnv_HQDirOverride(t *testing.T) {
 	t.Setenv("TAXIWAY_HQ_DIR", "/custom/hq")
 
 	ref := config.LabRef{Lab: "mylab", Orch: "gastown"}
-	env, err := buildBaseEnv(ref)
+	env, err := buildBaseEnv(t.TempDir(), ref)
 	require.NoError(t, err)
 	require.Equal(t, "/custom/hq", env["TAXIWAY_HQ_DIR"])
 }
@@ -252,8 +252,8 @@ func TestGastownManifestDocumentsModelSetting(t *testing.T) {
 	manifest := string(content)
 	require.Contains(t, manifest, `name: model`)
 	require.Contains(t, manifest, `Full Claude Code model name passed with --model and resolved by LiteLLM.`)
-	require.Contains(t, manifest, `default: claude-opus-4-8`)
-	require.Contains(t, manifest, "examples:\n      - claude-opus-4-8\n      - claude-sonnet-4-6\n      - claude-haiku-4-5-20251001")
+	require.Contains(t, manifest, `default: claude-opus-5-5`)
+	require.Contains(t, manifest, "examples:\n      - claude-fable-5-1\n      - claude-opus-5-5\n      - claude-sonnet-5-5")
 	require.Contains(t, manifest, "phases:\n      - start")
 }
 
@@ -299,7 +299,7 @@ func TestGastownStartConfiguresLiteLLMClaudeCodeAgent(t *testing.T) {
 
 	script := string(content)
 	require.Contains(t, script, `. "${HOME}/.config/taxiway/env"`)
-	require.Contains(t, script, `GASTOWN_MODEL="${TAXIWAY_SET_MODEL:-claude-opus-4-8}"`)
+	require.Contains(t, script, `GASTOWN_MODEL="${TAXIWAY_SET_MODEL:?Missing model: start this orchestrator through Taxiway}"`)
 	require.Contains(t, script, `TAXIWAY_LITELLM_BASE_URL="${TAXIWAY_LITELLM_BASE_URL:-http://${TAXIWAY_LAB:-lab}.litellm.internal:4000}"`)
 	require.Contains(t, script, `LiteLLM is required for Gas Town`)
 	require.Contains(t, script, `settings/agents.json`)
@@ -449,7 +449,7 @@ func TestCodexStartConfiguresLiteLLMSubscriptionProvider(t *testing.T) {
 	require.NoError(t, err)
 
 	script := string(content)
-	require.Contains(t, script, `CODEX_MODEL="${TAXIWAY_SET_MODEL:-gpt-5.5}"`)
+	require.Contains(t, script, `CODEX_MODEL="${TAXIWAY_SET_MODEL:?Missing model: start this orchestrator through Taxiway}"`)
 	require.Contains(t, script, `model_provider = "taxiway-litellm"`)
 	require.Contains(t, script, `printf 'model_provider = "taxiway-litellm"\n'`)
 	require.Contains(t, script, `printf 'model = "%s"\n' "$CODEX_MODEL"`)
@@ -480,7 +480,7 @@ func TestClaudeCodeStartPropagatesLiteLLMEnvironment(t *testing.T) {
 
 	script := string(content)
 	require.Contains(t, script, `. "${HOME}/.config/taxiway/env"`)
-	require.Contains(t, script, `CLAUDE_CODE_MODEL="${TAXIWAY_SET_MODEL:-claude-opus-4-8}"`)
+	require.Contains(t, script, `CLAUDE_CODE_MODEL="${TAXIWAY_SET_MODEL:?Missing model: start this orchestrator through Taxiway}"`)
 	require.Contains(t, script, `TAXIWAY_LITELLM_BASE_URL="${TAXIWAY_LITELLM_BASE_URL:-http://${TAXIWAY_LAB:-lab}.litellm.internal:4000}"`)
 	require.Contains(t, script, `export ANTHROPIC_BASE_URL="${TAXIWAY_LITELLM_BASE_URL%/}"`)
 	require.Contains(t, script, `export ANTHROPIC_CUSTOM_HEADERS="x-litellm-api-key: Bearer ${TAXIWAY_LITELLM_API_KEY}"`)

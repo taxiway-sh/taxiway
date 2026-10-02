@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -475,6 +477,29 @@ func runUp(ctx context.Context, state *RootState, ref config.LabRef, id, stateDi
 	if opts.out == nil {
 		opts.out = os.Stdout
 	}
+	if !opts.prepareOnly {
+		data, err := os.ReadFile(liteLLMModelsAssetPath(state))
+		if err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		if err == nil {
+			models, err := labLiteLLMModelNames(state, ref)
+			if err != nil {
+				return err
+			}
+			catalog, err := parseLiteLLMModelCatalog(data)
+			if err != nil {
+				return err
+			}
+			for _, model := range catalog.Models {
+				for _, name := range models {
+					if model.Name == name && model.StatusAt(time.Now()) == "deprecated" {
+						fmt.Fprintf(opts.out, "  WARN model %s%s\n", name, describeModelLifecycle(state, name))
+					}
+				}
+			}
+		}
+	}
 
 	startIdx := 0
 	if opts.from != "" {
@@ -677,7 +702,7 @@ var userLookup = func() (string, error) {
 // buildBaseEnv constructs the base environment variables for phase scripts.
 // It includes workspace variables when ref.Workspace is non-nil.
 // Returns an error if the host username cannot be resolved (gastown only).
-func buildBaseEnv(ref config.LabRef) (map[string]string, error) {
+func buildBaseEnv(repoDir string, ref config.LabRef) (map[string]string, error) {
 	orch := ref.Orch
 	env := map[string]string{
 		"TAXIWAY_ORCH": orch,
@@ -687,7 +712,64 @@ func buildBaseEnv(ref config.LabRef) (map[string]string, error) {
 	if hqDir := os.Getenv("TAXIWAY_HQ_DIR"); hqDir != "" {
 		env["TAXIWAY_HQ_DIR"] = hqDir
 	}
-	injectSettingsEnv(env, ref.Settings)
+	manifest, err := config.LoadOrchManifest(repoDir, orch)
+	if err != nil {
+		return nil, err
+	}
+	settings := make(map[string]string, len(ref.Settings))
+	for key, value := range ref.Settings {
+		settings[key] = value
+	}
+	if manifest != nil {
+		for _, setting := range manifest.Settings {
+			if settings[setting.Name] == "" && setting.Default != "" {
+				settings[setting.Name] = setting.Default
+			}
+		}
+	}
+	if err := validateSettingEnvCollisions(settings); err != nil {
+		return nil, err
+	}
+	injectSettingsEnv(env, settings)
+	if _, err := os.Stat(liteLLMModelsAssetPath(&RootState{RepoDir: repoDir})); err == nil {
+		if _, err := labLiteLLMModelNames(&RootState{RepoDir: repoDir}, ref); err != nil {
+			return nil, err
+		}
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
+	if manifest != nil {
+		usesClaude := false
+		for _, agent := range manifest.Agents {
+			if agent == "claude-code" {
+				usesClaude = true
+			}
+		}
+		if usesClaude {
+			data, err := os.ReadFile(liteLLMModelsAssetPath(&RootState{RepoDir: repoDir}))
+			if err != nil && !os.IsNotExist(err) {
+				return nil, err
+			}
+			if err == nil {
+				catalog, err := parseLiteLLMModelCatalog(data)
+				if err != nil {
+					return nil, err
+				}
+				for alias, model := range catalog.Defaults["anthropic"] {
+					env["ANTHROPIC_DEFAULT_"+strings.ToUpper(alias)+"_MODEL"] = model
+				}
+				models, err := labLiteLLMModelNames(&RootState{RepoDir: repoDir}, ref)
+				if err != nil {
+					return nil, err
+				}
+				encoded, err := json.Marshal(models)
+				if err != nil {
+					return nil, err
+				}
+				env["TAXIWAY_CLAUDE_AVAILABLE_MODELS"] = string(encoded)
+			}
+		}
+	}
 
 	if ref.Workspace != nil {
 		name := repoBasename(ref.Workspace.Repo)
@@ -794,7 +876,7 @@ func runAgentScripts(ctx context.Context, state *RootState, ref config.LabRef, s
 }
 
 func runDoctor(ctx context.Context, state *RootState, ref config.LabRef, fix bool) error {
-	baseEnv, err := buildBaseEnv(ref)
+	baseEnv, err := buildBaseEnv(state.RepoDir, ref)
 	if err != nil {
 		return err
 	}
@@ -828,7 +910,7 @@ func runPhaseWithProfile(ctx context.Context, state *RootState, ref config.LabRe
 	orch := ref.Orch
 
 	// PRD FR7: all phase scripts receive the base TAXIWAY_* vars plus workspace vars.
-	baseEnv, err := buildBaseEnv(ref)
+	baseEnv, err := buildBaseEnv(state.RepoDir, ref)
 	if err != nil {
 		return err
 	}
@@ -872,7 +954,7 @@ func runPhaseWithProfile(ctx context.Context, state *RootState, ref config.LabRe
 		if err := prepareWorkspaceRepository(ctx, state, &ref); err != nil {
 			return err
 		}
-		baseEnv, err = buildBaseEnv(ref)
+		baseEnv, err = buildBaseEnv(state.RepoDir, ref)
 		if err != nil {
 			return err
 		}

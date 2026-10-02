@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -61,9 +62,6 @@ func newDescribeCmd(state *RootState) *cobra.Command {
 						fmt.Fprintf(out, "    Phases: %s\n", strings.Join(setting.Phases, ", "))
 					}
 					examples := setting.Examples
-					if setting.Name == "model" && len(liteLLMModels) > 0 {
-						examples = describeModelExamples(setting.Default, liteLLMModels)
-					}
 					if len(examples) > 0 {
 						fmt.Fprintln(out, "    Examples:")
 						for _, example := range examples {
@@ -76,7 +74,7 @@ func newDescribeCmd(state *RootState) *cobra.Command {
 				fmt.Fprintln(out)
 				fmt.Fprintln(out, "Available LiteLLM models:")
 				for _, model := range liteLLMModels {
-					fmt.Fprintf(out, "  %s\n", model)
+					fmt.Fprintf(out, "  %s%s\n", model, describeModelLifecycle(state, model))
 				}
 			}
 			return nil
@@ -119,21 +117,33 @@ func describeLiteLLMModels(state *RootState, manifest *config.OrchManifest) ([]s
 
 	models := []string{}
 	for _, model := range catalog.Models {
-		if providers[model.Provider] {
+		if providers[model.Provider] && model.StatusAt(time.Now()) != "retired" {
 			models = append(models, model.Name)
 		}
 	}
 	return models, nil
 }
 
-func describeModelExamples(defaultModel string, models []string) []string {
-	for _, model := range models {
-		if model != defaultModel {
-			return []string{model}
+func describeModelLifecycle(state *RootState, name string) string {
+	data, err := os.ReadFile(liteLLMModelsAssetPath(state))
+	if err != nil {
+		return ""
+	}
+	catalog, err := parseLiteLLMModelCatalog(data)
+	if err != nil {
+		return ""
+	}
+	for _, model := range catalog.Models {
+		if model.Name == name && model.StatusAt(time.Now()) == "deprecated" {
+			detail := " (deprecated; explicit selection only"
+			if model.RetirementDate != "" {
+				detail += "; retires " + model.RetirementDate
+			}
+			if model.Replacement != "" {
+				detail += "; replacement " + model.Replacement
+			}
+			return detail + ")"
 		}
 	}
-	if len(models) > 0 {
-		return []string{models[0]}
-	}
-	return nil
+	return ""
 }

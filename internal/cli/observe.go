@@ -22,6 +22,7 @@ import (
 
 	"github.com/taxiway-sh/taxiway/internal/config"
 	"github.com/taxiway-sh/taxiway/internal/driver"
+	"github.com/taxiway-sh/taxiway/internal/modelcatalog"
 )
 
 // observabilityDir returns the absolute path to the bundled observability assets under
@@ -287,19 +288,8 @@ func (runtime observabilityRuntime) ComposeEnv(proxy proxyRuntime) []string {
 	return env
 }
 
-type liteLLMModelCatalog struct {
-	Models []liteLLMModelDefinition `yaml:"models"`
-}
-
-type liteLLMModelDefinition struct {
-	Name                 string `yaml:"name"`
-	Provider             string `yaml:"provider"`
-	Upstream             string `yaml:"upstream"`
-	APIBase              string `yaml:"api_base,omitempty"`
-	APIKey               string `yaml:"api_key,omitempty"`
-	API                  string `yaml:"api,omitempty"`
-	ForwardClientHeaders bool   `yaml:"forward_client_headers,omitempty"`
-}
+type liteLLMModelCatalog = modelcatalog.Catalog
+type liteLLMModelDefinition = modelcatalog.Model
 
 type liteLLMGeneratedConfig struct {
 	ModelList       []liteLLMGeneratedModelEntry `yaml:"model_list"`
@@ -399,7 +389,12 @@ func renderLiteLLMConfig(state *RootState, includeCodexModels bool, enableCodexS
 			continue
 		}
 		if selected[model.Name] {
+			if err := model.SelectionError(time.Now()); err != nil {
+				return nil, err
+			}
 			matchedSelected[model.Name] = true
+		} else if model.StatusAt(time.Now()) != "active" {
+			continue
 		}
 		if model.Provider == "chatgpt" && !includeCodexModels && len(selected) == 0 {
 			continue
@@ -427,6 +422,9 @@ func renderLiteLLMConfig(state *RootState, includeCodexModels bool, enableCodexS
 	}
 
 	callbacks := []string{"langfuse_otel"}
+	if len(forwardHeaders) > 0 {
+		callbacks = append(callbacks, "anthropic_protocol.proxy_handler_instance")
+	}
 	if enableCodexSessionMapper {
 		callbacks = append([]string{"codex_session_mapper.proxy_handler_instance"}, callbacks...)
 	}
@@ -458,11 +456,7 @@ func renderLiteLLMConfig(state *RootState, includeCodexModels bool, enableCodexS
 }
 
 func parseLiteLLMModelCatalog(data []byte) (liteLLMModelCatalog, error) {
-	var catalog liteLLMModelCatalog
-	if err := yaml.Unmarshal(data, &catalog); err != nil {
-		return liteLLMModelCatalog{}, fmt.Errorf("parsing LiteLLM model catalog: %w", err)
-	}
-	return catalog, nil
+	return modelcatalog.Parse(data)
 }
 
 func ensureLiteLLMChatGPTAuth(stateDir string, required bool) (bool, error) {

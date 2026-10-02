@@ -41,6 +41,7 @@ PATH="$fake_bin:$PATH" \
 HOME="$home" \
 TAXIWAY_LITELLM_API_KEY="test-key" \
 TAXIWAY_LITELLM_BASE_URL="http://gateway.test:4000" \
+TAXIWAY_SET_MODEL="test-selected-codex-model" \
 TAXIWAY_WORKSPACE_DIR="$workspace" \
 bash "$START_SH" >/dev/null
 
@@ -54,6 +55,7 @@ with open(sys.argv[1], "rb") as config_file:
 assert config["projects"][sys.argv[2]]["trust_level"] == "trusted"
 assert config["projects"][sys.argv[2]]["marker"] == "preserve-me"
 assert config["model_provider"] == "taxiway-litellm"
+assert config["model"] == "test-selected-codex-model"
 assert config["model_providers"]["taxiway-litellm"]["requires_openai_auth"] is False
 PY
 

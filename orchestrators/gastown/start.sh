@@ -18,7 +18,7 @@ HQ_DIR="${TAXIWAY_HQ_DIR:-/lab/work/gt}"
 FORCE="${TAXIWAY_FORCE:-false}"
 MARKER="$HQ_DIR/.taxiway-hq-initialized"
 GASTOWN_LITELLM_AGENT="claude-code-litellm"
-GASTOWN_MODEL="${TAXIWAY_SET_MODEL:-claude-opus-4-8}"
+GASTOWN_MODEL="${TAXIWAY_SET_MODEL:?Missing model: start this orchestrator through Taxiway}"
 TAXIWAY_LITELLM_BASE_URL="${TAXIWAY_LITELLM_BASE_URL:-http://${TAXIWAY_LAB:-lab}.litellm.internal:4000}"
 
 prepare_beads_dir() {

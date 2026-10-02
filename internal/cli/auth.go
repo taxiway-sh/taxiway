@@ -110,7 +110,7 @@ func runAuth(ctx context.Context, state *RootState, ref config.LabRef, requireAu
 		return nil
 	}
 
-	env, err := buildBaseEnv(ref)
+	env, err := buildBaseEnv(state.RepoDir, ref)
 	if err != nil {
 		return err
 	}
