@@ -481,7 +481,18 @@ func ensureLiteLLMChatGPTAuth(stateDir string, required bool) (bool, error) {
 
 	dst := liteLLMChatGPTAuthStatePath(stateDir)
 	if dstInfo, statErr := os.Stat(dst); statErr == nil && !sourceInfo.ModTime().After(dstInfo.ModTime()) {
-		return true, nil
+		// LiteLLM can replace an invalid cache with device-login state. Its
+		// modification time alone does not mean usable credentials exist.
+		cached, readErr := os.ReadFile(dst)
+		var tokens struct {
+			AccessToken  string `json:"access_token"`
+			RefreshToken string `json:"refresh_token"`
+			IDToken      string `json:"id_token"`
+		}
+		if readErr == nil && json.Unmarshal(cached, &tokens) == nil &&
+			tokens.AccessToken != "" && tokens.RefreshToken != "" && tokens.IDToken != "" {
+			return true, nil
+		}
 	}
 
 	data, err := os.ReadFile(sourcePath)
