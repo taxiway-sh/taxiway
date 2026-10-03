@@ -22,9 +22,11 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
 	"github.com/taxiway-sh/taxiway/internal/config"
 	"github.com/taxiway-sh/taxiway/internal/driver"
+	"github.com/taxiway-sh/taxiway/internal/modelcatalog"
 	"github.com/taxiway-sh/taxiway/internal/phases"
 	"github.com/taxiway-sh/taxiway/internal/recording"
 )
@@ -55,20 +57,20 @@ func e2eExpectations(t *testing.T, orch string) e2eOrchestratorExpectations {
 	switch orch {
 	case "claude-code":
 		return e2eOrchestratorExpectations{
-			model: "claude-opus-4-8", recordInput: "/status",
+			model: e2ePrincipalModel(t, orch), recordInput: "/status",
 			workspaceAssertion: "assert:workspace-cloned", workspace: e2ePlainFixtureWorkspace,
 			workspaceTrustedBeforeStart: true,
 			assertSessions:              assertE2EClaudeCodeSession,
 		}
 	case "codex":
 		return e2eOrchestratorExpectations{
-			model: "gpt-5.5", recordInput: "/status",
+			model: e2ePrincipalModel(t, orch), recordInput: "/status",
 			workspaceAssertion: "assert:workspace-cloned", workspace: e2ePlainFixtureWorkspace,
 			workspaceTrustedBeforeStart: true,
 		}
 	case "gastown":
 		return e2eOrchestratorExpectations{
-			model: "claude-opus-4-8", recordInput: "gt status",
+			model: e2ePrincipalModel(t, orch), recordInput: "gt status",
 			workspaceAssertion: "assert:workspace-provisioned", workspace: e2eGastownFixtureWorkspace,
 			// Gastown approves each working directory when its agent launches.
 			workspaceTrustedBeforeStart: false, assertSessions: assertE2EGastownSessions,
@@ -125,11 +127,12 @@ func testE2EOrchestratorPrepareRun(t *testing.T, orch string) {
 	configureE2EScenarioEnvironment(t, scope)
 	id := uniqueDockerID(t, orch, "prepare-run")
 	lab := labNameFromID(id)
-	fakeUpstream := startE2EFakeOpenAIUpstream(t)
+	fakeUpstream := startE2EFakeModelUpstream(t)
 	root, state, tb := buildRealOrchestratorDockerRoot(t, orch, scope)
 	cleanupE2EOrchestratorLab(t, state, id, lab, orch)
 	configureE2ELiteLLMModelCatalog(t, state, fakeUpstream)
 	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+	assertE2EInvalidModelSelections(t, root, tb, state, id, lab, orch)
 
 	runE2EStep(t, "taxiway:init", func(t *testing.T) {
 		ensureE2ERuntimeInitialized(t, root, tb)
@@ -209,11 +212,12 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 	configureE2EScenarioEnvironment(t, scope)
 	id := uniqueDockerID(t, orch, "phase-by-phase")
 	lab := labNameFromID(id)
-	fakeUpstream := startE2EFakeOpenAIUpstream(t)
+	fakeUpstream := startE2EFakeModelUpstream(t)
 	root, state, tb := buildRealOrchestratorDockerRoot(t, orch, scope)
 	cleanupE2EOrchestratorLab(t, state, id, lab, orch)
 	configureE2ELiteLLMModelCatalog(t, state, fakeUpstream)
 	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+	assertE2EInvalidModelSelections(t, root, tb, state, id, lab, orch)
 
 	runE2EStep(t, "taxiway:init", func(t *testing.T) {
 		ensureE2ERuntimeInitialized(t, root, tb)
@@ -241,7 +245,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 	})
 
 	runE2EStep(t, "taxiway:install", func(t *testing.T) {
-		runE2ECommand(t, root, tb, "install", lab)
+		runE2ECommand(t, root, tb, "install", lab, "--set", "model="+expectations.model)
 		runE2EAssert(t, "assert:phase-installed", func(t *testing.T) {
 			assertE2EPhase(t, stateDir, id, phases.PhaseInstall)
 		})
@@ -395,11 +399,12 @@ func testE2EOrchestratorUp(t *testing.T, orch string) {
 	configureE2EScenarioEnvironment(t, scope)
 	id := uniqueDockerID(t, orch, "up")
 	lab := labNameFromID(id)
-	fakeUpstream := startE2EFakeOpenAIUpstream(t)
+	fakeUpstream := startE2EFakeModelUpstream(t)
 	root, state, tb := buildRealOrchestratorDockerRoot(t, orch, scope)
 	cleanupE2EOrchestratorLab(t, state, id, lab, orch)
 	configureE2ELiteLLMModelCatalog(t, state, fakeUpstream)
 	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+	assertE2EInvalidModelSelections(t, root, tb, state, id, lab, orch)
 
 	runE2EStep(t, "taxiway:init", func(t *testing.T) {
 		ensureE2ERuntimeInitialized(t, root, tb)
@@ -409,7 +414,7 @@ func testE2EOrchestratorUp(t *testing.T, orch string) {
 	})
 
 	runE2EStep(t, fmt.Sprintf("taxiway:up[--type=%s,--repo=<fixture>,--skip-auth-check]", orch), func(t *testing.T) {
-		runE2ECommand(t, root, tb, "up", lab, "--type", orch, "--repo", e2eFixtureRepoURL, "--skip-auth-check")
+		runE2ECommand(t, root, tb, "up", lab, "--type", orch, "--repo", e2eFixtureRepoURL, "--skip-auth-check", "--set", "model="+expectations.model)
 		runE2EAssert(t, "assert:phase-started", func(t *testing.T) {
 			assertE2EPhase(t, stateDir, id, phases.PhaseStart)
 		})
@@ -549,6 +554,31 @@ func e2eAgents(t *testing.T, repoDir, orch string) []string {
 	return manifest.Agents
 }
 
+func assertE2EInvalidModelSelections(t *testing.T, root *cobra.Command, tb *dockerTestBuf, state *RootState, id, lab, orch string) {
+	t.Helper()
+	prefix := "claude"
+	if orch == "codex" {
+		prefix = "gpt"
+	}
+	for _, tc := range []struct{ model, message string }{
+		{prefix + "-e2e-unknown", "unknown LiteLLM model"},
+		{prefix + "-e2e-retired", "is retired"},
+	} {
+		runE2EAssert(t, "assert:model-rejected:"+tc.model, func(t *testing.T) {
+			_, _, err := execDockerRoot(t, root, tb, "up", lab, "--type", orch, "--skip-auth-check", "--set", "model="+tc.model)
+			require.ErrorContains(t, err, tc.message)
+			require.ErrorContains(t, err, tc.model)
+			if strings.Contains(tc.model, "retired") {
+				require.ErrorContains(t, err, "select ")
+			}
+			exists, err := state.Driver.Exists(context.Background(), id)
+			require.NoError(t, err)
+			require.False(t, exists, "invalid selection must not create a lab")
+			require.NoDirExists(t, filepath.Join(config.StateDir(state.Flags.StateDir, state.RepoDir), lab), "invalid selection must not write lab state")
+		})
+	}
+}
+
 func runE2ECommand(t *testing.T, root *cobra.Command, tb *dockerTestBuf, args ...string) string {
 	t.Helper()
 	t.Logf("running: taxiway %s", strings.Join(args, " "))
@@ -681,6 +711,16 @@ func assertE2EAgentWorkspaceTrusted(t *testing.T, state *RootState, id, agent, w
 func assertE2EStartedAgents(t *testing.T, state *RootState, id, orch, stage string) {
 	t.Helper()
 	expectations := e2eExpectations(t, orch)
+	runE2EStep(t, "models:configuration@"+stage, func(t *testing.T) {
+		runE2EAssert(t, "assert:gateway-provider-models", func(t *testing.T) {
+			assertE2EGatewayModels(t, state, id, orch)
+		})
+		if orch == "codex" {
+			runE2EAssert(t, "assert:codex-selected-model", func(t *testing.T) {
+				assertE2ECodexModel(t, state, id)
+			})
+		}
+	})
 	runE2EStep(t, "agents:workspace-trust@"+stage, func(t *testing.T) {
 		runE2EAssert(t, "assert:lab-work-trusted", func(t *testing.T) {
 			assertE2EAgentsWorkspaceTrusted(t, state, id, orch, LabWorkRoot)
@@ -705,18 +745,27 @@ func assertE2EShellCheck(t *testing.T, root *cobra.Command, tb *dockerTestBuf, l
 
 func assertE2EClaudeCodeSession(t *testing.T, state *RootState, id string) {
 	t.Helper()
-	assertE2EClaudeMCPEnvironment(t, state, id, "", "claude-code")
+	assertE2EClaudeEnvironment(t, state, id, "", "claude-code")
 }
 
 // Inspect the actual Claude process, not the tmux server or its launching shell.
 // Shared by standalone sessions, Gastown roles, and Gastown handoffs.
-func assertE2EClaudeMCPEnvironment(t *testing.T, state *RootState, id, socket, session string) {
+func assertE2EClaudeEnvironment(t *testing.T, state *RootState, id, socket, session string) {
 	t.Helper()
+	ref, ok, err := state.Driver.ReadLabRef(context.Background(), id)
+	require.NoError(t, err)
+	require.True(t, ok)
+	expected, err := json.Marshal(map[string]any{
+		"model":   e2eExpectations(t, ref.Orch).model,
+		"models":  e2eGatewayModelNames(t, ref.Orch),
+		"aliases": e2eClaudeModelAliases(t),
+	})
+	require.NoError(t, err)
 	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
 	defer cancel()
 	var stderr bytes.Buffer
 	res, err := state.Driver.Exec(ctx, id, driver.ExecRequest{
-		Argv: []string{"python3", "-c", `import pathlib, subprocess, sys, time
+		Argv: []string{"python3", "-c", `import json, pathlib, subprocess, sys, time
 tmux = ['tmux'] + (['-L', sys.argv[1]] if sys.argv[1] else [])
 deadline = time.monotonic() + 30
 while True:
@@ -730,11 +779,167 @@ while True:
 env = dict(entry.split(b'=', 1) for entry in (pathlib.Path('/proc') / pane[0] / 'environ').read_bytes().split(b'\0') if b'=' in entry)
 assert env.get(b'ENABLE_TOOL_SEARCH') == b'true', 'Claude lost tool search default'
 assert env.get(b'ENABLE_CLAUDEAI_MCP_SERVERS') == b'false', 'Claude must disable connector import by default'
-`, socket, session},
+expected = json.loads(sys.argv[3])
+args = (pathlib.Path('/proc') / pane[0] / 'cmdline').read_bytes().split(b'\0')
+assert b'--model' in args, 'Claude lost explicit model argument'
+assert args[args.index(b'--model')+1].decode() == expected['model'], 'Claude changed principal model'
+for alias, model in expected['aliases'].items():
+    key = ('ANTHROPIC_DEFAULT_'+alias.upper()+'_MODEL').encode()
+    assert env.get(key) == model.encode(), 'Claude lost '+alias+' alias'
+models = json.loads(env.get(b'TAXIWAY_CLAUDE_AVAILABLE_MODELS', b'null'))
+assert isinstance(models, list) and sorted(models) == sorted(expected['models']), 'Claude process lost provider model catalog'
+policy = json.loads(pathlib.Path('/etc/claude-code/managed-settings.json').read_text())
+assert sorted(policy['availableModels']) == sorted(expected['models']), 'Claude managed model catalog differs from gateway'
+assert policy['enforceAvailableModels'] is True, 'Claude model policy is not enforced'
+assert policy['availableModelsMatch'] == 'exact', 'Claude model policy must match exact IDs'
+`, socket, session, string(expected)},
 		Stderr: &stderr,
 	})
-	require.NoError(t, err, "Claude MCP environment in %s: %s", session, stderr.String())
-	require.Equal(t, 0, res.ExitCode, "Claude MCP environment in %s: %s", session, stderr.String())
+	require.NoError(t, err, "Claude model/MCP environment in %s: %s", session, stderr.String())
+	require.Equal(t, 0, res.ExitCode, "Claude model/MCP environment in %s: %s", session, stderr.String())
+}
+
+// Read the catalog from the tested source tree, not the generated lab config.
+// This keeps expectations independent of the gateway's selection/rendering code.
+func e2eSourceModelCatalog(t *testing.T) modelcatalog.Catalog {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(findRepoRoot(t), "infra", "gateway", "litellm", "models.yaml"))
+	require.NoError(t, err)
+	catalog, err := modelcatalog.Parse(data)
+	require.NoError(t, err)
+	return catalog
+}
+
+func e2eModelProvider(orch string) string {
+	if orch == "codex" {
+		return "chatgpt"
+	}
+	return "anthropic"
+}
+
+// Subtests retain their parent scenario name. Prepare/run covers manifest
+// defaults; up and phase-by-phase cover explicit deprecated selections.
+func e2eUsesManifestDefault(t *testing.T) bool {
+	return strings.HasSuffix(strings.SplitN(t.Name(), "/", 2)[0], "_PrepareRun")
+}
+
+func e2ePrincipalModel(t *testing.T, orch string) string {
+	t.Helper()
+	manifest, err := config.LoadOrchManifest(findRepoRoot(t), orch)
+	require.NoError(t, err)
+	require.NotNil(t, manifest)
+	var defaultModel string
+	for _, setting := range manifest.Settings {
+		if setting.Name == "model" {
+			defaultModel = setting.Default
+		}
+	}
+	require.NotEmpty(t, defaultModel, "orchestrator must declare its default model")
+	catalog := e2eSourceModelCatalog(t)
+	foundDefault := false
+	var alternative string
+	aliases := catalog.Defaults[e2eModelProvider(orch)]
+	for _, model := range catalog.Models {
+		if model.Provider != e2eModelProvider(orch) {
+			continue
+		}
+		if model.Name == defaultModel {
+			require.NotEqual(t, "retired", model.StatusAt(modelNow()), "shipped default must remain usable")
+			foundDefault = true
+		} else if (alternative == "" || model.Name < alternative) && model.StatusAt(modelNow()) == "active" {
+			isAlias := false
+			for _, name := range aliases {
+				isAlias = isAlias || model.Name == name
+			}
+			if isAlias {
+				continue
+			}
+			alternative = model.Name
+		}
+	}
+	require.True(t, foundDefault, "shipped default must be in the provider catalog")
+	if e2eUsesManifestDefault(t) {
+		return defaultModel
+	}
+	require.NotEmpty(t, alternative, "need a provider-compatible alternative to prove explicit selection")
+	return alternative
+}
+
+func e2eClaudeModelAliases(t *testing.T) map[string]string {
+	t.Helper()
+	aliases := e2eSourceModelCatalog(t).Defaults["anthropic"]
+	for _, alias := range []string{"opus", "sonnet", "haiku"} {
+		require.NotEmpty(t, aliases[alias], "Claude tier alias %s must be defined", alias)
+	}
+	return aliases
+}
+
+func e2eGatewayModelNames(t *testing.T, orch string) []string {
+	t.Helper()
+	catalog := e2eSourceModelCatalog(t)
+	names := []string{e2ePrincipalModel(t, orch)}
+	aliases := catalog.Defaults[e2eModelProvider(orch)]
+	for _, model := range catalog.Models {
+		if model.Provider != e2eModelProvider(orch) || model.Name == names[0] {
+			continue
+		}
+		include := model.StatusAt(modelNow()) == "active"
+		for _, name := range aliases {
+			include = include || model.Name == name
+		}
+		if include {
+			names = append(names, model.Name)
+		}
+	}
+	require.Greater(t, len(names), 1, "gateway must expose models beyond the principal")
+	return names
+}
+
+func assertE2ECodexModel(t *testing.T, state *RootState, id string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
+	defer cancel()
+	var stderr bytes.Buffer
+	res, err := state.Driver.Exec(ctx, id, driver.ExecRequest{
+		Argv: []string{"python3", "-c", `import os, pathlib, subprocess, sys, time, tomllib
+assert (pathlib.Path('/proc/self/task')/str(os.getpid())/'children').exists(), 'Codex process inspection requires Linux CONFIG_PROC_CHILDREN'
+config = tomllib.loads((pathlib.Path.home()/'.codex/config.toml').read_text())
+assert config['model'] == sys.argv[1], 'Codex changed principal model'
+assert config['model_provider'] == 'taxiway-litellm', 'Codex bypassed gateway provider'
+provider = config['model_providers']['taxiway-litellm']
+assert provider['wire_api'] == 'responses', 'Codex must use Responses API'
+assert provider['requires_openai_auth'] is False, 'Codex lab must not carry provider auth'
+deadline = time.monotonic()+30
+while True:
+    pane = subprocess.check_output(['tmux','display-message','-p','-t','codex','#{pane_pid}|#{pane_dead}'], text=True).strip().split('|')
+    assert len(pane) == 2 and pane[1] == '0', 'Codex pane must be alive'
+    candidates = [int(pane[0])]
+    for pid in candidates:
+        proc = pathlib.Path('/proc')/str(pid)
+        try:
+            args = (proc/'cmdline').read_bytes().split(b'\0')
+        except FileNotFoundError:
+            continue
+        if any(pathlib.PurePath(a.decode(errors='replace')).name == 'codex' for a in args):
+            try:
+                env = dict(e.split(b'=',1) for e in (proc/'environ').read_bytes().split(b'\0') if b'=' in e)
+            except FileNotFoundError:
+                continue
+            assert provider['base_url'] == env[b'TAXIWAY_LITELLM_BASE_URL'].decode().rstrip('/')+'/v1', 'Codex process lost gateway URL'
+            assert env.get(b'TAXIWAY_LITELLM_API_KEY'), 'Codex process lost gateway key'
+            sys.exit(0)
+        children = proc/'task'/str(pid)/'children'
+        try:
+            candidates.extend(map(int, children.read_text().split()))
+        except FileNotFoundError:
+            pass
+    assert time.monotonic() < deadline, 'Codex process did not start'
+    time.sleep(0.2)
+`, e2eExpectations(t, "codex").model},
+		Stderr: &stderr,
+	})
+	require.NoError(t, err, "Codex process inspection: %s", stderr.String())
+	require.Equal(t, 0, res.ExitCode, "Codex model configuration: %s", stderr.String())
 }
 
 func assertE2EGastownSessions(t *testing.T, state *RootState, id string) {
@@ -813,7 +1018,7 @@ func assertE2EGastownSessions(t *testing.T, state *RootState, id string) {
 			}
 			checked++
 			require.True(t, agent.Running, "Present session %s is not recognized as running by Gastown", agent.Session)
-			assertE2EClaudeMCPEnvironment(t, state, id, status.Tmux.Socket, agent.Session)
+			assertE2EClaudeEnvironment(t, state, id, status.Tmux.Socket, agent.Session)
 		}
 		require.Positive(t, checked, "No persistent agent session was checked")
 	})
@@ -881,7 +1086,7 @@ args = (p / 'cmdline').read_bytes().split(b'\0')
 assert b'--model' in args, 'handoff lost model selection'
 assert args[args.index(b'--model') + 1] == sys.argv[2].encode(), 'handoff changed model'
 `, parts[0], e2eExpectations(t, "gastown").model)
-		assertE2EClaudeMCPEnvironment(t, state, id, status.Tmux.Socket, target)
+		assertE2EClaudeEnvironment(t, state, id, status.Tmux.Socket, target)
 	}
 	assertE2EGastownSessions(t, state, id)
 }
@@ -1096,7 +1301,7 @@ func e2eDockerNetworkExists(t *testing.T, name string) bool {
 	return err == nil
 }
 
-func startE2EFakeOpenAIUpstream(t *testing.T) string {
+func startE2EFakeModelUpstream(t *testing.T) string {
 	t.Helper()
 	var mu sync.Mutex
 	var modelCalls int
@@ -1108,67 +1313,54 @@ func startE2EFakeOpenAIUpstream(t *testing.T) string {
 		requests = append(requests, r.Method+" "+r.URL.Path)
 		mu.Unlock()
 		if r.URL.Path == "/v1/models" {
-			writeE2EJSON(t, w, map[string]any{
-				"object": "list",
-				"data": []map[string]any{{
-					"id":       "e2e-smoke",
-					"object":   "model",
-					"created":  0,
-					"owned_by": "taxiway-e2e",
-				}},
-			})
+			writeE2EJSON(t, w, map[string]any{"object": "list", "data": []map[string]any{{"id": "e2e-smoke", "object": "model", "owned_by": "taxiway-e2e"}}})
 			return
 		}
-		if r.Method == http.MethodPost && r.URL.Path == "/v1/chat/completions" {
+		if r.Method == http.MethodPost && (r.URL.Path == "/v1/messages" || r.URL.Path == "/backend-api/codex/responses") {
+			var payload struct {
+				Model string `json:"model"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				http.Error(w, "invalid fixture request", http.StatusBadRequest)
+				return
+			}
 			mu.Lock()
 			modelCalls++
 			mu.Unlock()
-			writeE2EJSON(t, w, map[string]any{
-				"id":      "chatcmpl-taxiway-e2e",
-				"object":  "chat.completion",
-				"created": time.Now().Unix(),
-				"model":   "e2e-smoke",
-				"choices": []map[string]any{{
-					"index": 0,
-					"message": map[string]any{
-						"role":    "assistant",
-						"content": e2eFakeModelResponse,
-					},
-					"finish_reason": "stop",
-				}},
-				"usage": map[string]any{
-					"prompt_tokens":     1,
-					"completion_tokens": 1,
-					"total_tokens":      2,
-				},
-			})
-			return
-		}
-		if r.Method == http.MethodPost && r.URL.Path == "/v1/responses" {
-			mu.Lock()
-			modelCalls++
-			mu.Unlock()
-			writeE2EJSON(t, w, map[string]any{
-				"id":         "resp-taxiway-e2e",
-				"object":     "response",
-				"created_at": time.Now().Unix(),
-				"status":     "completed",
-				"model":      "e2e-smoke",
-				"output": []map[string]any{{
-					"id":     "msg-taxiway-e2e",
-					"type":   "message",
-					"status": "completed",
-					"role":   "assistant",
-					"content": []map[string]any{{
-						"type": "output_text",
-						"text": e2eFakeModelResponse,
-					}},
-				}},
-				"usage": map[string]any{
-					"input_tokens":  1,
-					"output_tokens": 1,
-				},
-			})
+			if r.URL.Path == "/v1/messages" {
+				writeE2EJSON(t, w, map[string]any{
+					"id": "msg-taxiway-e2e", "type": "message", "role": "assistant", "model": payload.Model,
+					"content":     []map[string]any{{"type": "text", "text": e2eFakeModelResponse}},
+					"stop_reason": "end_turn", "stop_sequence": nil,
+					"usage": map[string]any{"input_tokens": 1, "output_tokens": 1},
+				})
+				return
+			}
+			item := map[string]any{
+				"id": "msg-taxiway-e2e", "type": "message", "status": "completed", "role": "assistant",
+				"content": []map[string]any{{"type": "output_text", "text": e2eFakeModelResponse, "annotations": []any{}}},
+			}
+			response := map[string]any{
+				"id": "resp-taxiway-e2e", "object": "response", "created_at": time.Now().Unix(),
+				"status": "completed", "model": payload.Model, "output": []any{item}, "error": nil, "incomplete_details": nil,
+				"usage": map[string]any{"input_tokens": 1, "output_tokens": 1, "total_tokens": 2,
+					"input_tokens_details": map[string]any{"cached_tokens": 0}, "output_tokens_details": map[string]any{"reasoning_tokens": 0}},
+			}
+			started := map[string]any{}
+			for key, value := range response {
+				started[key] = value
+			}
+			started["status"] = "in_progress"
+			started["output"] = []any{}
+			w.Header().Set("Content-Type", "text/event-stream")
+			for _, event := range []map[string]any{
+				{"type": "response.created", "response": started, "sequence_number": 0},
+				{"type": "response.output_item.done", "output_index": 0, "item": item, "sequence_number": 1},
+				{"type": "response.completed", "response": response, "sequence_number": 2},
+			} {
+				data, _ := json.Marshal(event)
+				_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event["type"], data)
+			}
 			return
 		}
 		http.NotFound(w, r)
@@ -1198,20 +1390,107 @@ func writeE2EJSON(t *testing.T, w http.ResponseWriter, value any) {
 
 func configureE2ELiteLLMModelCatalog(t *testing.T, state *RootState, fakeUpstreamBaseURL string) {
 	t.Helper()
+	catalog := e2eSourceModelCatalog(t)
+	selected := map[string]bool{
+		e2ePrincipalModel(t, "codex"):       true,
+		e2ePrincipalModel(t, "claude-code"): true,
+		e2ePrincipalModel(t, "gastown"):     true,
+	}
+	// Keep public IDs/providers but send every inference request to the fixture.
+	// Freeze lifecycle statuses in this snapshot instead of waiting on public dates.
+	for i := range catalog.Models {
+		model := &catalog.Models[i]
+		model.Status = model.StatusAt(modelNow())
+		model.RetirementDate = ""
+		if selected[model.Name] && !e2eUsesManifestDefault(t) {
+			model.Status = "deprecated"
+		}
+		if model.Provider == "chatgpt" {
+			model.APIBase = fakeUpstreamBaseURL + "/backend-api/codex"
+			model.API = "responses"
+		} else {
+			model.APIBase = fakeUpstreamBaseURL
+			model.APIKey = "sk-e2e-upstream"
+		}
+	}
+	for _, orch := range []string{"codex", "claude-code"} {
+		prefix := "claude"
+		if orch == "codex" {
+			prefix = "gpt"
+		}
+		principal := e2ePrincipalModel(t, orch)
+		for _, status := range []string{"deprecated", "retired"} {
+			catalog.Models = append(catalog.Models, modelcatalog.Model{
+				Name: prefix + "-e2e-" + status, Provider: e2eModelProvider(orch),
+				Upstream: principal, Status: status, Replacement: principal,
+			})
+		}
+	}
+	data, err := yaml.Marshal(catalog)
+	require.NoError(t, err)
 	modelsPath := filepath.Join(state.RepoDir, "infra", "gateway", "litellm", "models.yaml")
-	content := fmt.Sprintf(`models:
-  - name: gpt-5.5
-    provider: openai
-    upstream: e2e-smoke
-    api_base: %[1]s/v1
-    api_key: sk-e2e-upstream
-  - name: claude-opus-4-8
-    provider: openai
-    upstream: e2e-smoke
-    api_base: %[1]s/v1
-    api_key: sk-e2e-upstream
-`, fakeUpstreamBaseURL)
-	require.NoError(t, os.WriteFile(modelsPath, []byte(content), 0o644))
+	require.NoError(t, os.WriteFile(modelsPath, data, 0o644))
+	// ChatGPT's native adapter resolves its base through this environment
+	// variable even when model parameters contain api_base. Set it in the
+	// copied callback loaded inside the test sidecar, never in shipped assets.
+	mapperPath := liteLLMCodexSessionMapperAssetPath(state)
+	mapper, err := os.ReadFile(mapperPath)
+	require.NoError(t, err)
+	mapper = append(mapper, []byte(fmt.Sprintf("\nimport os\nos.environ['CHATGPT_API_BASE'] = %q\n", fakeUpstreamBaseURL+"/backend-api/codex"))...)
+	require.NoError(t, os.WriteFile(mapperPath, mapper, 0o644))
+	// TestMain isolates HOME. Only fake credentials are created, never host auth.
+	requirePathUnder(t, defaultCodexAuthFile(), e2eTestRoot)
+	require.NoError(t, os.MkdirAll(filepath.Dir(defaultCodexAuthFile()), 0o700))
+	require.NoError(t, os.WriteFile(defaultCodexAuthFile(), []byte(`{
+  "access_token":"e2e-fake-access", "refresh_token":"e2e-fake-refresh",
+  "id_token":"e2e-fake-id", "account_id":"e2e-fake-account", "expires_at":32503680000
+ }`), 0o600))
+	converted, err := ensureLiteLLMChatGPTAuth(authStateDir(state), true)
+	require.NoError(t, err)
+	require.True(t, converted, "fixture auth must be provisioned before starting ChatGPT routes")
+}
+
+func assertE2EGatewayModels(t *testing.T, state *RootState, id, orch string) {
+	t.Helper()
+	ref, ok, err := state.Driver.ReadLabRef(context.Background(), id)
+	require.NoError(t, err)
+	require.True(t, ok)
+	if e2eUsesManifestDefault(t) {
+		_, persisted := ref.Settings["model"]
+		require.False(t, persisted, "manifest default must not be persisted as an explicit setting")
+	} else {
+		require.Equal(t, e2eExpectations(t, orch).model, ref.Settings["model"], "explicit principal selection must persist")
+	}
+	values, err := readLabGatewayEnv(config.StateDir(state.Flags.StateDir, state.RepoDir), ref)
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	var stdout, stderr bytes.Buffer
+	res, err := state.Driver.Exec(ctx, id, driver.ExecRequest{
+		Argv:   []string{"curl", "-fsS", "--max-time", "15", "-H", "x-litellm-api-key: Bearer " + values[labLiteLLMAPIKeyEnv], labLiteLLMBaseURL(state, ref) + "/v1/models"},
+		Stdout: &stdout, Stderr: &stderr,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 0, res.ExitCode, "gateway model discovery from lab: %s", stderr.String())
+	var result struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &result))
+	var names []string
+	for _, model := range result.Data {
+		names = append(names, model.ID)
+	}
+	// Controlled fixture entries give independent lifecycle expectations even
+	// if parsing/status logic shared with production regresses.
+	for _, prefix := range []string{"gpt", "claude"} {
+		require.NotContains(t, names, prefix+"-e2e-deprecated")
+		require.NotContains(t, names, prefix+"-e2e-retired")
+	}
+	require.Contains(t, names, e2ePrincipalModel(t, orch), "principal must remain exposed, including an explicitly selected deprecated model")
+	require.ElementsMatch(t, e2eGatewayModelNames(t, orch), names,
+		"gateway must expose the provider catalog, retain the selected deprecated principal, and exclude other providers/retired/unselected deprecated models")
 }
 
 func assertE2EGatewayRuntimeRunning(t *testing.T, state *RootState, lab, orch string) {
@@ -1239,40 +1518,48 @@ func assertE2EGatewayRequestRouted(t *testing.T, state *RootState, lab, orch str
 	require.NoError(t, err)
 	apiKey := values[labLiteLLMAPIKeyEnv]
 	require.NotEmpty(t, apiKey)
-	model := e2eExpectations(t, orch).model
-
-	deadline := time.Now().Add(90 * time.Second)
-	var lastErr error
-	for time.Now().Before(deadline) {
-		hostContent, err := callE2ELiteLLMChatCompletion(state, lab, apiKey, model)
-		if err == nil {
-			labContent, labErr := callE2ELiteLLMChatCompletionFromLab(state, ref, apiKey, model)
-			if labErr == nil {
-				require.Equal(t, e2eFakeModelResponse, hostContent)
-				require.Equal(t, e2eFakeModelResponse, labContent)
-				return
+	for _, model := range e2eGatewayModelNames(t, orch) {
+		runE2EAssert(t, "assert:model-routed:"+model, func(t *testing.T) {
+			deadline := time.Now().Add(90 * time.Second)
+			var lastErr error
+			for time.Now().Before(deadline) {
+				hostContent, err := callE2ELiteLLMModel(state, lab, apiKey, orch, model)
+				if err == nil {
+					labContent, labErr := callE2ELiteLLMModelFromLab(state, ref, apiKey, model)
+					if labErr == nil {
+						require.Equal(t, e2eFakeModelResponse, hostContent)
+						require.Equal(t, e2eFakeModelResponse, labContent)
+						return
+					}
+					err = labErr
+				}
+				lastErr = err
+				time.Sleep(2 * time.Second)
 			}
-			err = labErr
-		}
-		lastErr = err
-		time.Sleep(2 * time.Second)
+			require.NoError(t, lastErr, "model %s must route via fake upstream %s\n%s", model, fakeUpstreamBaseURL, collectE2ELiteLLMDiagnostics(t, state, ref, fakeUpstreamBaseURL))
+		})
 	}
-	require.NoError(t, lastErr, "LiteLLM smoke via %s should reach fake upstream %s\n%s", labLiteLLMBaseURL(state, ref), fakeUpstreamBaseURL, collectE2ELiteLLMDiagnostics(t, state, ref, fakeUpstreamBaseURL))
 }
 
-func callE2ELiteLLMChatCompletion(state *RootState, lab, apiKey, model string) (string, error) {
-	body := strings.NewReader(fmt.Sprintf(`{"model":%q,"messages":[{"role":"user","content":"smoke"}],"max_tokens":8}`, model))
-	req, err := http.NewRequest(http.MethodPost, state.proxyRuntime().BaseURL()+"/v1/chat/completions", body)
+func e2eModelRequest(orch, model string) (string, string) {
+	if orch == "codex" {
+		return "/v1/responses", fmt.Sprintf(`{"model":%q,"stream":true,"input":[{"role":"user","content":"smoke"}],"parallel_tool_calls":false}`, model)
+	}
+	return "/v1/messages", fmt.Sprintf(`{"model":%q,"messages":[{"role":"user","content":"smoke"}],"max_tokens":8}`, model)
+}
+
+func callE2ELiteLLMModel(state *RootState, lab, apiKey, orch, model string) (string, error) {
+	endpoint, body := e2eModelRequest(orch, model)
+	req, err := http.NewRequest(http.MethodPost, state.proxyRuntime().BaseURL()+endpoint, strings.NewReader(body))
 	if err != nil {
 		return "", err
 	}
 	req.Host = labLiteLLMHost(lab)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("x-litellm-api-key", "Bearer "+apiKey)
 	req.Header.Set("x-litellm-agent-id", "taxiway-e2e")
-
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -1284,40 +1571,20 @@ func callE2ELiteLLMChatCompletion(state *RootState, lab, apiKey, model string) (
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("LiteLLM returned %s: %s", resp.Status, strings.TrimSpace(string(data)))
 	}
-	var parsed struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
-	if err := json.Unmarshal(data, &parsed); err != nil {
-		return "", err
-	}
-	if len(parsed.Choices) == 0 {
-		return "", fmt.Errorf("LiteLLM response has no choices: %s", string(data))
-	}
-	return parsed.Choices[0].Message.Content, nil
+	return e2eModelResponseText(orch, model, data)
 }
 
-func callE2ELiteLLMChatCompletionFromLab(state *RootState, ref config.LabRef, apiKey, model string) (string, error) {
-	body := fmt.Sprintf(`{"model":%q,"messages":[{"role":"user","content":"smoke"}],"max_tokens":8}`, model)
+func callE2ELiteLLMModelFromLab(state *RootState, ref config.LabRef, apiKey, model string) (string, error) {
+	endpoint, body := e2eModelRequest(ref.Orch, model)
 	var stdout, stderr bytes.Buffer
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	result, err := state.Driver.Exec(ctx, idName(ref.Lab), driver.ExecRequest{
 		Workdir: "/lab/work",
-		Argv: []string{
-			"curl", "-fsS", "--max-time", "10",
-			"-H", "Content-Type: application/json",
-			"-H", "Authorization: Bearer " + apiKey,
-			"-H", "x-litellm-api-key: Bearer " + apiKey,
-			"-H", "x-litellm-agent-id: taxiway-e2e",
-			"--data", body,
-			labLiteLLMBaseURL(state, ref) + "/v1/chat/completions",
-		},
-		Stdout: &stdout,
-		Stderr: &stderr,
+		Argv: []string{"curl", "-fsS", "--max-time", "15",
+			"-H", "Content-Type: application/json", "-H", "x-litellm-api-key: Bearer " + apiKey,
+			"-H", "x-litellm-agent-id: taxiway-e2e", "--data", body, labLiteLLMBaseURL(state, ref) + endpoint},
+		Stdout: &stdout, Stderr: &stderr,
 	})
 	if err != nil {
 		return "", err
@@ -1325,21 +1592,51 @@ func callE2ELiteLLMChatCompletionFromLab(state *RootState, ref config.LabRef, ap
 	if result.ExitCode != 0 {
 		return "", fmt.Errorf("lab gateway request exited %d: %s", result.ExitCode, strings.TrimSpace(stderr.String()))
 	}
+	return e2eModelResponseText(ref.Orch, model, stdout.Bytes())
+}
 
-	var parsed struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
+func e2eModelResponseText(orch, model string, data []byte) (string, error) {
+	if orch == "codex" {
+		for _, line := range strings.Split(string(data), "\n") {
+			if !strings.HasPrefix(line, "data: ") || line == "data: [DONE]" {
+				continue
+			}
+			var event struct {
+				Type     string `json:"type"`
+				Response struct {
+					Model  string `json:"model"`
+					Status string `json:"status"`
+					Output []struct {
+						Content []struct {
+							Text string `json:"text"`
+						} `json:"content"`
+					} `json:"output"`
+				} `json:"response"`
+			}
+			if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &event); err != nil {
+				return "", err
+			}
+			if event.Type == "response.completed" && event.Response.Model == model && event.Response.Status == "completed" && len(event.Response.Output) > 0 && len(event.Response.Output[0].Content) > 0 {
+				return event.Response.Output[0].Content[0].Text, nil
+			}
+		}
+		return "", fmt.Errorf("Codex stream did not complete for model %s", model)
 	}
-	if err := json.Unmarshal(stdout.Bytes(), &parsed); err != nil {
+	var message struct {
+		Model      string `json:"model"`
+		StopReason string `json:"stop_reason"`
+		Content    []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+	if err := json.Unmarshal(data, &message); err != nil {
 		return "", err
 	}
-	if len(parsed.Choices) == 0 {
-		return "", fmt.Errorf("LiteLLM response has no choices: %s", stdout.String())
+	if message.Model != model || message.StopReason != "end_turn" || len(message.Content) == 0 || message.Content[0].Type != "text" {
+		return "", fmt.Errorf("Anthropic message did not complete for model %s", model)
 	}
-	return parsed.Choices[0].Message.Content, nil
+	return message.Content[0].Text, nil
 }
 
 func collectE2ELiteLLMDiagnostics(t *testing.T, state *RootState, ref config.LabRef, fakeUpstreamBaseURL string) string {
