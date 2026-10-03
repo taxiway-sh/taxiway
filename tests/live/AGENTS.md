@@ -16,6 +16,9 @@ creating an authenticated scenario.
   when the required login is missing or unusable; do not request it for every lab.
 - Copy only Claude OAuth credentials through `propagate_claude_auth`; never
   print them, pass them in argv, or copy a gateway environment/key from another lab.
+  The helper also copies completed first-run setup flags, preserving target
+  preferences and workspace trust. Verify interactive readiness: successful
+  `claude -p` calls alone do not prove the user can attach without onboarding.
   Codex authentication is managed by the gateway, not copied into lab clients.
 - Use `temporary_lab` for resources owned by a scenario. Preserve reference labs
   and other instances; never use global `destroy` or Docker prune for cleanup.

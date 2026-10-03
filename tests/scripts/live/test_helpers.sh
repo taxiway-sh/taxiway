@@ -60,6 +60,39 @@ with tempfile.TemporaryDirectory(prefix="taxiway-helper-test-") as root:
 print("PASS: reference auth is propagated before the first orchestrator start")
 print("PASS: cleanup preserves the original error and reports owned-lab failures")
 
+# Exercise the actual guest scripts with isolated local homes, no credentials.
+import json
+import subprocess
+with tempfile.TemporaryDirectory(prefix="taxiway-onboarding-test-") as root:
+    homes = {name: Path(root) / name for name in ("source", "target")}
+    for home in homes.values(): home.mkdir()
+    source = {"hasCompletedOnboarding": True, "lastOnboardingVersion": "test-version",
+              "oauthAccount": {"sentinel": "source-only"}, "projects": {"source-workspace": {}}}
+    target = {"theme": "light", "oauthAccount": {"sentinel": "target-only"},
+              "projects": {"target-workspace": {"hasTrustDialogAccepted": True}}}
+    for name, config in (("source", source), ("target", target)):
+        (homes[name] / ".claude.json").write_text(json.dumps(config))
+    def local_guest(lab, script, *, data=None, **kwargs):
+        env = dict(os.environ, HOME=str(homes[lab]))
+        return subprocess.run(["bash", "-c", script], input=data, env=env,
+                              capture_output=True, check=True).stdout
+    with patch.object(live, "guest", local_guest):
+        live.propagate_claude_onboarding("source", "target")
+        path = homes["target"] / ".claude.json"
+        merged = json.loads(path.read_text())
+        assert merged == dict(target, hasCompletedOnboarding=True, lastOnboardingVersion="test-version")
+        assert path.stat().st_mode & 0o777 == 0o600
+        before = path.read_bytes()
+        live.propagate_claude_onboarding("source", "target")
+        assert path.read_bytes() == before
+        source["hasCompletedOnboarding"] = False
+        (homes["source"] / ".claude.json").write_text(json.dumps(source))
+        try: live.propagate_claude_onboarding("source", "target")
+        except RuntimeError: pass
+        else: raise AssertionError("incomplete reference onboarding accepted")
+        assert path.read_bytes() == before
+print("PASS: onboarding copied safely; account, theme and workspace settings retained")
+
 # Missing internal functions should report the required compatibility check.
 for name in ("litellm", "litellm.integrations", "litellm.integrations.custom_logger",
              "litellm.llms", "litellm.llms.anthropic", "litellm.llms.anthropic.common_utils",

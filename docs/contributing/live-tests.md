@@ -35,8 +35,14 @@ process memory and stdin. The target file is installed atomically with mode
 command arguments, or written to an intermediate host file. Existing target
 credentials are protected unless overwrite is explicitly requested.
 
+The helper also merges `hasCompletedOnboarding` and `lastOnboardingVersion`
+from the reference into the target’s `~/.claude.json`. It preserves the target’s
+account metadata, theme, project trust and gateway settings; it never copies the
+whole reference configuration. The reference must have completed interactive
+onboarding, so authenticated noninteractive calls alone are not sufficient.
+
 Each target retains its own gateway key and environment. Only the Claude
-login is copied. Normal client token refresh still applies; propagation does
+login and the completed first-run setup flags are copied. Normal client token refresh still applies; propagation does
 not make an expired or revoked login valid. Re-authenticate the reference lab
 if the client can no longer use or refresh its login, then propagate again.
 The helper does not synchronize subsequent refreshes between running labs.

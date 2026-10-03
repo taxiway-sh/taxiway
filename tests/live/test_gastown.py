@@ -29,6 +29,10 @@ def sessions(lab):
     output = guest(lab, "python3 - " + shlex.quote(socket) + " <<'PY'\n" + r"""
 import json, os, pathlib, subprocess, sys
 root=pathlib.Path('/lab/work/gt')
+onboarding=json.loads((pathlib.Path.home()/'.claude.json').read_text())
+assert onboarding.get('hasCompletedOnboarding') is True, 'Claude interactive onboarding was not propagated'
+auth=json.loads(subprocess.check_output(['claude','auth','status'],text=True))
+assert auth.get('loggedIn') is True, 'Claude does not report a logged-in account'
 agent=json.loads((root/'settings/agents.json').read_text())['agents']['claude-code-litellm']
 model=agent['args'][agent['args'].index('--model')+1]
 names=subprocess.check_output(['tmux','-L',sys.argv[1],'list-sessions','-F','#{session_name}'],text=True).splitlines()
@@ -47,6 +51,8 @@ for name in names:
     for alias in ('OPUS','SONNET','HAIKU'):
         assert env.get(('ANTHROPIC_DEFAULT_'+alias+'_MODEL').encode()), 'role lost alias mapping'
     assert env.get(b'TAXIWAY_CLAUDE_AVAILABLE_MODELS'), 'role lost managed model catalog'
+    pane=subprocess.check_output(['tmux','-L',sys.argv[1],'capture-pane','-p','-t',name],text=True).lower()
+    assert not any(prompt in pane for prompt in ('choose the text style','choose a theme','select login method','select the login method')), 'role is blocked on interactive onboarding'
     checked+=1
 assert checked>=2, 'fewer than two persistent Claude roles checked'
 print(json.dumps({'model':model,'checked':checked}))

@@ -67,8 +67,48 @@ def require_claude_auth(lab):
     guest(lab, 'command -v claude >/dev/null && test -s "$HOME/.claude/.credentials.json"')
 
 
+def _claude_onboarding(source):
+    state = json.loads(guest(source, """python3 - <<'PY'
+import json
+from pathlib import Path
+config = json.loads((Path.home() / '.claude.json').read_text())
+print(json.dumps({key: config[key] for key in
+                 ('hasCompletedOnboarding', 'lastOnboardingVersion') if key in config}))
+PY"""))
+    if state.get("hasCompletedOnboarding") is not True:
+        raise RuntimeError("Complete Claude interactive onboarding in the reference lab first")
+    if "lastOnboardingVersion" in state and not isinstance(state["lastOnboardingVersion"], str):
+        raise RuntimeError("Reference lab has invalid Claude onboarding metadata")
+    return state
+
+
+def _write_claude_onboarding(target, state):
+    guest(target, """python3 -c '
+import json, os, pathlib, sys, tempfile
+path = pathlib.Path.home() / ".claude.json"
+config = json.loads(path.read_text()) if path.exists() else {}
+config.update(json.load(sys.stdin))
+fd, name = tempfile.mkstemp(prefix=".claude-onboarding-", dir=path.parent)
+try:
+    with os.fdopen(fd, "w") as output:
+        json.dump(config, output, indent=2)
+        output.write("\\n")
+    os.chmod(name, 0o600)
+    os.replace(name, path)
+finally:
+    if os.path.exists(name): os.unlink(name)
+'""", data=json.dumps(state).encode())
+
+
+def propagate_claude_onboarding(source, target):
+    """Reuse completed setup flags, preserving target account/workspace settings."""
+    if source == target:
+        raise RuntimeError("Onboarding source and target must be different labs")
+    _write_claude_onboarding(target, _claude_onboarding(source))
+
+
 def propagate_claude_auth(source, target, *, overwrite=False):
-    """Copy one reference login to a lab; never copy gateway keys or config."""
+    """Copy a reference login and completed onboarding; preserve lab-specific config."""
     if source == target:
         raise RuntimeError("Authentication source and target must be different labs")
     require_claude_auth(source)
@@ -76,6 +116,7 @@ def propagate_claude_auth(source, target, *, overwrite=False):
     present = guest(target, 'if [ -e "$HOME/.claude/.credentials.json" ]; then printf present; fi')
     if present and not overwrite:
         raise RuntimeError("Target already has Claude credentials; use overwrite explicitly")
+    onboarding = _claude_onboarding(source)
     credential = guest(source, 'cat "$HOME/.claude/.credentials.json"')
     try:
         # Validate without ever including file contents in an error message.
@@ -96,6 +137,7 @@ mv -f "$tmp" "$HOME/.claude/.credentials.json"
 ''', data=credential)
     finally:
         del credential
+    _write_claude_onboarding(target, onboarding)
 
 
 def run_in_lab(lab, argv, *, agent=None, timeout=180, workdir="/lab/work"):
