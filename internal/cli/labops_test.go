@@ -82,6 +82,10 @@ func TestAgentVersionEventsPersistActualExecutable(t *testing.T) {
 	require.NoError(t, err)
 	ref.Settings = map[string]string{"codex-version": "1.0.0"}
 	require.NoError(t, state.Driver.WriteLabRef(context.Background(), idName("pinned"), ref))
+	root.SetArgs([]string{"list", "pinned"})
+	out.Reset()
+	require.NoError(t, root.Execute())
+	require.Contains(t, out.String(), "codex: requested 1.0.0, installed not observed")
 	script := filepath.Join(state.RepoDir, "infra", "commands", "version.sh")
 	require.NoError(t, os.WriteFile(script, []byte(`#!/bin/bash
 printf '%s\n' 'LAB_AGENT_EVENT {"type":"agent-version","agent":"codex","requested":"1.0.0","actual":"1.0.0","executable":"/usr/bin/codex"}'

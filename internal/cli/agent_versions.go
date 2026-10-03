@@ -92,8 +92,17 @@ func printAgentVersions(w io.Writer, stateDir, id string) error {
 	if err != nil {
 		return err
 	}
-	agents := make([]string, 0, len(versions))
+	selected := map[string]bool{}
 	for agent := range versions {
+		selected[agent] = true
+	}
+	for _, agent := range []string{"claude-code", "codex"} {
+		if ref.Settings[agent+"-version"] != "" {
+			selected[agent] = true
+		}
+	}
+	agents := make([]string, 0, len(selected))
+	for agent := range selected {
 		agents = append(agents, agent)
 	}
 	sort.Strings(agents)
@@ -103,7 +112,15 @@ func printAgentVersions(w io.Writer, stateDir, id string) error {
 		if requested == "" {
 			requested = "latest"
 		}
-		fmt.Fprintf(w, "  %s: requested %s, installed %s (%s)\n", agent, requested, version.Actual, version.Executable)
+		actual := version.Actual
+		if actual == "" {
+			actual = "not observed"
+		}
+		fmt.Fprintf(w, "  %s: requested %s, installed %s", agent, requested, actual)
+		if version.Executable != "" {
+			fmt.Fprintf(w, " (%s)", version.Executable)
+		}
+		fmt.Fprintln(w)
 	}
 	return nil
 }
