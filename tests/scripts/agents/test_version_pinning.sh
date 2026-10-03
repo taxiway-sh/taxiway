@@ -61,7 +61,7 @@ case "$version" in
   *) echo "npm error code ETARGET" >&2; echo "npm error notarget No matching version found for $spec." >&2; exit 1 ;;
 esac
 case "$1" in
-  install) echo "$version" > "$FAKE_LAB/installed-$bin" ;;
+  install) echo "${FAKE_INSTALLED_VERSION:-$version}" > "$FAKE_LAB/installed-$bin" ;;
 esac
 EOF
     cat > "$dir/bin/claude" <<'EOF'
@@ -112,6 +112,7 @@ for agent in claude-code codex; do
     else
         _fail "$agent installs the pinned release in a fresh lab" "$out"
     fi
+    _assert "$agent installer reports its actual executable version" test "${out#*'"type":"agent-version"'}" != "$out"
     _assert "$agent npm installed the exact release" grep -q "@1.0.0$" "$lab/npm.log"
 
     lab_run "$lab" env "$setting_env=1.0.0" bash "$install_sh" >/dev/null 2>&1
@@ -121,6 +122,35 @@ for agent in claude-code codex; do
     _assert "$agent changing the pin upgrades" test "$(cat "$lab/installed-$bin")" = 2.0.0
     lab_run "$lab" env "$setting_env=1.0.0" bash "$install_sh" >/dev/null 2>&1
     _assert "$agent changing the pin downgrades" test "$(cat "$lab/installed-$bin")" = 1.0.0
+
+    out="$(lab_run "$lab" env "$setting_env=2.0.0" FAKE_INSTALLED_VERSION=1.0.0 bash "$install_sh" 2>&1)" && status=0 || status=$?
+    if [[ "$status" -ne 0 && "$out" == *"requested 2.0.0"* && "$out" == *"installed 1.0.0"* ]]; then
+        _pass "$agent refuses a mismatched executable after installation"
+    else
+        _fail "$agent refuses a mismatched executable after installation" "status=$status" "$out"
+    fi
+
+    out="$(lab_run "$lab" env "$setting_env=2.0.0" bash "$REPO_ROOT/agents/$agent/verify.sh" 2>&1)" && status=0 || status=$?
+    if [[ "$status" -ne 0 && "$out" == *"requested 2.0.0"* && "$out" == *"installed 1.0.0"* ]]; then
+        _pass "$agent verification rejects an executable that differs from the pin"
+    else
+        _fail "$agent verification rejects an executable that differs from the pin" "status=$status" "$out"
+    fi
+    out="$(lab_run "$lab" env "$setting_env=1.0.0" bash "$REPO_ROOT/agents/$agent/verify.sh" 2>&1)" && status=0 || status=$?
+    if [[ "$status" -eq 0 && "$out" == *'"type":"agent-version"'* && "$out" == *'"actual":"1.0.0"'* && "$out" == *'"requested":"1.0.0"'* ]]; then
+        _pass "$agent verification records requested and actual versions"
+    else
+        _fail "$agent verification records requested and actual versions" "status=$status" "$out"
+    fi
+
+    if [[ "$agent" == claude-code ]]; then
+        out="$(lab_run "$lab" env "$setting_env=2.0.0" bash "$REPO_ROOT/agents/$agent/auth.sh" 2>&1)" && status=0 || status=$?
+        if [[ "$status" -ne 0 && "$out" == *"version mismatch"* ]]; then
+            _pass "Claude authentication refuses a different executable"
+        else
+            _fail "Claude authentication refuses a different executable" "status=$status" "$out"
+        fi
+    fi
 
     before="$(npm_installs "$lab")"
     lab_run "$lab" env -u "$setting_env" bash "$install_sh" >/dev/null 2>&1
@@ -154,17 +184,28 @@ HOME="$env_home" TAXIWAY_SET_CLAUDE_CODE_VERSION=latest claude_code_write_env tr
 _assert "unpinned Claude Code launches keep the default update policy" \
     bash -c "! grep -q DISABLE_AUTOUPDATER '$env_home/.config/taxiway/agents/claude-code.env'"
 
+HOME="$env_home" TAXIWAY_SET_CLAUDE_CODE_VERSION=2.0.0 claude_code_write_env true false
+out="$(lab_run "$tmp_dir/claude-code" env HOME="$env_home" bash -c 'source "$1"; claude_code_load_env' _ "$REPO_ROOT/agents/claude-code/env.sh" 2>&1)" && status=0 || status=$?
+if [[ "$status" -ne 0 && "$out" == *"requested 2.0.0"* ]]; then
+    _pass "Claude direct and embedded launch environments reject a different executable"
+else
+    _fail "Claude direct and embedded launch environments reject a different executable" "status=$status" "$out"
+fi
+
 echo "=== Codex self-update policy ==="
 codex_home="$tmp_dir/codex-home"
 codex_bin="$tmp_dir/codex-start-bin"
 mkdir -p "$codex_home" "$codex_bin"
 printf '#!/usr/bin/env bash\n[[ "${1:-}" == has-session ]] && exit 1\nexit 0\n' > "$codex_bin/tmux"
 printf '#!/usr/bin/env bash\n[[ "$*" == "-p /lab/work" ]] && exit 0\nexec /bin/mkdir "$@"\n' > "$codex_bin/mkdir"
+printf '#!/usr/bin/env bash\n[[ "${1:-}" == --version ]] && echo "codex-cli ${FAKE_CODEX_VERSION:-1.0.0}"\nexit 0\n' > "$codex_bin/codex"
 chmod +x "$codex_bin/"*
 codex_start() {
     PATH="$codex_bin:$PATH" HOME="$codex_home" TAXIWAY_LITELLM_API_KEY=test-key TAXIWAY_SET_MODEL=test-model \
         TAXIWAY_WORKSPACE_DIR="$tmp_dir" "$@" bash "$REPO_ROOT/orchestrators/codex/start.sh" >/dev/null
 }
+out="$(codex_start env TAXIWAY_SET_CODEX_VERSION=2.0.0 2>&1)" && status=0 || status=$?
+_assert "Codex start rejects a different executable" test "$status" -ne 0
 codex_start env TAXIWAY_SET_CODEX_VERSION=1.0.0
 _assert "pinned Codex disables update checks" \
     grep -qx 'check_for_update_on_startup = false' "$codex_home/.codex/config.toml"

@@ -26,6 +26,7 @@ claude_code_write_env() (
             fi
         done
         if claude_code_version_pinned "${TAXIWAY_SET_CLAUDE_CODE_VERSION:-}"; then
+            printf 'export TAXIWAY_PINNED_CLAUDE_CODE_VERSION=%q\n' "$TAXIWAY_SET_CLAUDE_CODE_VERSION"
             printf 'export DISABLE_AUTOUPDATER=1\n'
         fi
     } > "$settings_tmp"
@@ -70,7 +71,12 @@ PY
 
 claude_code_load_env() {
     if [[ -f "$HOME/.config/taxiway/agents/claude-code.env" ]]; then
+        unset TAXIWAY_PINNED_CLAUDE_CODE_VERSION DISABLE_AUTOUPDATER
         # shellcheck disable=SC1091
         source "$HOME/.config/taxiway/agents/claude-code.env"
+        if [[ -n "${TAXIWAY_PINNED_CLAUDE_CODE_VERSION:-}" ]]; then
+            source "$(dirname "${BASH_SOURCE[0]}")/../../infra/agents/npm-agent.sh"
+            npm_agent_verify_version claude-code claude-code-version "$TAXIWAY_PINNED_CLAUDE_CODE_VERSION" "$(claude --version | awk 'NR == 1 { print $1 }')" "$(command -v claude)" || return 1
+        fi
     fi
 }

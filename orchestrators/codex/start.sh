@@ -7,6 +7,11 @@
 
 set -euo pipefail
 
+if [[ -n "${TAXIWAY_SET_CODEX_VERSION:-}" && "$TAXIWAY_SET_CODEX_VERSION" != latest ]]; then
+    source "$(dirname "${BASH_SOURCE[0]}")/../../infra/agents/npm-agent.sh"
+    npm_agent_verify_version codex codex-version "$TAXIWAY_SET_CODEX_VERSION" "$(codex --version | awk 'NR == 1 { print $NF }')" "$(command -v codex)"
+fi
+
 # shellcheck source=../../infra/trace/events.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../../infra/trace/events.sh" 2>/dev/null || true
 # shellcheck source=../../infra/commands/steps.sh

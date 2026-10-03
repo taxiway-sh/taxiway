@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/taxiway-sh/taxiway/internal/config"
+	"github.com/taxiway-sh/taxiway/internal/phases"
 )
 
 type settingsSelection struct {
@@ -123,6 +124,12 @@ func applySettingsSelection(ctx context.Context, state *RootState, id string, re
 	if err != nil {
 		return false, err
 	}
+	versionChanged := false
+	for _, key := range []string{"claude-code-version", "codex-version"} {
+		if ref.Settings[key] != next[key] {
+			versionChanged = true
+		}
+	}
 	ref.Settings = next
 
 	exists, err := state.Driver.Exists(ctx, id)
@@ -131,6 +138,14 @@ func applySettingsSelection(ctx context.Context, state *RootState, id string, re
 	}
 	if err := state.Driver.WriteLabRef(ctx, id, *ref); err != nil {
 		return true, fmt.Errorf("persisting orchestrator settings: %w", err)
+	}
+	if versionChanged {
+		stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+		for _, phase := range []phases.Phase{phases.PhaseInstall, phases.PhaseVerify, phases.PhaseStart} {
+			if err := phases.Clear(stateDir, id, phase); err != nil {
+				return true, fmt.Errorf("invalidate changed agent version: %w", err)
+			}
+		}
 	}
 	return true, nil
 }

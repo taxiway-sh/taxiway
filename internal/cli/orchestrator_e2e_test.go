@@ -144,7 +144,7 @@ func testE2EOrchestratorPrepareRun(t *testing.T, orch string) {
 	})
 
 	runE2EStep(t, fmt.Sprintf("taxiway:prepare[--type=%s]", orch), func(t *testing.T) {
-		runE2ECommand(t, root, tb, "prepare", lab, "--type", orch)
+		runE2ECommand(t, root, tb, "prepare", lab, "--type", orch, "--set", e2eHarnessPin(orch))
 		configureE2EFixtureWorkspace(t, state, id)
 		runE2EAssert(t, "assert:phase-verified", func(t *testing.T) {
 			assertE2EPhase(t, stateDir, id, phases.PhaseVerify)
@@ -301,7 +301,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 
 	runE2EScriptDryRunStep(t, "taxiway:install[--dry-run]", root, tb, state, stateDir, id, dryRunLabels.Install, "install", lab)
 	runE2EStep(t, "taxiway:install", func(t *testing.T) {
-		runE2ECommand(t, root, tb, "install", lab, "--set", "model="+expectations.model)
+		runE2ECommand(t, root, tb, "install", lab, "--set", "model="+expectations.model, "--set", e2eHarnessPin(orch))
 		runE2EAssert(t, "assert:phase-installed", func(t *testing.T) {
 			assertE2EPhase(t, stateDir, id, phases.PhaseInstall)
 		})
@@ -569,7 +569,7 @@ func testE2EOrchestratorUp(t *testing.T, orch string) {
 	})
 
 	runE2EStep(t, fmt.Sprintf("taxiway:up[--type=%s,--repo=<fixture>,--skip-auth-check]", orch), func(t *testing.T) {
-		runE2ECommand(t, root, tb, "up", lab, "--type", orch, "--repo", e2eFixtureRepoURL, "--skip-auth-check", "--set", "model="+expectations.model)
+		runE2ECommand(t, root, tb, "up", lab, "--type", orch, "--repo", e2eFixtureRepoURL, "--skip-auth-check", "--set", "model="+expectations.model, "--set", e2eHarnessPin(orch))
 		runE2EAssert(t, "assert:phase-started", func(t *testing.T) {
 			assertE2EPhase(t, stateDir, id, phases.PhaseStart)
 		})
@@ -1021,9 +1021,36 @@ func assertE2EAgentWorkspaceTrusted(t *testing.T, state *RootState, id, agent, w
 		agent, workspacePath, stdout.String(), stderr.String())
 }
 
+// Use published, fixed harness releases so lifecycle scenarios verify real pins.
+func e2eHarnessPin(orch string) string {
+	if orch == "codex" {
+		return "codex-version=0.160.0"
+	}
+	return "claude-code-version=2.1.289"
+}
+
 func assertE2EStartedAgents(t *testing.T, state *RootState, id, orch, stage string) {
 	t.Helper()
 	expectations := e2eExpectations(t, orch)
+	runE2EStep(t, "agents:versions@"+stage, func(t *testing.T) {
+		agent, requested, _ := strings.Cut(e2eHarnessPin(orch), "=")
+		agent = strings.TrimSuffix(agent, "-version")
+		ref, ok, err := state.Driver.ReadLabRef(context.Background(), id)
+		require.NoError(t, err)
+		require.True(t, ok)
+		require.Equal(t, requested, ref.Settings[agent+"-version"])
+		versions, err := readAgentVersions(config.StateDir(state.Flags.StateDir, state.RepoDir), id)
+		require.NoError(t, err)
+		require.Equal(t, requested, versions[agent].Actual)
+		require.NotEmpty(t, versions[agent].Executable)
+		var stdout, stderr bytes.Buffer
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		res, err := state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: []string{versions[agent].Executable, "--version"}, Stdout: &stdout, Stderr: &stderr})
+		require.NoError(t, err)
+		require.Zero(t, res.ExitCode, stderr.String())
+		require.Contains(t, stdout.String(), requested)
+	})
 	runE2EStep(t, "models:configuration@"+stage, func(t *testing.T) {
 		runE2EAssert(t, "assert:gateway-provider-models", func(t *testing.T) {
 			assertE2EGatewayModels(t, state, id, orch)
@@ -1069,9 +1096,10 @@ func assertE2EClaudeEnvironment(t *testing.T, state *RootState, id, socket, sess
 	require.NoError(t, err)
 	require.True(t, ok)
 	expected, err := json.Marshal(map[string]any{
-		"model":   e2eExpectations(t, ref.Orch).model,
-		"models":  e2eGatewayModelNames(t, ref.Orch),
-		"aliases": e2eClaudeModelAliases(t),
+		"model":           e2eExpectations(t, ref.Orch).model,
+		"harness_version": ref.Settings["claude-code-version"],
+		"models":          e2eGatewayModelNames(t, ref.Orch),
+		"aliases":         e2eClaudeModelAliases(t),
 	})
 	require.NoError(t, err)
 	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
@@ -1093,6 +1121,8 @@ env = dict(entry.split(b'=', 1) for entry in (pathlib.Path('/proc') / pane[0] / 
 assert env.get(b'ENABLE_TOOL_SEARCH') == b'true', 'Claude lost tool search default'
 assert env.get(b'ENABLE_CLAUDEAI_MCP_SERVERS') == b'false', 'Claude must disable connector import by default'
 expected = json.loads(sys.argv[3])
+if expected.get('harness_version') not in ('', None, 'latest'):
+    assert env.get(b'DISABLE_AUTOUPDATER') == b'1', 'pinned Claude process lost update suppression'
 args = (pathlib.Path('/proc') / pane[0] / 'cmdline').read_bytes().split(b'\0')
 assert b'--model' in args, 'Claude lost explicit model argument'
 assert args[args.index(b'--model')+1].decode() == expected['model'], 'Claude changed principal model'

@@ -23,6 +23,7 @@ npm_agent_install() {
   current="$("$@")"
   if [[ -n "$current" && ( "$requested" == "latest" || "$current" == "$requested" ) ]]; then
     log "$agent already installed (version: $current) - skipping"
+    npm_agent_verify_version "$agent" "$setting" "$requested" "$current" "$(command -v "${agent/claude-code/claude}")"
     return 0
   fi
 
@@ -47,5 +48,26 @@ npm_agent_install() {
   local installed
   installed="$("$@")"
   [[ -n "$installed" ]] || { printf '%s not found after install\n' "$agent" >&2; return 1; }
+  if [[ "$requested" != latest && "$installed" != "$requested" ]]; then
+    printf '%s version mismatch: requested %s, installed %s; check the executable on PATH and rerun: taxiway install %s --set %s=%s\n' "$agent" "$requested" "$installed" "${TAXIWAY_LAB:-<lab>}" "$setting" "$requested" >&2
+    return 1
+  fi
   log "Installed: $agent $installed"
+  npm_agent_verify_version "$agent" "$setting" "$requested" "$installed" "$(command -v "${agent/claude-code/claude}")"
+}
+
+# npm_agent_verify_version <agent> <setting> <requested> <actual> <executable>
+# Report the executable actually resolved by the launch PATH, not npm metadata.
+npm_agent_verify_version() {
+  local agent="$1" setting="$2" requested="$3" actual="$4" executable="$5"
+  [[ -n "$actual" ]] || { printf '%s executable did not report a version\n' "$agent" >&2; return 1; }
+  if [[ "$requested" != latest && "$actual" != "$requested" ]]; then
+    printf '%s version mismatch: requested %s, installed %s at %s; rerun: taxiway install %s --set %s=%s\n' "$agent" "$requested" "$actual" "$executable" "${TAXIWAY_LAB:-<lab>}" "$setting" "$requested" >&2
+    return 1
+  fi
+  printf '%s version: requested %s, installed %s at %s\n' "$agent" "$requested" "$actual" "$executable"
+  python3 - "$agent" "$requested" "$actual" "$executable" <<'VERSION_PY'
+import json, sys
+print('LAB_AGENT_EVENT ' + json.dumps(dict(type='agent-version', agent=sys.argv[1], requested=sys.argv[2], actual=sys.argv[3], executable=sys.argv[4]), separators=(',', ':')))
+VERSION_PY
 }

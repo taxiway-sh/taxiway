@@ -6,6 +6,8 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/../../infra/trace/events.sh" 2>/dev/null || true
 # shellcheck source=../../infra/commands/steps.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../../infra/commands/steps.sh"
+# shellcheck source=../../infra/agents/npm-agent.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../infra/agents/npm-agent.sh"
 
 log()  { printf '\n\033[1;34m[codex-agent-verify]\033[0m %s\n' "$*"; }
 pass() { printf '  \033[1;32mOK\033[0m   %s\n' "$*"; }
@@ -43,6 +45,7 @@ version_out="$(mktemp -t codex-version.XXXXXX)"
 "$CODEX" --version >"$version_out" 2>&1 \
   || { cat "$version_out" >&2; rm -f "$version_out"; fail "codex --version failed"; }
 pass "$(tr '\n' ' ' <"$version_out")"
+npm_agent_verify_version codex codex-version "${TAXIWAY_SET_CODEX_VERSION:-latest}" "$(awk 'NR == 1 { print $NF }' "$version_out")" "$CODEX"
 rm -f "$version_out"
 
 log "codex --help"

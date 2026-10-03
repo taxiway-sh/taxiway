@@ -91,3 +91,9 @@ OAuth credentials are available, without making an API call.
 ```bash
 taxiway describe codex
 ```
+
+`taxiway list <lab>` shows the requested harness version and the last observed
+installed release and executable path. Installation and `taxiway verify <lab>`
+refresh that observation in the lab's `agent-versions.json` state; the requested
+version remains in its saved settings. Verification fails if the executable on
+the launch PATH differs from an exact pin.
