@@ -2301,3 +2301,20 @@ func TestVersionChangeFailureInvalidatesCachedInstallForResume(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, mock.ExecLog, "install.sh")
 }
+
+func TestVersionChangeUsesPersistedLabDriver(t *testing.T) {
+	_, state, _, _, _ := buildUpTestRoot(t)
+	bin := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(bin, "docker"), []byte("#!/bin/sh\nexit 0\n"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(bin, "limactl"), []byte("#!/bin/sh\nexit 1\n"), 0755))
+	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
+	state.Driver = driver.NewLimaDriver(state.Flags.StateDir)
+	ref := config.LabRef{Lab: "pinned", Orch: "codex", Driver: "docker", Settings: map[string]string{"codex-version": "0.159.0"}}
+	require.NoError(t, config.WriteLabRef(state.Flags.StateDir, idName(ref.Lab), ref))
+	_, err := applySettingsFromFlags(context.Background(), state, idName(ref.Lab), &ref, []string{"codex-version=0.160.0"}, nil)
+	require.NoError(t, err)
+	saved, ok, err := config.ReadLabRef(state.Flags.StateDir, idName(ref.Lab))
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, "0.160.0", saved.Settings["codex-version"])
+}

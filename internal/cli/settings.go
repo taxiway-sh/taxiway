@@ -132,11 +132,15 @@ func applySettingsSelection(ctx context.Context, state *RootState, id string, re
 	}
 	ref.Settings = next
 
-	exists, err := state.Driver.Exists(ctx, id)
+	d, err := driverForRef(state, *ref)
+	if err != nil {
+		return true, err
+	}
+	exists, err := d.Exists(ctx, id)
 	if err != nil || !exists {
 		return true, err
 	}
-	if err := state.Driver.WriteLabRef(ctx, id, *ref); err != nil {
+	if err := d.WriteLabRef(ctx, id, *ref); err != nil {
 		return true, fmt.Errorf("persisting orchestrator settings: %w", err)
 	}
 	if versionChanged {
