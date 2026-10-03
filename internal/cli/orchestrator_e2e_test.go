@@ -1274,6 +1274,7 @@ func assertE2ERuntimeDestroyed(t *testing.T, state *RootState) {
 	proxy := state.proxyRuntime()
 
 	require.Equal(t, "missing", e2eDockerContainerState(t, proxy.Container), "proxy must be removed")
+	require.False(t, e2eDockerNetworkExists(t, proxy.DockerNetwork()), "proxy network must be removed")
 	require.Empty(t, e2eDockerNames("container", runtime.ComposeProject+"-"), "observability containers must be removed")
 	require.Empty(t, e2eDockerNames("volume", runtime.ComposeProject+"_"), "observability volumes must be removed")
 	require.False(t, e2eDockerNetworkExists(t, runtime.DockerNetwork()), "observability network must be removed")

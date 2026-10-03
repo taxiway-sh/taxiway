@@ -1288,6 +1288,9 @@ func destroyTaxiwayRuntime(w io.Writer, state *RootState) error {
 	if _, err := removeProxyContainer(state); err != nil {
 		return err
 	}
+	if err := removeProxyDockerNetwork(proxy); err != nil {
+		return err
+	}
 	if err := os.RemoveAll(proxy.StateDir); err != nil {
 		return fmt.Errorf("remove proxy state: %w", err)
 	}
