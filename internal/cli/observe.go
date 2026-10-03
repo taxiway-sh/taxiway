@@ -93,15 +93,7 @@ type observabilityRuntime struct {
 }
 
 type observabilityRuntimeState struct {
-	Initialized          bool `json:"initialized,omitempty"`
-	WorkerPort           int  `json:"worker_port,omitempty"`
-	LangfusePort         int  `json:"langfuse_port,omitempty"`
-	ClickHouseHTTPPort   int  `json:"clickhouse_http_port,omitempty"`
-	ClickHouseNativePort int  `json:"clickhouse_native_port,omitempty"`
-	MinIOPort            int  `json:"minio_port,omitempty"`
-	MinIOConsolePort     int  `json:"minio_console_port,omitempty"`
-	RedisPort            int  `json:"redis_port,omitempty"`
-	PostgresPort         int  `json:"postgres_port,omitempty"`
+	Initialized bool `json:"initialized,omitempty"`
 }
 
 func (state *RootState) resolveObservabilityRuntime() (observabilityRuntime, error) {
@@ -166,15 +158,6 @@ func readDevObservabilityRuntimeState(stateDir string) (observabilityRuntimeStat
 		return state, false, fmt.Errorf("read observability runtime state: %w", err)
 	}
 	return state, true, nil
-}
-
-func applyObservabilityRuntimeState(runtime *observabilityRuntime, state observabilityRuntimeState) {
-	_ = runtime
-	_ = state
-}
-
-func applyDefaultObservabilityRuntimePorts(runtime *observabilityRuntime) {
-	_ = runtime
 }
 
 func ensureDevObservabilityRuntimeState(runtime *observabilityRuntime) error {
@@ -252,8 +235,6 @@ func (state *RootState) ensureObservabilityRuntime() (observabilityRuntime, erro
 		if err := ensureDevObservabilityRuntimeState(&runtime); err != nil {
 			return observabilityRuntime{}, err
 		}
-	} else {
-		applyDefaultObservabilityRuntimePorts(&runtime)
 	}
 	state.Observability = runtime
 	return runtime, nil
