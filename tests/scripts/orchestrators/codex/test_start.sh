@@ -14,8 +14,6 @@ workspace="$tmp_dir/workspace"
 mkdir -p "$home/.codex" "$fake_bin" "$workspace"
 
 cat > "$home/.codex/config.toml" <<EOF
-approval_policy = "on-request"
-sandbox_mode = "read-only"
 [projects."$workspace"]
 trust_level = "trusted"
 marker = "preserve-me"
@@ -49,6 +47,7 @@ sys.exit(1 if sys.argv[1:2] == ["resume"] else 0)
 EOF
 chmod +x "$fake_bin/codex"
 
+for _ in 1 2; do
 TEST_RESULT="$tmp_dir/commands.jsonl" \
 PATH="$fake_bin:$PATH" \
 HOME="$home" \
@@ -57,6 +56,7 @@ TAXIWAY_LITELLM_BASE_URL="http://gateway.test:4000" \
 TAXIWAY_SET_MODEL="test-selected-codex-model" \
 TAXIWAY_WORKSPACE_DIR="$workspace" \
 bash "$START_SH" >/dev/null
+done
 
 python3 - "$home/.codex/config.toml" "$workspace" "$tmp_dir/commands.jsonl" <<'PY'
 import sys
@@ -67,7 +67,7 @@ with open(sys.argv[1], "rb") as config_file:
     config = tomllib.load(config_file)
 
 commands = [json.loads(line) for line in open(sys.argv[3])]
-assert commands == [["resume", "--last", "--dangerously-bypass-approvals-and-sandbox"], ["--dangerously-bypass-approvals-and-sandbox"]], commands
+assert commands == [["resume", "--last", "--dangerously-bypass-approvals-and-sandbox"], ["--dangerously-bypass-approvals-and-sandbox"]] * 2, commands
 
 assert config["projects"][sys.argv[2]]["trust_level"] == "trusted"
 assert config["projects"][sys.argv[2]]["marker"] == "preserve-me"

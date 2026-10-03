@@ -107,4 +107,4 @@ Claude Code runs with `--dangerously-skip-permissions` inside the guest.
 The launcher suppresses the separate initial bypass warning; authentication
 and onboarding remain independent prerequisites.
 
-See [guest capabilities and existing-lab migration](../contributing/live-tests.md#autonomous-guest-permissions).
+See [guest capabilities](../contributing/live-tests.md#guest-capabilities).

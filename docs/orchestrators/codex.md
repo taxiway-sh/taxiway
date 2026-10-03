@@ -105,4 +105,4 @@ Codex runs with Full Access inside the guest: `approval_policy = "never"` and
 resumed interactive launches also explicitly pass
 `--dangerously-bypass-approvals-and-sandbox` to override saved session restrictions.
 
-See [guest capabilities and existing-lab migration](../contributing/live-tests.md#autonomous-guest-permissions).
+See [guest capabilities](../contributing/live-tests.md#guest-capabilities).

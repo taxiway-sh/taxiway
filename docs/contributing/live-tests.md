@@ -231,7 +231,7 @@ When removal of the reference lab is requested after validation:
 direnv exec . ./taxiway rm test-claude --yes
 ```
 
-## Autonomous guest permissions
+## Guest capabilities
 
 Taxiway orchestrators default to Full Access/YOLO inside their guests. Codex
 writes `approval_policy = "never"` and `sandbox_mode = "danger-full-access"`
@@ -264,13 +264,3 @@ request privileged mode. Agents can use passwordless sudo inside the guest.
 Network access and provisioned credentials can reach external services, and
 agents can modify the writable host artifact directories. Full Access does
 not remove those capabilities or isolate their external effects.
-
-For existing labs, update the Taxiway runtime assets and explicitly run
-`taxiway start <lab>` when ready to adopt the new defaults. This restarts the
-orchestrator, rewrites only Codex's guest permission defaults while preserving
-workspace trust and other configuration, and applies Claude/Gas Town launch
-flags. Existing active processes are not rewritten in place. Gas Town's new
-role and handoff launches use the updated launcher, so stop its roles before
-updating runtime assets if its current execution must remain unchanged.
-No host client settings or authentication files are changed. Recreating a
-disposable lab with the new runtime is the cleanest migration for old scenarios.

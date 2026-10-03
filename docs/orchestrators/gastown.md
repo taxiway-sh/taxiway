@@ -129,4 +129,4 @@ Gas Town requires YOLO/bypass for every automated role. Taxiway preserves
 `--dangerously-skip-permissions` during daemon launches and handoffs;
 this adapter does not offer a restrictive permission mode.
 
-See [guest capabilities and existing-lab migration](../contributing/live-tests.md#autonomous-guest-permissions).
+See [guest capabilities](../contributing/live-tests.md#guest-capabilities).

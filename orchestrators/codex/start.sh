@@ -102,8 +102,8 @@ if [ -f "$CODEX_CONFIG" ]; then
         /^model_provider = / { next }
         /^model = / { next }
         !top && /^check_for_update_on_startup = / { next }
-        /^approval_policy[[:space:]]*=/ { next }
-        /^sandbox_mode[[:space:]]*=/ { next }
+        /^approval_policy = / { next }
+        /^sandbox_mode = / { next }
         { print }
     ' "$CODEX_CONFIG" >> "$tmp_config"
 fi
