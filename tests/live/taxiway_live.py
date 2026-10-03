@@ -145,11 +145,16 @@ def temporary_lab(orch, *, auth_lab=None, driver="docker", settings=None,
             command([taxiway, "start", name])
         yield name
     finally:
+        scenario_failed = sys.exc_info()[0] is not None
         # No destroy, prune, or reference-lab removal. Also clean partial setup.
         try:
             command([taxiway, "rm", name, "--yes"], timeout=180)
         except (RuntimeError, OSError, subprocess.TimeoutExpired):
-            raise RuntimeError(f"Cleanup failed for {name}; remove that lab with taxiway rm --yes") from None
+            message = f"Cleanup failed for {name}; remove that lab with taxiway rm --yes"
+            if scenario_failed:
+                print(message, file=sys.stderr)
+            else:
+                raise RuntimeError(message) from None
 
 
 def main():

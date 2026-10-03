@@ -7,7 +7,9 @@ from litellm.llms.chatgpt.responses.transformation import ChatGPTResponsesAPICon
 # LiteLLM 1.103.2 filters this supported Responses parameter out of ChatGPT
 # requests. Codex Responses Lite requires the client's explicit false value.
 # Remove this shim once the shipped image passes the protocol test without it.
-_original_transform = ChatGPTResponsesAPIConfig.transform_responses_api_request
+_original_transform = getattr(ChatGPTResponsesAPIConfig, "transform_responses_api_request", None)
+if not callable(_original_transform):
+    raise RuntimeError("Codex shim incompatible with this LiteLLM version; see gateway protocol test")
 
 
 def _preserve_parallel_tool_calls(self, model, input, response_api_optional_request_params,

@@ -10,7 +10,9 @@ from litellm.integrations.custom_logger import CustomLogger
 from litellm.llms.anthropic import common_utils
 
 
-_original_is_empty = common_utils.is_empty_thinking_block
+_original_is_empty = getattr(common_utils, "is_empty_thinking_block", None)
+if not callable(_original_is_empty):
+    raise RuntimeError("Anthropic shim incompatible with this LiteLLM version; see gateway protocol test")
 
 
 def _is_empty_unsigned(block):
