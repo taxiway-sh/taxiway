@@ -22,6 +22,7 @@ import (
 
 	"github.com/taxiway-sh/taxiway/internal/config"
 	"github.com/taxiway-sh/taxiway/internal/driver"
+	"github.com/taxiway-sh/taxiway/internal/modelcatalog"
 )
 
 // observabilityDir returns the absolute path to the bundled observability assets under
@@ -287,18 +288,11 @@ func (runtime observabilityRuntime) ComposeEnv(proxy proxyRuntime) []string {
 	return env
 }
 
-type liteLLMModelCatalog struct {
-	Models []liteLLMModelDefinition `yaml:"models"`
-}
+// modelNow is shared by catalog selection and display; tests can freeze lifecycle time.
+var modelNow = time.Now
 
-type liteLLMModelDefinition struct {
-	Name                 string `yaml:"name"`
-	Provider             string `yaml:"provider"`
-	Upstream             string `yaml:"upstream"`
-	APIBase              string `yaml:"api_base,omitempty"`
-	APIKey               string `yaml:"api_key,omitempty"`
-	API                  string `yaml:"api,omitempty"`
-	ForwardClientHeaders bool   `yaml:"forward_client_headers,omitempty"`
+func liteLLMAnthropicProtocolAssetPath(state *RootState) string {
+	return filepath.Join(state.RepoDir, "infra", "gateway", "litellm", "callbacks", "anthropic_protocol.py")
 }
 
 type liteLLMGeneratedConfig struct {
@@ -376,6 +370,7 @@ func renderLiteLLMConfig(state *RootState, includeCodexModels bool, enableCodexS
 
 	var models []liteLLMGeneratedModelEntry
 	var forwardHeaders []string
+	hasAnthropic := false
 	selected := map[string]bool{}
 	for _, name := range selectedModels {
 		if name != "" {
@@ -399,7 +394,12 @@ func renderLiteLLMConfig(state *RootState, includeCodexModels bool, enableCodexS
 			continue
 		}
 		if selected[model.Name] {
+			if err := model.SelectionError(modelNow()); err != nil {
+				return nil, err
+			}
 			matchedSelected[model.Name] = true
+		} else if model.StatusAt(modelNow()) != "active" {
+			continue
 		}
 		if model.Provider == "chatgpt" && !includeCodexModels && len(selected) == 0 {
 			continue
@@ -416,6 +416,7 @@ func renderLiteLLMConfig(state *RootState, includeCodexModels bool, enableCodexS
 			entry.ModelInfo = &liteLLMGeneratedModelInfo{Mode: model.API}
 		}
 		models = append(models, entry)
+		hasAnthropic = hasAnthropic || model.Provider == "anthropic"
 		if model.ForwardClientHeaders {
 			addForwardHeader(model.Name)
 		}
@@ -427,6 +428,9 @@ func renderLiteLLMConfig(state *RootState, includeCodexModels bool, enableCodexS
 	}
 
 	callbacks := []string{"langfuse_otel"}
+	if hasAnthropic {
+		callbacks = append(callbacks, "anthropic_protocol.proxy_handler_instance")
+	}
 	if enableCodexSessionMapper {
 		callbacks = append([]string{"codex_session_mapper.proxy_handler_instance"}, callbacks...)
 	}
@@ -457,12 +461,8 @@ func renderLiteLLMConfig(state *RootState, includeCodexModels bool, enableCodexS
 	return out, nil
 }
 
-func parseLiteLLMModelCatalog(data []byte) (liteLLMModelCatalog, error) {
-	var catalog liteLLMModelCatalog
-	if err := yaml.Unmarshal(data, &catalog); err != nil {
-		return liteLLMModelCatalog{}, fmt.Errorf("parsing LiteLLM model catalog: %w", err)
-	}
-	return catalog, nil
+func parseLiteLLMModelCatalog(data []byte) (modelcatalog.Catalog, error) {
+	return modelcatalog.Parse(data)
 }
 
 func ensureLiteLLMChatGPTAuth(stateDir string, required bool) (bool, error) {
@@ -487,7 +487,18 @@ func ensureLiteLLMChatGPTAuth(stateDir string, required bool) (bool, error) {
 
 	dst := liteLLMChatGPTAuthStatePath(stateDir)
 	if dstInfo, statErr := os.Stat(dst); statErr == nil && !sourceInfo.ModTime().After(dstInfo.ModTime()) {
-		return true, nil
+		// LiteLLM can replace an invalid cache with device-login state. Its
+		// modification time alone does not mean usable credentials exist.
+		cached, readErr := os.ReadFile(dst)
+		var tokens struct {
+			AccessToken  string `json:"access_token"`
+			RefreshToken string `json:"refresh_token"`
+			IDToken      string `json:"id_token"`
+		}
+		if readErr == nil && json.Unmarshal(cached, &tokens) == nil &&
+			tokens.AccessToken != "" && tokens.RefreshToken != "" && tokens.IDToken != "" {
+			return true, nil
+		}
 	}
 
 	data, err := os.ReadFile(sourcePath)

@@ -166,6 +166,7 @@ GT_DAEMON_STATUS=1 \
 GT_DAEMON_STATUS_OUTPUT="Daemon is not running" \
 GT_DAEMON_LOGS_OUTPUT="Heartbeat complete (#1)" \
 TAXIWAY_HQ_DIR="$hq" \
+TAXIWAY_SET_MODEL="test-selected-claude-model" \
 TAXIWAY_LITELLM_API_KEY="test-key" \
 TAXIWAY_RIG_NAME="demo_rig" \
 TAXIWAY_CREW_NAME="demo_crew" \
@@ -181,7 +182,7 @@ settings = json.load(open(sys.argv[2]))
 agent = registry["agents"]["claude-code-litellm"]
 assert agent["provider"] == "claude"
 assert agent["command"] == "/lab/orchestrators/gastown/launch-agent.sh"
-assert agent["args"] == [sys.argv[3], "claude", "--model", "claude-opus-4-8", "--dangerously-skip-permissions"]
+assert agent["args"] == [sys.argv[3], "claude", "--model", "test-selected-claude-model", "--dangerously-skip-permissions"]
 assert agent["process_names"] == ["claude", "node"]
 assert "TAXIWAY_WORKSPACE_TRUST_ROOT" not in agent["env"]
 assert settings["default_agent"] == "claude-code-litellm"
@@ -207,7 +208,7 @@ for value in false true ''; do
   PATH="$fake_bin:$PATH" HOME="$home" GT_LOG="$gt_log" TMUX_LOG="$tmux_log" \
   GT_DAEMON_STATUS_AFTER_START_OUTPUT="Daemon is running. Last heartbeat: now" \
   GT_DAEMON_LOGS_OUTPUT="Heartbeat complete (#1)" \
-  TAXIWAY_HQ_DIR="$hq" TAXIWAY_LITELLM_API_KEY="test-key" \
+  TAXIWAY_HQ_DIR="$hq" TAXIWAY_LITELLM_API_KEY="test-key" TAXIWAY_SET_MODEL="test-selected-claude-model" \
   TAXIWAY_SET_TOOL_SEARCH="$value" TAXIWAY_SET_CLAUDEAI_MCP_SERVERS="$value" \
   bash "$START_SH" >/dev/null
   if python3 - "$START_SH" "$home" "$hq" "$value" <<'PY'
@@ -260,6 +261,7 @@ GT_DAEMON_STATUS=1 \
 GT_DAEMON_STATUS_OUTPUT="Daemon is not running" \
 GT_DAEMON_LOGS_OUTPUT="Heartbeat complete (#1)" \
 TAXIWAY_HQ_DIR="$hq_failure" \
+TAXIWAY_SET_MODEL="test-selected-claude-model" \
 TAXIWAY_LITELLM_API_KEY="test-key" \
 TAXIWAY_RIG_NAME="demo_rig" \
 TAXIWAY_CREW_NAME="demo_crew" \

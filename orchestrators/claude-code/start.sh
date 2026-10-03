@@ -29,7 +29,7 @@ log()  { printf '\n\033[1;34m[claude-code-start]\033[0m %s\n' "$*"; }
 pass() { printf '  \033[1;32mOK\033[0m   %s\n' "$*"; }
 
 SESSION="claude-code"
-CLAUDE_CODE_MODEL="${TAXIWAY_SET_MODEL:-claude-opus-4-8}"
+CLAUDE_CODE_MODEL="${TAXIWAY_SET_MODEL:?Missing model: start this orchestrator through Taxiway}"
 TAXIWAY_LITELLM_BASE_URL="${TAXIWAY_LITELLM_BASE_URL:-http://${TAXIWAY_LAB:-lab}.litellm.internal:4000}"
 
 if [ -z "${TAXIWAY_LITELLM_API_KEY:-}" ]; then

@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -732,17 +733,17 @@ func TestObserveLiteLLMAssets_OmitsCodexSessionMapperWhenDisabled(t *testing.T) 
 }
 
 func TestObserveLiteLLMAssets_ExposeAgentNativeModelNames(t *testing.T) {
-	repoDir := filepath.Join("..", "..")
+	state := providerModelCatalogState(t)
 
-	config, err := renderLiteLLMConfig(&RootState{RepoDir: repoDir}, true, true, nil)
+	config, err := renderLiteLLMConfig(state, true, true, nil)
 	require.NoError(t, err)
 	configText := string(config)
 
 	for _, modelName := range []string{
-		"model_name: gpt-5.5",
-		"model_name: gpt-5.4",
-		"model_name: gpt-5.4-mini",
-		"model_name: gpt-5.3-codex-spark",
+		"model_name: gpt-6.1-sol",
+		"model_name: gpt-6-astra",
+		"model_name: gpt-6-luna",
+		"model_name: gpt-5.6-sol",
 		"model_name: claude-opus-4-8",
 		"model_name: claude-sonnet-4-6",
 		"model_name: claude-haiku-4-5-20251001",
@@ -1513,6 +1514,36 @@ func TestEnsureLiteLLMChatGPTAuth_ConvertsCodexAuthFile(t *testing.T) {
 	assert.Contains(t, string(data), `"refresh_token":"refresh"`)
 	assert.Contains(t, string(data), `"id_token":"id"`)
 	assert.Contains(t, string(data), `"account_id":"account"`)
+}
+
+func TestEnsureLiteLLMChatGPTAuth_ValidatesNewerCache(t *testing.T) {
+	for _, tc := range []struct {
+		name, cached, want string
+	}{
+		{"device-login-only", `{"device_code_requested_at":123}`, "host-access"},
+		{"malformed", `{`, "host-access"},
+		{"refreshed", `{"access_token":"refreshed-access","refresh_token":"refresh","id_token":"id"}`, "refreshed-access"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			source := filepath.Join(home, ".codex", "auth.json")
+			stateDir := filepath.Join(home, "auth")
+			cache := liteLLMChatGPTAuthStatePath(stateDir)
+			require.NoError(t, os.MkdirAll(filepath.Dir(source), 0o700))
+			require.NoError(t, os.MkdirAll(filepath.Dir(cache), 0o700))
+			require.NoError(t, os.WriteFile(source, []byte(`{"tokens":{"access_token":"host-access","refresh_token":"refresh","id_token":"id"}}`), 0o600))
+			require.NoError(t, os.WriteFile(cache, []byte(tc.cached), 0o600))
+			older := time.Now().Add(-time.Hour)
+			require.NoError(t, os.Chtimes(source, older, older))
+			enabled, err := ensureLiteLLMChatGPTAuth(stateDir, true)
+			require.NoError(t, err)
+			require.True(t, enabled)
+			data, err := os.ReadFile(cache)
+			require.NoError(t, err)
+			assert.Contains(t, string(data), tc.want)
+		})
+	}
 }
 
 func TestEnsureLiteLLMConfigFile_OverwritesGeneratedLabConfig(t *testing.T) {

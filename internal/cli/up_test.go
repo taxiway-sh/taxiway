@@ -407,6 +407,43 @@ func TestUp_SetPersistsAndInjectsEnv(t *testing.T) {
 	require.Equal(t, "1.1.0", installEnv["TAXIWAY_SET_VERSION"])
 }
 
+func TestInstall_ResolvesManifestDefaultsWithoutPersistingThem(t *testing.T) {
+	for _, selected := range []string{"", "explicit-model"} {
+		t.Run(selected, func(t *testing.T) {
+			root, state, mock, stdout, stderr := buildUpTestRoot(t)
+			setManifest(t, state, "gastown", `name: gastown
+settings:
+  - name: model
+    default: manifest-model
+`)
+			ref := config.LabRef{Lab: "gastown", Orch: "gastown", Driver: "mock"}
+			if selected != "" {
+				ref.Settings = map[string]string{"model": selected}
+			}
+			require.NoError(t, mock.Create(context.Background(), idName(ref.Lab), driver.CreateOptions{}))
+			require.NoError(t, mock.WriteLabRef(context.Background(), idName(ref.Lab), ref))
+			_, _, err := execUpRoot(t, root, stdout, stderr, "install", ref.Lab)
+			require.NoError(t, err)
+			want := selected
+			if want == "" {
+				want = "manifest-model"
+			}
+			found := false
+			for i, script := range mock.ExecLog {
+				if script == "install.sh" {
+					found = true
+					require.Equal(t, want, mock.ExecEnvLog[i]["TAXIWAY_SET_MODEL"])
+				}
+			}
+			require.True(t, found)
+			stored, ok, err := mock.ReadLabRef(context.Background(), idName(ref.Lab))
+			require.NoError(t, err)
+			require.True(t, ok)
+			require.Equal(t, ref.Settings, stored.Settings)
+		})
+	}
+}
+
 func TestInstall_ReusesPersistedSet(t *testing.T) {
 	root, _, mock, stdout, stderr := buildUpTestRoot(t)
 	ref := config.LabRef{
@@ -2141,7 +2178,7 @@ func TestBuildBaseEnv_CrewName_FailFast(t *testing.T) {
 			Repo: "https://github.com/acme/myrepo",
 		},
 	}
-	_, err := buildBaseEnv(ref)
+	_, err := buildBaseEnv(t.TempDir(), ref)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "injected: cannot resolve username")
 }

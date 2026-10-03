@@ -23,7 +23,7 @@ log()  { printf '\n\033[1;34m[codex-start]\033[0m %s\n' "$*"; }
 pass() { printf '  \033[1;32mOK\033[0m   %s\n' "$*"; }
 
 SESSION="codex"
-CODEX_MODEL="${TAXIWAY_SET_MODEL:-gpt-5.5}"
+CODEX_MODEL="${TAXIWAY_SET_MODEL:?Missing model: start this orchestrator through Taxiway}"
 TAXIWAY_LITELLM_BASE_URL="${TAXIWAY_LITELLM_BASE_URL:-http://${TAXIWAY_LAB:-lab}.litellm.internal:4000}"
 TAXIWAY_LITELLM_OPENAI_BASE_URL="${TAXIWAY_LITELLM_BASE_URL%/}/v1"
 TAXIWAY_LITELLM_AGENT_ID="${TAXIWAY_LITELLM_AGENT_ID:-${TAXIWAY_AGENT:-codex}}"

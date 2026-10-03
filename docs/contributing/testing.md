@@ -14,6 +14,7 @@ To verify a published release across platforms and drivers, see
 | Unit | Go behavior, driver commands, configuration, and phase edge cases | Go; no Docker or Lima |
 | Shell scripts | Installer and runtime script contracts | Local shell tools; no running lab |
 | End-to-end | Orchestrator lifecycle using source-tree runtime assets | Go and a running Docker daemon |
+| Live | Authenticated agent requests and feature-specific scenarios in isolated labs | Python, Docker/Lima and a reusable reference login |
 | Site | Documentation routing, navigation, rendering, and landing page content | Node.js and the site dependencies |
 
 Unit and shell tests provide quick feedback during development. End-to-end
@@ -80,6 +81,22 @@ LAB_NO_DOCKER=1 make test-e2e-only
 ```
 
 A skipped test is not evidence that the lifecycle works.
+
+### Authenticated live scenarios
+
+The opt-in scripts under `tests/live/` cover behavior requiring real agent
+requests. The [live testing guide](live-tests.md) explains how to authenticate
+Claude once, propagate that login to automatically created labs, and reuse the
+shared helpers for new features. It also documents the command-line smoke
+runner and cleanup ownership. The [model gateway tests](model-gateway-tests.md)
+provide existing principal/subagent scenarios for Claude and Codex.
+
+Live tests consume account usage and run separately from ordinary unit tests,
+offline protocol tests and unattended CI. Their agent instructions are in
+`tests/live/AGENTS.md`. Persistent manual-validation labs use the generic names
+`test-claude`, `test-codex` and `test-gastown` within a worktree context. Keep
+them available for manual checks after automated validation; temporary scenario
+labs are cleaned up separately. Existing labs retain their current names.
 
 ## Test coverage
 
@@ -169,6 +186,7 @@ or `phase-by-phase` step, then rerun that scope locally.
 | Go behavior or driver command | Nearest `_test.go` file, with no build tag; verify with `make test-unit` |
 | Shell behavior | A `test_*.sh` file under `tests/scripts/`; verify with `make test-scripts` |
 | Orchestrator lifecycle | A `*_e2e_test.go` file; verify with the relevant end-to-end target |
+| Authenticated agent or feature behavior | A scenario under `tests/live/` using `taxiway_live.py`; run explicitly in a dev/e2e context |
 | Documentation page or site navigation | Existing tests under `site/src/`; run site tests and build |
 
 End-to-end files must start with the following directive and a blank line:

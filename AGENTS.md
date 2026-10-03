@@ -36,6 +36,8 @@ Kubernetes and heavyweight infrastructure are out of scope.
   - `docs:`, `test:`, `refactor:`, and `chore:` where appropriate.
 - Before claiming work is complete, run the narrowest meaningful checks and
   report what passed or could not be run.
+- For authenticated feature tests, reuse `tests/live/taxiway_live.py` and read
+  `tests/live/AGENTS.md` plus `docs/contributing/live-tests.md`.
 
 ## GitHub
 

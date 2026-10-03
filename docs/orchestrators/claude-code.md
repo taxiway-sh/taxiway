@@ -36,7 +36,7 @@ The adapter exposes these settings through `--set`:
 
 | Setting | Description | Default |
 |---|---|---|
-| `model` | Claude Code model name passed through LiteLLM | `claude-opus-4-8` |
+| `model` | Claude Code model name passed through LiteLLM | `claude-opus-5-5` |
 | `tool-search` | Load MCP tool definitions on demand: `true`, `false`, `auto`, or `auto:N` | `true` |
 | `claudeai-mcp-servers` | Import Claude.ai connectors: `true` or `false` | `false` |
 

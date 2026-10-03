@@ -15,7 +15,7 @@ in that session.
 
 The recommended lab path is to route Codex through the lab's LiteLLM sidecar.
 `taxiway up` creates the lab LiteLLM key, sidecar, and proxy route. The adapter
-writes the `taxiway-litellm` provider and default `gpt-5.5` model into Codex's
+writes the `taxiway-litellm` provider and default `gpt-6.1-sol` model into Codex's
 local config during `start`. Run `taxiway observe up` separately when you also
 want Langfuse traces.
 
@@ -37,13 +37,13 @@ The adapter exposes this setting through `--set`:
 
 | Setting | Description | Default |
 |---|---|---|
-| `model` | Codex model name passed through LiteLLM | `gpt-5.5` |
+| `model` | Codex model name passed through LiteLLM | `gpt-6.1-sol` |
 
 The model name should match a Codex model name declared in LiteLLM, such as
-`gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, or `gpt-5.3-codex-spark`.
+`gpt-6.1-sol`, `gpt-6-astra`, or `gpt-6-luna`.
 
 ```bash
-taxiway start mylab --set model=gpt-5.4
+taxiway start mylab --set model=gpt-6-luna
 taxiway start mylab --clear-set model
 ```
 

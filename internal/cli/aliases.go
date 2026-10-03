@@ -183,7 +183,7 @@ func newStartCmd(state *RootState) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			env, err := buildBaseEnv(ref)
+			env, err := buildBaseEnv(state.RepoDir, ref)
 			if err != nil {
 				return err
 			}
@@ -375,7 +375,7 @@ func newVerifyCmd(state *RootState) *cobra.Command {
 			if ref.Orch == "" {
 				return fmt.Errorf("lab %q has no orchestrator type", a[0])
 			}
-			env, err := buildBaseEnv(ref)
+			env, err := buildBaseEnv(state.RepoDir, ref)
 			if err != nil {
 				return err
 			}

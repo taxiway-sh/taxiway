@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/taxiway-sh/taxiway/internal/config"
+	"github.com/taxiway-sh/taxiway/internal/modelcatalog"
 )
 
 func newDescribeCmd(state *RootState) *cobra.Command {
@@ -61,9 +62,6 @@ func newDescribeCmd(state *RootState) *cobra.Command {
 						fmt.Fprintf(out, "    Phases: %s\n", strings.Join(setting.Phases, ", "))
 					}
 					examples := setting.Examples
-					if setting.Name == "model" && len(liteLLMModels) > 0 {
-						examples = describeModelExamples(setting.Default, liteLLMModels)
-					}
 					if len(examples) > 0 {
 						fmt.Fprintln(out, "    Examples:")
 						for _, example := range examples {
@@ -76,7 +74,7 @@ func newDescribeCmd(state *RootState) *cobra.Command {
 				fmt.Fprintln(out)
 				fmt.Fprintln(out, "Available LiteLLM models:")
 				for _, model := range liteLLMModels {
-					fmt.Fprintf(out, "  %s\n", model)
+					fmt.Fprintf(out, "  %s%s\n", model.Name, model.LifecycleNote(modelNow()))
 				}
 			}
 			return nil
@@ -84,7 +82,7 @@ func newDescribeCmd(state *RootState) *cobra.Command {
 	}
 }
 
-func describeLiteLLMModels(state *RootState, manifest *config.OrchManifest) ([]string, error) {
+func describeLiteLLMModels(state *RootState, manifest *config.OrchManifest) ([]modelcatalog.Model, error) {
 	if manifest == nil || len(manifest.Agents) == 0 {
 		return nil, nil
 	}
@@ -117,23 +115,11 @@ func describeLiteLLMModels(state *RootState, manifest *config.OrchManifest) ([]s
 		return nil, err
 	}
 
-	models := []string{}
+	models := []modelcatalog.Model{}
 	for _, model := range catalog.Models {
-		if providers[model.Provider] {
-			models = append(models, model.Name)
+		if providers[model.Provider] && model.StatusAt(modelNow()) != "retired" {
+			models = append(models, model)
 		}
 	}
 	return models, nil
-}
-
-func describeModelExamples(defaultModel string, models []string) []string {
-	for _, model := range models {
-		if model != defaultModel {
-			return []string{model}
-		}
-	}
-	if len(models) > 0 {
-		return []string{models[0]}
-	}
-	return nil
 }

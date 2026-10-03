@@ -13,6 +13,7 @@ import (
 
 	"github.com/taxiway-sh/taxiway/internal/config"
 	"github.com/taxiway-sh/taxiway/internal/envfile"
+	"github.com/taxiway-sh/taxiway/internal/modelcatalog"
 )
 
 const (
@@ -335,7 +336,7 @@ func prepareLabLiteLLMSidecarFiles(state *RootState, labStateDir, authDir string
           - %[8]s
 
   %[2]s:
-    image: litellm/litellm:1.88.1
+    image: litellm/litellm:1.103.2
     extra_hosts:
       - host.docker.internal:host-gateway
     depends_on:
@@ -344,6 +345,7 @@ func prepareLabLiteLLMSidecarFiles(state *RootState, labStateDir, authDir string
     volumes:
       - ./litellm_config.yaml:/app/config.yaml:ro
       - %[5]s:/app/codex_session_mapper.py:ro
+      - %[10]s:/app/anthropic_protocol.py:ro
       - %[6]s:/app/chatgpt_token
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     environment:
@@ -362,7 +364,7 @@ volumes:
 networks:
   default:
     name: %[4]s
-`, dbService, service, liteLLMKey, project+"_default", liteLLMCodexSessionMapperAssetPath(state), liteLLMChatGPTTokenStateDir(authDir), langfuseEnv, dbAlias, routeService)
+`, dbService, service, liteLLMKey, project+"_default", liteLLMCodexSessionMapperAssetPath(state), liteLLMChatGPTTokenStateDir(authDir), langfuseEnv, dbAlias, routeService, liteLLMAnthropicProtocolAssetPath(state))
 
 	if err := os.WriteFile(composePath, []byte(compose), 0o600); err != nil {
 		return labLiteLLMSidecarFiles{}, fmt.Errorf("write lab LiteLLM compose: %w", err)
@@ -378,6 +380,12 @@ networks:
 }
 
 func labLiteLLMModelNames(state *RootState, ref config.LabRef) ([]string, error) {
+	_, models, err := resolveLabModels(state, ref)
+	return models, err
+}
+
+func resolveLabModels(state *RootState, ref config.LabRef) (modelcatalog.Catalog, []string, error) {
+	var catalog modelcatalog.Catalog
 	var models []string
 	seen := map[string]bool{}
 	add := func(model string) {
@@ -390,7 +398,7 @@ func labLiteLLMModelNames(state *RootState, ref config.LabRef) ([]string, error)
 
 	orchManifest, err := config.LoadOrchManifest(state.RepoDir, ref.Orch)
 	if err != nil {
-		return nil, err
+		return catalog, nil, err
 	}
 	addManifestModel := func(manifest *config.OrchManifest) {
 		if manifest == nil {
@@ -414,12 +422,70 @@ func labLiteLLMModelNames(state *RootState, ref config.LabRef) ([]string, error)
 		for _, agent := range orchManifest.Agents {
 			agentManifest, err := config.LoadOrchManifest(state.RepoDir, agent)
 			if err != nil {
-				return nil, err
+				return catalog, nil, err
 			}
 			addManifestModel(agentManifest)
 		}
 	}
-	return models, nil
+	if orchManifest == nil {
+		return catalog, models, nil
+	}
+	providers := map[string]bool{}
+	for _, agent := range orchManifest.Agents {
+		manifest, err := config.LoadAgentManifest(state.RepoDir, agent)
+		if err != nil {
+			return catalog, nil, err
+		}
+		if manifest != nil && manifest.LiteLLM != nil {
+			for _, provider := range manifest.LiteLLM.Providers {
+				providers[provider] = true
+			}
+		}
+	}
+	if len(providers) == 0 {
+		return catalog, models, nil
+	}
+	data, err := os.ReadFile(liteLLMModelsAssetPath(state))
+	if err != nil {
+		return catalog, nil, fmt.Errorf("reading LiteLLM model catalog: %w", err)
+	}
+	catalog, err = parseLiteLLMModelCatalog(data)
+	if err != nil {
+		return catalog, nil, err
+	}
+	// Alias defaults are explicit choices too. Keep them routable until their
+	// announced retirement, even when they leave automatic active exposure.
+	aliasModels := map[string]bool{}
+	for provider, aliases := range catalog.Defaults {
+		if providers[provider] {
+			for _, name := range aliases {
+				aliasModels[name] = true
+			}
+		}
+	}
+	byName := map[string]modelcatalog.Model{}
+	for _, model := range catalog.Models {
+		byName[model.Name] = model
+	}
+	for _, name := range models {
+		model, found := byName[name]
+		if !found {
+			return catalog, nil, fmt.Errorf("unknown LiteLLM model %q", name)
+		}
+		if !providers[model.Provider] {
+			return catalog, nil, fmt.Errorf("model %q uses provider %q, unsupported by %s", name, model.Provider, ref.Orch)
+		}
+		if err := model.SelectionError(modelNow()); err != nil {
+			return catalog, nil, err
+		}
+	}
+
+	for _, model := range catalog.Models {
+		if providers[model.Provider] && (model.StatusAt(modelNow()) == "active" || (aliasModels[model.Name] && model.StatusAt(modelNow()) != "retired")) {
+			add(model.Name)
+		}
+	}
+	return catalog, models, nil
 }
 
 func labUsesAgent(state *RootState, ref config.LabRef, agentName string) (bool, error) {

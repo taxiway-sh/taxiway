@@ -67,6 +67,7 @@ settings:
   - name: model
     description: Full Claude Code model name
     default: claude-opus-4-8
+    examples: [claude-opus-4-8]
     phases: [start]
 `)
 	writeAgentManifest(t, state, "claude-code", `name: claude-code
@@ -95,6 +96,19 @@ litellm:
 	require.Contains(t, out, "  claude-sonnet-4-6")
 	require.NotContains(t, out, "gpt-5.5")
 	require.Contains(t, out, "Examples:")
-	require.Contains(t, out, "  --set model=claude-sonnet-4-6")
-	require.NotContains(t, out, "  --set model=claude-opus-4-8")
+	require.NotContains(t, out, "  --set model=claude-sonnet-4-6")
+	require.Contains(t, out, "  --set model=claude-opus-4-8")
+
+	// A catalog must not invent examples when the manifest declares none.
+	setManifest(t, state, "claude-code", `name: claude-code
+agents: [claude-code]
+settings:
+  - name: model
+    default: claude-opus-4-8
+`)
+	out, _, err = execUpRoot(t, root, stdout, stderr, "describe", "claude-code")
+	require.NoError(t, err)
+	require.NotContains(t, out, "Examples:")
+	require.Contains(t, out, "Available LiteLLM models:")
+	require.Contains(t, out, "  claude-sonnet-4-6")
 }

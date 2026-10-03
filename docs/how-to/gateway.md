@@ -81,6 +81,42 @@ The runtime LiteLLM model catalog lives under:
 ~/.taxiway/runtime/infra/gateway/litellm/models.yaml
 ```
 
+## Models And Lifecycle
+
+`--set model=...` selects the main agent model. Each gateway also exposes all
+active catalog models for the providers declared by its agents: `chatgpt` for
+Codex, `anthropic` for Claude Code and Gas Town. This lets Claude's helper agents
+use Haiku or Sonnet while the main agent uses Opus. It does not make a model
+available on an account whose subscription or API permissions exclude it.
+
+Run `taxiway describe codex` or `taxiway describe claude-code` to inspect the
+catalog. Deprecated models show their retirement date and replacement; they
+remain routable when explicitly selected as the main model or an alias default.
+Retired models are excluded and rejected with a replacement suggestion. There
+is no silent switch to another model. ChatGPT subscription retirement dates
+apply to the `chatgpt` route and do not imply retirement from the OpenAI API.
+
+Taxiway sets Claude's alias mappings and installs a managed exact model list in
+the lab at `/etc/claude-code/managed-settings.json`, preserving other managed
+settings. This requires Claude Code 2.1.284 or later; startup reports an upgrade
+requirement for older clients. Project model lists cannot widen this policy.
+Changes take effect after `taxiway gateway <lab>` and `taxiway start <lab>`.
+Codex keeps its own client catalog and capability metadata; gateway exposure
+does not replace that catalog or enable an unsupported client model.
+
+The bundled LiteLLM version is 1.103.2. Compatibility shims preserve signed
+thinking blocks with omitted text during Anthropic tool replay and the explicit
+`parallel_tool_calls` value required by Codex Responses Lite. Isolated
+Docker tests exercise both Anthropic Messages and ChatGPT Responses without
+external networking or provider credentials.
+For live principal/subagent tests with reusable authentication, see
+[testing model gateways](../contributing/model-gateway-tests.md).
+
+New releases and explicit retirement announcements are checked by the daily
+[catalog update workflow](../contributing/model-catalog.md). It prepares a draft
+PR for review, runs compatibility checks, and keeps model defaults unchanged.
+It does not update running labs automatically.
+
 ## Access And Credentials
 
 Run:
@@ -134,7 +170,7 @@ gateway:
 
 ```toml
 model_provider = "taxiway-litellm"
-model = "gpt-5.5"
+model = "gpt-6.1-sol"
 
 [model_providers.taxiway-litellm]
 name = "Taxiway LiteLLM"
@@ -166,8 +202,8 @@ Use a full Claude model name declared in the LiteLLM catalog from the attached
 Claude Code session. Examples include:
 
 ```text
-claude-opus-4-8
-claude-sonnet-4-6
+claude-opus-5-5
+claude-sonnet-5-5
 ```
 
 Claude Code keeps the user OAuth token client-side. LiteLLM receives and
@@ -181,8 +217,10 @@ general_settings:
 Otherwise Anthropic receives neither the Claude Code OAuth `Authorization`
 header nor an API key and returns an authentication error.
 
-Taxiway deliberately does not expose Claude Code aliases such as `opus`,
-`sonnet`, or `haiku` through LiteLLM. Use full model names from the catalog.
+Taxiway maps Claude Code aliases (`opus`, `sonnet`, `haiku`, `fable`) to full
+model IDs from the same catalog. LiteLLM routes those full IDs without renaming
+one model to another. The managed lab environment preserves these mappings
+across tmux restarts and Gas Town handoffs.
 
 ## Traces
 
@@ -226,3 +264,5 @@ gateway has exported them.
 | Codex route fails auth | Run `codex login`, then `taxiway credentials codex`, then `taxiway gateway <lab>` |
 | Claude route fails auth | Verify Claude Code is logged in and `forward_client_headers_to_llm_api` is enabled |
 | Langfuse has no traces | Start observability, refresh the gateway, then send model traffic through LiteLLM |
+
+Retirement dates take effect at 00:00 UTC on the specified date.
