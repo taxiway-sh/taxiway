@@ -82,6 +82,14 @@ LAB_NO_DOCKER=1 make test-e2e-only
 
 A skipped test is not evidence that the lifecycle works.
 
+Before merging a change to provisioned or runtime behavior, run the affected
+existing E2E scenarios and verify that they pass on the proposed code. For an
+agent change shared by several orchestrators, cover each consuming orchestrator.
+Use `up`, `prepare-run`, and `phase-by-phase` when all three paths are affected.
+Passing core CI does not replace this check: the GitHub E2E workflow runs on a
+schedule or manual dispatch. A skipped or blocked run must be reported and
+resolved before claiming E2E validation.
+
 ### Authenticated live scenarios
 
 The opt-in scripts under `tests/live/` cover behavior requiring real agent
@@ -156,6 +164,29 @@ tool search is enabled and Claude.ai connector import is disabled by default.
 The same assertion runs after each Gas Town handoff. Overrides and clearing
 settings are covered by the runtime script tests.
 
+Model expectations come from `infra/gateway/litellm/models.yaml` and the
+orchestrator manifests in the tested source tree. The fixture keeps public model
+IDs and providers, snapshots their lifecycle status, and routes requests to a
+local simulated upstream. It does not fetch new model lists from the internet.
+This avoids duplicating changing defaults in the tests while keeping a run tied
+to the commit being tested. Unknown and retired selections use controlled
+fixture entries.
+
+The scenarios explicitly select a compatible model different from the shipped
+default and make it deprecated in the fixture, verifying that an explicit
+selection remains routable. They check the persisted principal selection and
+the models exposed by the running gateway from inside the lab, excluding other
+providers, retired models, and unselected deprecated models. Each exposed model
+is exercised through its native Messages or Responses endpoint from both the
+host and the lab. Codex's configured principal/provider and Claude's process
+arguments, tier aliases, and exact enforced managed model policy are checked in
+the guest. These assertions run at startup, after the phase-by-phase lab restart,
+and for the Claude processes replaced by Gas Town handoff.
+
+These configuration and simulated-provider requests do not prove real
+principal/subagent delegation or interactive readiness. Use the authenticated
+[model gateway scenarios](model-gateway-tests.md) for real model delegation.
+
 Tests use `--skip-auth-check`. They do not run interactive authentication,
 use real API keys, or exercise browser/device login. Authenticated execution
 depends on external accounts and interactive state and is outside this suite.
@@ -180,6 +211,16 @@ For end-to-end failures, inspect the failing orchestrator's `up`, `prepare-run`,
 or `phase-by-phase` step, then rerun that scope locally.
 
 ## Adding or updating tests
+
+When a feature changes what a lab receives or does, enrich the relevant existing
+E2E scenarios with assertions of that added behavior. A process being alive, a
+successful CLI exit, or a gateway health check does not prove model selection,
+configuration propagation, or the effect of an agent action. Assert observable
+configuration or results inside the lab; include restart/handoff paths when the
+behavior must survive session renewal. Keep expected values independent of the
+production code that selects or renders them. Add authenticated live coverage
+when the behavior requires real provider requests, without replacing the
+credential-free E2E assertions.
 
 | Change | Where to add coverage |
 |---|---|
