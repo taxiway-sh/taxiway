@@ -96,6 +96,11 @@ Retired models are excluded and rejected with a replacement suggestion. There
 is no silent switch to another model. ChatGPT subscription retirement dates
 apply to the `chatgpt` route and do not imply retirement from the OpenAI API.
 
+The `chatgpt` provider uses the ChatGPT subscription endpoint. With the pinned
+LiteLLM version, a catalog model's `api_base` does not override that endpoint.
+Taxiway does not currently support custom upstream endpoints for this provider;
+leave `api_base` unset for ChatGPT models.
+
 Taxiway sets Claude's alias mappings and installs a managed exact model list in
 the lab at `/etc/claude-code/managed-settings.json`, preserving other managed
 settings. This requires Claude Code 2.1.284 or later; startup reports an upgrade
