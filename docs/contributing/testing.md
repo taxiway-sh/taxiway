@@ -93,7 +93,10 @@ provide existing principal/subagent scenarios for Claude and Codex.
 
 Live tests consume account usage and run separately from ordinary unit tests,
 offline protocol tests and unattended CI. Their agent instructions are in
-`tests/live/AGENTS.md`.
+`tests/live/AGENTS.md`. Persistent manual-validation labs use the generic names
+`test-claude`, `test-codex` and `test-gastown` within a worktree context. Keep
+them available for manual checks after automated validation; temporary scenario
+labs are cleaned up separately. Existing labs retain their current names.
 
 ## Test coverage
 

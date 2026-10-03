@@ -19,11 +19,11 @@ Build the local CLI to match the worktree assets, then create a reference lab:
 ```bash
 go build -o taxiway ./cmd/taxiway
 direnv exec . ./taxiway init
-direnv exec . ./taxiway up live-auth --driver docker --type claude-code --skip-auth-check
-direnv exec . ./taxiway auth live-auth claude-code
+direnv exec . ./taxiway up test-claude --driver docker --type claude-code --skip-auth-check
+direnv exec . ./taxiway auth test-claude claude-code
 ```
 
-The user completes Claude's interactive login once. Keep `live-auth` for later
+The user completes Claude's interactive login once. Keep `test-claude` for later
 runs, or use an already authenticated lab in the same dev/e2e context instead.
 No host credential file needs to be created or exported. A Lima reference lab
 can supply credentials to Docker targets, and vice versa.
@@ -46,12 +46,67 @@ gateway from the existing host Codex login. Do not copy Claude credentials or
 host Codex auth files into Codex clients. API-key mode also uses gateway
 credentials and is not handled by the Claude OAuth-copy helper.
 
+## Authentication responsibilities
+
+The shared tooling reuses authentication after the initial user login:
+
+| Agent | Initial authentication | Reuse by tests |
+|---|---|---|
+| Claude Code | User logs in once inside a reference lab such as `test-claude` | `temporary_lab(..., auth_lab=...)` copies OAuth credentials before starting roles; the `auth` command handles persistent targets |
+| Gas Town | Uses the same Claude Code reference login | Same copy helper; each Gas Town lab keeps its own gateway configuration |
+| Codex | User has an existing Codex subscription login on the host | Taxiway prepares the lab gateway's ChatGPT authentication cache; no login is copied into the lab client |
+
+Pass the actual Claude reference name with `--auth-lab` (or `--source` for
+persistent targets). The helper does not guess a reference lab or complete
+interactive login. Initial, expired or revoked authentication still requires
+user intervention when the client cannot refresh it. API-key authentication
+is managed through the ordinary gateway credentials, outside the OAuth-copy
+helper. No credentials are committed to the repository.
+
+## Persistent labs for manual validation
+
+Use these feature-independent names within each dev worktree:
+
+| Lab | Orchestrator | Purpose |
+|---|---|---|
+| `test-claude` | `claude-code` | Manual Claude checks and reusable reference authentication |
+| `test-codex` | `codex` | Manual Codex checks using host authentication through the gateway |
+| `test-gastown` | `gastown` | Manual Gas Town checks using a copy of the reference Claude login |
+
+The runtime context isolates these names between worktrees. Existing labs may
+have older names: pass their actual names to the scripts and keep using them;
+updating this naming convention does not rename or recreate any resources.
+
+After authenticating `test-claude` above, create the other labs when validation
+of the feature needs them:
+
+```bash
+direnv exec . ./taxiway up test-codex --driver docker --type codex
+direnv exec . ./taxiway up test-gastown --driver docker --type gastown \
+  --repo https://github.com/octocat/Hello-World --prepare-only --skip-auth-check
+direnv exec . python3 tests/live/taxiway_live.py auth --source test-claude --target test-gastown
+direnv exec . ./taxiway run test-gastown
+```
+
+Prepare Gas Town before copying authentication so its roles first start with
+a usable login. If a lab already exists, inspect and reuse it instead of
+creating a replacement or overwriting its authentication automatically.
+
+Leave persistent labs available after automated checks for the user's manual
+validation. Connect with `direnv exec . ./taxiway shell <lab>`; in Gas Town,
+use `gt status` and `gt mayor attach`. Remove persistent labs only when their
+validation work is finished and removal is requested.
+
+Automatically owned scenarios continue to use unique `live-test-<random>`
+names and clean up their own labs. A temporary scenario never removes one of
+the three persistent labs.
+
 ## Scripts for developers and agents
 
 To copy a reference login into an existing target lab:
 
 ```bash
-direnv exec . python3 tests/live/taxiway_live.py auth --source live-auth --target my-test-lab
+direnv exec . python3 tests/live/taxiway_live.py auth --source test-claude --target my-test-lab
 direnv exec . ./taxiway start my-test-lab
 ```
 
@@ -62,7 +117,7 @@ For a command in a new temporary authenticated lab:
 
 ```bash
 direnv exec . python3 tests/live/taxiway_live.py run \
-  --type claude-code --agent claude-code --auth-lab live-auth \
+  --type claude-code --agent claude-code --auth-lab test-claude \
   --timeout 120 --expect LIVE_OK -- \
   claude -p 'Reply exactly LIVE_OK.' --tools '' --max-budget-usd 1
 ```
@@ -90,7 +145,7 @@ scenario, as the [model gateway suites](model-gateway-tests.md) do.
 With an authenticated reference lab, run:
 
 ```bash
-direnv exec . python3 tests/live/test_gastown.py --auth-lab live-auth
+direnv exec . python3 tests/live/test_gastown.py --auth-lab test-claude
 ```
 
 The scenario creates a temporary Docker Gas Town lab with a small public
@@ -126,7 +181,7 @@ restart, independently of model selection:
 ```python
 from taxiway_live import command, guest, temporary_lab
 
-with temporary_lab("claude-code", auth_lab="live-auth") as lab:
+with temporary_lab("claude-code", auth_lab="test-claude") as lab:
     guest(lab, "printf 'fixture' > /lab/work/live-fixture")
     command(["./taxiway", "start", lab])
     output = guest(lab, '''
@@ -159,8 +214,8 @@ Report the failing scenario and evidence, without dumping secrets or raw
 request logs. Fix a protocol or lifecycle failure with a focused regression
 test before rerunning the live scenario.
 
-When the reference lab is no longer needed:
+When removal of the reference lab is requested after validation:
 
 ```bash
-direnv exec . ./taxiway rm live-auth --yes
+direnv exec . ./taxiway rm test-claude --yes
 ```

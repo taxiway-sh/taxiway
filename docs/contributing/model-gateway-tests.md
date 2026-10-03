@@ -2,6 +2,9 @@
 
 These suites use the shared `taxiway_live.py` helpers. For authentication reuse,
 temporary labs and scenarios for other features, see [reusable live tests](live-tests.md).
+The examples reuse the worktree’s persistent `test-claude` and `test-codex` labs;
+names describe the orchestrator rather than the feature under development.
+Pass an existing lab’s actual name to `--auth-lab` or `--lab`.
 
 ## Automated checks without provider calls
 
@@ -28,9 +31,9 @@ matches the mounted assets. The commands below preserve the reference lab:
 ```bash
 go build -o taxiway ./cmd/taxiway
 direnv exec . ./taxiway init
-direnv exec . ./taxiway up models-claude-test --driver docker --type claude-code --skip-auth-check
-direnv exec . ./taxiway auth models-claude-test claude-code
-direnv exec . python3 tests/live/test_claude_models.py --auth-lab models-claude-test
+direnv exec . ./taxiway up test-claude --driver docker --type claude-code --skip-auth-check
+direnv exec . ./taxiway auth test-claude claude-code
+direnv exec . python3 tests/live/test_claude_models.py --auth-lab test-claude
 ```
 
 If the reference lab already exists, its persisted driver is used. Both Docker
@@ -59,8 +62,8 @@ The gateway uses the existing host Codex subscription login. With that login
 available, create a reference lab and run:
 
 ```bash
-direnv exec . ./taxiway up models-codex-test --driver docker --type codex
-direnv exec . python3 tests/live/test_codex_models.py --lab models-codex-test
+direnv exec . ./taxiway up test-codex --driver docker --type codex
+direnv exec . python3 tests/live/test_codex_models.py --lab test-codex
 ```
 
 The four live cases check the configured principal, an alternate Luna
@@ -81,7 +84,7 @@ the accuracy of LiteLLM pricing/context metadata.
 ```bash
 direnv exec . ./taxiway describe claude-code
 direnv exec . ./taxiway describe codex
-direnv exec . ./taxiway shell models-claude-test
+direnv exec . ./taxiway shell test-claude
 ```
 
 In Claude, try `/model sonnet`, ask a short question, then return to `/model opus`.
@@ -90,16 +93,17 @@ For explicit subagent models, define custom agents with `model: sonnet` and
 and ask the principal to delegate one task to each. See the official
 [Claude subagent documentation](https://code.claude.com/docs/en/sub-agents).
 
-Attach to Codex with `taxiway shell models-codex-test` and ask it to spawn two
+Attach to Codex with `taxiway shell test-codex` and ask it to spawn two
 fresh-context subagents using `gpt-6-luna` and `gpt-6-sol`, wait for both, and
 summarize their results. See the official
 [Codex subagent documentation](https://learn.chatgpt.com/docs/agent-configuration/subagents).
 Inspect generations in Langfuse to verify the models and output tokens;
 an agent's assertion that it delegated is not sufficient evidence.
 
-Remove only the reference labs when finished:
+Keep the reference labs available for manual validation after an automated run.
+Remove them explicitly when their validation work is finished:
 
 ```bash
-direnv exec . ./taxiway rm models-claude-test --yes
-direnv exec . ./taxiway rm models-codex-test --yes
+direnv exec . ./taxiway rm test-claude --yes
+direnv exec . ./taxiway rm test-codex --yes
 ```
