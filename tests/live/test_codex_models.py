@@ -3,17 +3,16 @@
 import argparse
 from datetime import datetime, timezone
 import json
-import os
 import shlex
 import subprocess
 import sys
 import time
 
-from test_claude_models import command, guest
+from taxiway_live import command, guest, run_in_lab, runtime_id, validate_context
 
 
 def metrics(lab, since):
-    runtime = f"taxiway-{os.environ['TAXIWAY_CONTEXT']}-{os.environ['TAXIWAY_CONTEXT_ID']}-{lab}"
+    runtime = runtime_id(lab)
     # Only models, token counts and counts of distinct sessions leave the DB.
     rows = ('FROM "LiteLLM_SpendLogs" WHERE "startTime" >= '
             f"TIMESTAMP '{since}' AND completion_tokens > 0 ")
@@ -57,12 +56,7 @@ def check(lab, label, model, prompt, expected, *, expected_children=None):
     argv = ["codex", "exec", "--skip-git-repo-check", "--json",
             "-s", "read-only", "-m", model, "-c", 'model_reasoning_effort="low"',
             "-c", "features.multi_agent_v2=true" if agents else "agents.enabled=false", prompt]
-    script = """set -euo pipefail
-set -a
-source "$HOME/.config/taxiway/env"
-set +a
-exec timeout --kill-after=10s 180s """ + shlex.join(argv)
-    output = guest(lab, script)
+    output = run_in_lab(lab, argv, agent="codex")
     events = [json.loads(line) for line in output.splitlines() if line.startswith(b"{")]
     assert any(e.get("type") == "turn.completed" for e in events), "Turn did not complete"
     assert not any(e.get("type") in ("error", "turn.failed") for e in events), "Client reported an error"
@@ -90,11 +84,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--lab", required=True)
     args = parser.parse_args()
-    for key in ("TAXIWAY_CONTEXT", "TAXIWAY_CONTEXT_ID", "TAXIWAY_LAB_STATE_DIR"):
-        if not os.environ.get(key):
-            parser.error(f"{key} must be set; run through direnv exec .")
-    if os.environ["TAXIWAY_CONTEXT"] not in ("dev", "e2e"):
-        parser.error("Live tests require a dev or e2e context")
+    validate_context()
     main_model = guest(args.lab, "python3 -c 'import pathlib,tomllib; "
                        "print(tomllib.loads((pathlib.Path.home()/\".codex/config.toml\").read_text())[\"model\"])'").decode().strip()
     check(args.lab, "principal", main_model,
