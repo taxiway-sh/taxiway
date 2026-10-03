@@ -846,7 +846,7 @@ func e2ePrincipalModel(t *testing.T, orch string) string {
 		if model.Name == defaultModel {
 			require.NotEqual(t, "retired", model.StatusAt(modelNow()), "shipped default must remain usable")
 			foundDefault = true
-		} else if alternative == "" && model.StatusAt(modelNow()) == "active" {
+		} else if (alternative == "" || model.Name < alternative) && model.StatusAt(modelNow()) == "active" {
 			isAlias := false
 			for _, name := range aliases {
 				isAlias = isAlias || model.Name == name
@@ -901,7 +901,8 @@ func assertE2ECodexModel(t *testing.T, state *RootState, id string) {
 	defer cancel()
 	var stderr bytes.Buffer
 	res, err := state.Driver.Exec(ctx, id, driver.ExecRequest{
-		Argv: []string{"python3", "-c", `import pathlib, subprocess, sys, time, tomllib
+		Argv: []string{"python3", "-c", `import os, pathlib, subprocess, sys, time, tomllib
+assert (pathlib.Path('/proc/self/task')/str(os.getpid())/'children').exists(), 'Codex process inspection requires Linux CONFIG_PROC_CHILDREN'
 config = tomllib.loads((pathlib.Path.home()/'.codex/config.toml').read_text())
 assert config['model'] == sys.argv[1], 'Codex changed principal model'
 assert config['model_provider'] == 'taxiway-litellm', 'Codex bypassed gateway provider'
@@ -937,7 +938,7 @@ while True:
 `, e2eExpectations(t, "codex").model},
 		Stderr: &stderr,
 	})
-	require.NoError(t, err)
+	require.NoError(t, err, "Codex process inspection: %s", stderr.String())
 	require.Equal(t, 0, res.ExitCode, "Codex model configuration: %s", stderr.String())
 }
 
