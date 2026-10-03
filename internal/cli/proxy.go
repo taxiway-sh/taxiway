@@ -797,6 +797,22 @@ func removeProxyContainer(state *RootState) (bool, error) {
 	return dockerRemoveContainerIfExists(state.proxyRuntime().Container)
 }
 
+func removeProxyDockerNetwork(runtime proxyRuntime) error {
+	name := runtime.DockerNetwork()
+	out, err := exec.Command("docker", "network", "rm", name).CombinedOutput()
+	if err == nil {
+		return nil
+	}
+	detail := strings.TrimSpace(string(out))
+	// Docker reports an absent network as an error, including when another
+	// cleanup removed it between attempts. Other failures must remain visible.
+	if _, exited := err.(*exec.ExitError); exited &&
+		(strings.Contains(detail, "network "+name+" not found") || strings.Contains(detail, "No such network: "+name)) {
+		return nil
+	}
+	return fmt.Errorf("remove proxy network %q (check attached containers and Docker availability, then retry destroy): %w\n%s", name, err, detail)
+}
+
 func removeProxyRuntimeState(runtime proxyRuntime) error {
 	if runtime.Context != "dev" && runtime.Context != "e2e" {
 		return nil
