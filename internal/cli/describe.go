@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/taxiway-sh/taxiway/internal/config"
+	"github.com/taxiway-sh/taxiway/internal/modelcatalog"
 )
 
 func newDescribeCmd(state *RootState) *cobra.Command {
@@ -74,7 +74,7 @@ func newDescribeCmd(state *RootState) *cobra.Command {
 				fmt.Fprintln(out)
 				fmt.Fprintln(out, "Available LiteLLM models:")
 				for _, model := range liteLLMModels {
-					fmt.Fprintf(out, "  %s%s\n", model, describeModelLifecycle(state, model))
+					fmt.Fprintf(out, "  %s%s\n", model.Name, model.LifecycleNote(modelNow()))
 				}
 			}
 			return nil
@@ -82,7 +82,7 @@ func newDescribeCmd(state *RootState) *cobra.Command {
 	}
 }
 
-func describeLiteLLMModels(state *RootState, manifest *config.OrchManifest) ([]string, error) {
+func describeLiteLLMModels(state *RootState, manifest *config.OrchManifest) ([]modelcatalog.Model, error) {
 	if manifest == nil || len(manifest.Agents) == 0 {
 		return nil, nil
 	}
@@ -115,35 +115,11 @@ func describeLiteLLMModels(state *RootState, manifest *config.OrchManifest) ([]s
 		return nil, err
 	}
 
-	models := []string{}
+	models := []modelcatalog.Model{}
 	for _, model := range catalog.Models {
-		if providers[model.Provider] && model.StatusAt(time.Now()) != "retired" {
-			models = append(models, model.Name)
+		if providers[model.Provider] && model.StatusAt(modelNow()) != "retired" {
+			models = append(models, model)
 		}
 	}
 	return models, nil
-}
-
-func describeModelLifecycle(state *RootState, name string) string {
-	data, err := os.ReadFile(liteLLMModelsAssetPath(state))
-	if err != nil {
-		return ""
-	}
-	catalog, err := parseLiteLLMModelCatalog(data)
-	if err != nil {
-		return ""
-	}
-	for _, model := range catalog.Models {
-		if model.Name == name && model.StatusAt(time.Now()) == "deprecated" {
-			detail := " (deprecated; explicit selection only"
-			if model.RetirementDate != "" {
-				detail += "; retires " + model.RetirementDate
-			}
-			if model.Replacement != "" {
-				detail += "; replacement " + model.Replacement
-			}
-			return detail + ")"
-		}
-	}
-	return ""
 }

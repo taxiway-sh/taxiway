@@ -55,7 +55,7 @@ func Parse(data []byte) (Catalog, error) {
 	for provider, aliases := range catalog.Defaults {
 		for alias, name := range aliases {
 			model, exists := seen[name]
-			if !exists || model.Provider != provider || model.StatusAt(time.Now()) == "retired" {
+			if !exists || model.Provider != provider || model.Status == "retired" {
 				return catalog, fmt.Errorf("default %s.%s must reference an available %s model, got %q", provider, alias, provider, name)
 			}
 		}
@@ -87,4 +87,19 @@ func (model Model) SelectionError(now time.Time) error {
 		return fmt.Errorf("model %q is retired; select %q instead", model.Name, model.Replacement)
 	}
 	return fmt.Errorf("model %q is retired", model.Name)
+}
+
+// LifecycleNote describes a deprecated choice without changing its identity.
+func (model Model) LifecycleNote(now time.Time) string {
+	if model.StatusAt(now) != "deprecated" {
+		return ""
+	}
+	detail := " (deprecated; explicit selection only"
+	if model.RetirementDate != "" {
+		detail += "; retires " + model.RetirementDate
+	}
+	if model.Replacement != "" {
+		detail += "; replacement " + model.Replacement
+	}
+	return detail + ")"
 }

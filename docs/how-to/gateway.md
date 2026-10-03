@@ -264,3 +264,5 @@ gateway has exported them.
 | Codex route fails auth | Run `codex login`, then `taxiway credentials codex`, then `taxiway gateway <lab>` |
 | Claude route fails auth | Verify Claude Code is logged in and `forward_client_headers_to_llm_api` is enabled |
 | Langfuse has no traces | Start observability, refresh the gateway, then send model traffic through LiteLLM |
+
+Retirement dates take effect at 00:00 UTC on the specified date.

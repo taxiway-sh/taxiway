@@ -733,9 +733,9 @@ func TestObserveLiteLLMAssets_OmitsCodexSessionMapperWhenDisabled(t *testing.T) 
 }
 
 func TestObserveLiteLLMAssets_ExposeAgentNativeModelNames(t *testing.T) {
-	repoDir := filepath.Join("..", "..")
+	state := providerModelCatalogState(t)
 
-	config, err := renderLiteLLMConfig(&RootState{RepoDir: repoDir}, true, true, nil)
+	config, err := renderLiteLLMConfig(state, true, true, nil)
 	require.NoError(t, err)
 	configText := string(config)
 

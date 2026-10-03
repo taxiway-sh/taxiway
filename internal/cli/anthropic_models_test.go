@@ -2,9 +2,7 @@ package cli
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -13,13 +11,13 @@ import (
 )
 
 func TestAnthropicCatalog_SelectedModelRouting(t *testing.T) {
-	state := &RootState{RepoDir: filepath.Join("..", "..")}
+	state := providerModelCatalogState(t)
 	data, err := os.ReadFile(liteLLMModelsAssetPath(state))
 	require.NoError(t, err)
 	catalog, err := parseLiteLLMModelCatalog(data)
 	require.NoError(t, err)
 	for _, entry := range catalog.Models {
-		if entry.Provider != "anthropic" || entry.StatusAt(time.Now()) == "retired" {
+		if entry.Provider != "anthropic" || entry.StatusAt(modelNow()) == "retired" {
 			continue
 		}
 		model := entry.Name
@@ -38,7 +36,7 @@ func TestAnthropicCatalog_SelectedModelRouting(t *testing.T) {
 }
 
 func TestClaudeCodeGatewayModelSelection(t *testing.T) {
-	state := &RootState{RepoDir: filepath.Join("..", "..")}
+	state := providerModelCatalogState(t)
 	for _, tc := range []struct {
 		name     string
 		selected string
@@ -73,7 +71,7 @@ func TestClaudeCodeGatewayModelSelection(t *testing.T) {
 }
 
 func TestAnthropicCatalog_RejectsRetiredAndUnknownModels(t *testing.T) {
-	state := &RootState{RepoDir: filepath.Join("..", "..")}
+	state := providerModelCatalogState(t)
 	for _, model := range []string{
 		"claude-opus-4-1-20250805",
 		"claude-opus-4-20250514",
@@ -91,12 +89,16 @@ func TestAnthropicCatalog_RejectsRetiredAndUnknownModels(t *testing.T) {
 }
 
 func TestAnthropicCatalog_DiscoveryRespectsAgentProvider(t *testing.T) {
-	state := &RootState{RepoDir: filepath.Join("..", "..")}
+	state := providerModelCatalogState(t)
 	for _, orch := range []string{"claude-code", "gastown", "codex"} {
 		t.Run(orch, func(t *testing.T) {
 			manifest, err := config.LoadOrchManifest(state.RepoDir, orch)
 			require.NoError(t, err)
-			models, err := describeLiteLLMModels(state, manifest)
+			records, err := describeLiteLLMModels(state, manifest)
+			models := []string{}
+			for _, record := range records {
+				models = append(models, record.Name)
+			}
 			require.NoError(t, err)
 			if orch == "codex" {
 				require.Contains(t, models, "gpt-6.1-sol")

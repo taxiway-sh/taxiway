@@ -288,8 +288,12 @@ func (runtime observabilityRuntime) ComposeEnv(proxy proxyRuntime) []string {
 	return env
 }
 
-type liteLLMModelCatalog = modelcatalog.Catalog
-type liteLLMModelDefinition = modelcatalog.Model
+// modelNow is shared by catalog selection and display; tests can freeze lifecycle time.
+var modelNow = time.Now
+
+func liteLLMAnthropicProtocolAssetPath(state *RootState) string {
+	return filepath.Join(state.RepoDir, "infra", "gateway", "litellm", "callbacks", "anthropic_protocol.py")
+}
 
 type liteLLMGeneratedConfig struct {
 	ModelList       []liteLLMGeneratedModelEntry `yaml:"model_list"`
@@ -366,6 +370,7 @@ func renderLiteLLMConfig(state *RootState, includeCodexModels bool, enableCodexS
 
 	var models []liteLLMGeneratedModelEntry
 	var forwardHeaders []string
+	hasAnthropic := false
 	selected := map[string]bool{}
 	for _, name := range selectedModels {
 		if name != "" {
@@ -389,11 +394,11 @@ func renderLiteLLMConfig(state *RootState, includeCodexModels bool, enableCodexS
 			continue
 		}
 		if selected[model.Name] {
-			if err := model.SelectionError(time.Now()); err != nil {
+			if err := model.SelectionError(modelNow()); err != nil {
 				return nil, err
 			}
 			matchedSelected[model.Name] = true
-		} else if model.StatusAt(time.Now()) != "active" {
+		} else if model.StatusAt(modelNow()) != "active" {
 			continue
 		}
 		if model.Provider == "chatgpt" && !includeCodexModels && len(selected) == 0 {
@@ -411,6 +416,7 @@ func renderLiteLLMConfig(state *RootState, includeCodexModels bool, enableCodexS
 			entry.ModelInfo = &liteLLMGeneratedModelInfo{Mode: model.API}
 		}
 		models = append(models, entry)
+		hasAnthropic = hasAnthropic || model.Provider == "anthropic"
 		if model.ForwardClientHeaders {
 			addForwardHeader(model.Name)
 		}
@@ -422,7 +428,7 @@ func renderLiteLLMConfig(state *RootState, includeCodexModels bool, enableCodexS
 	}
 
 	callbacks := []string{"langfuse_otel"}
-	if len(forwardHeaders) > 0 {
+	if hasAnthropic {
 		callbacks = append(callbacks, "anthropic_protocol.proxy_handler_instance")
 	}
 	if enableCodexSessionMapper {
@@ -455,7 +461,7 @@ func renderLiteLLMConfig(state *RootState, includeCodexModels bool, enableCodexS
 	return out, nil
 }
 
-func parseLiteLLMModelCatalog(data []byte) (liteLLMModelCatalog, error) {
+func parseLiteLLMModelCatalog(data []byte) (modelcatalog.Catalog, error) {
 	return modelcatalog.Parse(data)
 }
 

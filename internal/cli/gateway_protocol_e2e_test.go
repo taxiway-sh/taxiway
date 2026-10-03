@@ -65,7 +65,7 @@ func runGatewayProtocol(t *testing.T, orch string, modes []string) {
 				"-e", "TEST_AUTH_MODE="+mode,
 				"-v", configPath+":/test/config.yaml:ro",
 				"-v", filepath.Join(repo, "internal", "cli", "testdata", "gateway_protocol.py")+":/test/protocol.py:ro",
-				"-v", filepath.Join(repo, "infra", "gateway", "litellm", "callbacks", "anthropic_protocol.py")+":/app/anthropic_protocol.py:ro",
+				"-v", liteLLMAnthropicProtocolAssetPath(state)+":/app/anthropic_protocol.py:ro",
 				"-v", liteLLMCodexSessionMapperAssetPath(state)+":/app/codex_session_mapper.py:ro",
 				"--entrypoint", "python", services.Services[files.Service].Image, "/test/protocol.py")
 			output, err := cmd.CombinedOutput()

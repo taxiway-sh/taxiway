@@ -10,12 +10,12 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/taxiway-sh/taxiway/internal/config"
 	"github.com/taxiway-sh/taxiway/internal/driver"
+	"github.com/taxiway-sh/taxiway/internal/modelcatalog"
 	"github.com/taxiway-sh/taxiway/internal/phases"
 )
 
@@ -478,26 +478,23 @@ func runUp(ctx context.Context, state *RootState, ref config.LabRef, id, stateDi
 		opts.out = os.Stdout
 	}
 	if !opts.prepareOnly {
-		data, err := os.ReadFile(liteLLMModelsAssetPath(state))
-		if err != nil && !os.IsNotExist(err) {
-			return err
-		}
-		if err == nil {
-			models, err := labLiteLLMModelNames(state, ref)
+		if _, err := os.Stat(liteLLMModelsAssetPath(state)); err == nil {
+			catalog, models, err := resolveLabModels(state, ref)
 			if err != nil {
 				return err
 			}
-			catalog, err := parseLiteLLMModelCatalog(data)
-			if err != nil {
-				return err
+			selected := map[string]bool{}
+			for _, name := range models {
+				selected[name] = true
 			}
+			now := modelNow()
 			for _, model := range catalog.Models {
-				for _, name := range models {
-					if model.Name == name && model.StatusAt(time.Now()) == "deprecated" {
-						fmt.Fprintf(opts.out, "  WARN model %s%s\n", name, describeModelLifecycle(state, name))
-					}
+				if selected[model.Name] && model.StatusAt(now) == "deprecated" {
+					fmt.Fprintf(opts.out, "  WARN model %s%s\n", model.Name, model.LifecycleNote(now))
 				}
 			}
+		} else if !os.IsNotExist(err) {
+			return err
 		}
 	}
 
@@ -731,44 +728,37 @@ func buildBaseEnv(repoDir string, ref config.LabRef) (map[string]string, error) 
 		return nil, err
 	}
 	injectSettingsEnv(env, settings)
-	if _, err := os.Stat(liteLLMModelsAssetPath(&RootState{RepoDir: repoDir})); err == nil {
-		if _, err := labLiteLLMModelNames(&RootState{RepoDir: repoDir}, ref); err != nil {
+	state := &RootState{RepoDir: repoDir}
+	if _, err := os.Stat(liteLLMModelsAssetPath(state)); err == nil {
+		catalog, models, err := resolveLabModels(state, ref)
+		if err != nil {
 			return nil, err
 		}
-	} else if !os.IsNotExist(err) {
-		return nil, err
-	}
-	if manifest != nil {
 		usesClaude := false
-		for _, agent := range manifest.Agents {
-			if agent == "claude-code" {
-				usesClaude = true
+		if manifest != nil {
+			for _, agent := range manifest.Agents {
+				usesClaude = usesClaude || agent == "claude-code"
 			}
 		}
 		if usesClaude {
-			data, err := os.ReadFile(liteLLMModelsAssetPath(&RootState{RepoDir: repoDir}))
-			if err != nil && !os.IsNotExist(err) {
+			byName := map[string]modelcatalog.Model{}
+			for _, model := range catalog.Models {
+				byName[model.Name] = model
+			}
+			for alias, name := range catalog.Defaults["anthropic"] {
+				if err := byName[name].SelectionError(modelNow()); err != nil {
+					return nil, fmt.Errorf("default anthropic.%s: %w", alias, err)
+				}
+				env["ANTHROPIC_DEFAULT_"+strings.ToUpper(alias)+"_MODEL"] = name
+			}
+			encoded, err := json.Marshal(models)
+			if err != nil {
 				return nil, err
 			}
-			if err == nil {
-				catalog, err := parseLiteLLMModelCatalog(data)
-				if err != nil {
-					return nil, err
-				}
-				for alias, model := range catalog.Defaults["anthropic"] {
-					env["ANTHROPIC_DEFAULT_"+strings.ToUpper(alias)+"_MODEL"] = model
-				}
-				models, err := labLiteLLMModelNames(&RootState{RepoDir: repoDir}, ref)
-				if err != nil {
-					return nil, err
-				}
-				encoded, err := json.Marshal(models)
-				if err != nil {
-					return nil, err
-				}
-				env["TAXIWAY_CLAUDE_AVAILABLE_MODELS"] = string(encoded)
-			}
+			env["TAXIWAY_CLAUDE_AVAILABLE_MODELS"] = string(encoded)
 		}
+	} else if !os.IsNotExist(err) {
+		return nil, err
 	}
 
 	if ref.Workspace != nil {
