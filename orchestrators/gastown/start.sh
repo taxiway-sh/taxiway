@@ -15,9 +15,11 @@ if [ -f "${HOME}/.config/taxiway/env" ]; then
     set +a
 fi
 
-# shellcheck source=../../agents/claude-code/env.sh
-source "$(dirname "${BASH_SOURCE[0]}")/../../agents/claude-code/env.sh"
-claude_code_write_env "${TAXIWAY_SET_TOOL_SEARCH:-true}" "${TAXIWAY_SET_CLAUDEAI_MCP_SERVERS:-false}"
+if ! taxiway_is_plan; then
+    # shellcheck source=../../agents/claude-code/env.sh
+    source "$(dirname "${BASH_SOURCE[0]}")/../../agents/claude-code/env.sh"
+    claude_code_write_env "${TAXIWAY_SET_TOOL_SEARCH:-true}" "${TAXIWAY_SET_CLAUDEAI_MCP_SERVERS:-false}"
+fi
 
 HQ_DIR="${TAXIWAY_HQ_DIR:-/lab/work/gt}"
 FORCE="${TAXIWAY_FORCE:-false}"
@@ -27,6 +29,9 @@ GASTOWN_MODEL="${TAXIWAY_SET_MODEL:?Missing model: start this orchestrator throu
 TAXIWAY_LITELLM_BASE_URL="${TAXIWAY_LITELLM_BASE_URL:-http://${TAXIWAY_LAB:-lab}.litellm.internal:4000}"
 
 if taxiway_is_plan; then
+    log "Configuring Claude Code tool search and MCP settings"
+    taxiway_plan_detail "tool search: ${TAXIWAY_SET_TOOL_SEARCH:-true}"
+    taxiway_plan_detail "Claude AI MCP servers: ${TAXIWAY_SET_CLAUDEAI_MCP_SERVERS:-false}"
     log "Configuring Gas Town for the Taxiway LiteLLM gateway"
     taxiway_plan_detail "model: $GASTOWN_MODEL"
     if taxiway_can_inspect && [[ -f "$MARKER" ]] && [[ "$FORCE" != "true" ]]; then

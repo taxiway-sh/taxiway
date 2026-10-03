@@ -575,6 +575,23 @@ func TestDriverForRefPreservesDryRunForExistingLab(t *testing.T) {
 	require.True(t, exists, "resolved dry-run driver must not delete the existing lab")
 }
 
+func TestDryRunRejectedBeforeExecutingRuntimeCommands(t *testing.T) {
+	for _, args := range [][]string{{"destroy", "--yes", "--dry-run"}, {"observe", "rm", "--volumes", "--dry-run"}, {"observe", "reset", "--rotate-secrets", "--dry-run"}} {
+		t.Run(strings.Join(args[:len(args)-1], " "), func(t *testing.T) {
+			root, state, stdout, stderr := buildTestRoot(t)
+			root.AddCommand(newDestroyCmd(state), newObserveCmd(state))
+			called := false
+			root.PersistentPreRunE = func(_ *cobra.Command, _ []string) error {
+				called = true
+				return nil
+			}
+			_, _, err := execRoot(t, root, stdout, stderr, args...)
+			require.ErrorContains(t, err, "unknown flag: --dry-run")
+			require.False(t, called, "flag parsing must reject the command before runtime setup")
+		})
+	}
+}
+
 func TestDryRunFlagIsExposedOnLabLifecycleCommands(t *testing.T) {
 	for _, command := range [][]string{
 		{"up"}, {"prepare"}, {"run"},

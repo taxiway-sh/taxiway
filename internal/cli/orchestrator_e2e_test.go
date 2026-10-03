@@ -5,6 +5,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -216,19 +218,19 @@ func e2eSemanticDryRunLabels(orch string) e2eDryRunLabels {
 	labels := e2eDryRunLabels{Bootstrap: []string{"Updating apt cache", "Enabling Corepack"}}
 	switch orch {
 	case "codex":
-		labels.Install = []string{"Installing @openai/codex@latest"}
+		labels.Install = []string{"Installing @openai/codex@"}
 		labels.Verify = []string{"Verifying codex version and help"}
 		labels.Workspace = []string{"Cloning workspace repository"}
 		labels.Auth = []string{"Authentication is managed by the Taxiway LiteLLM gateway"}
 		labels.Start = []string{"Starting tmux session 'codex'"}
 	case "claude-code":
-		labels.Install = []string{"Installing @anthropic-ai/claude-code@latest"}
+		labels.Install = []string{"Installing @anthropic-ai/claude-code@"}
 		labels.Verify = []string{"Verifying claude version, help, and auth status"}
 		labels.Workspace = []string{"Cloning workspace repository"}
 		labels.Auth = []string{"Checking Claude Code authentication"}
 		labels.Start = []string{"Starting tmux session 'claude-code'"}
 	case "gastown":
-		labels.Install = []string{"Installing Gas Town", "Installing @anthropic-ai/claude-code@latest"}
+		labels.Install = []string{"Installing Gas Town", "Installing @anthropic-ai/claude-code@"}
 		labels.Verify = []string{"Verifying tool versions", "Verifying claude version, help, and auth status"}
 		labels.Workspace = []string{"Adding rig", "Adding crew workspace"}
 		labels.Auth = []string{"Checking Claude Code authentication"}
@@ -265,7 +267,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		existedBefore, err := state.Driver.Exists(context.Background(), id)
 		require.NoError(t, err)
 		phaseStateBefore := captureE2EPhaseState(stateDir, id)
-		output := runE2EDryRunCommand(t, root, tb, "create", lab, "--type", orch)
+		output := runE2EDryRunCommand(t, root, tb, state, "create", lab, "--type", orch)
 		require.Contains(t, output, "Creating Docker lab runtime")
 		require.Contains(t, output, "No changes were made.")
 		runE2EAssert(t, "assert:phase-markers-preserved", func(t *testing.T) {
@@ -289,7 +291,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		})
 	})
 
-	runE2EScriptDryRunStep(t, "taxiway:bootstrap[--dry-run]", root, tb, stateDir, id, dryRunLabels.Bootstrap, "bootstrap", lab)
+	runE2EScriptDryRunStep(t, "taxiway:bootstrap[--dry-run]", root, tb, state, stateDir, id, dryRunLabels.Bootstrap, "bootstrap", lab)
 	runE2EStep(t, "taxiway:bootstrap", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "bootstrap", lab)
 		runE2EAssert(t, "assert:phase-bootstrapped", func(t *testing.T) {
@@ -297,7 +299,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		})
 	})
 
-	runE2EScriptDryRunStep(t, "taxiway:install[--dry-run]", root, tb, stateDir, id, dryRunLabels.Install, "install", lab)
+	runE2EScriptDryRunStep(t, "taxiway:install[--dry-run]", root, tb, state, stateDir, id, dryRunLabels.Install, "install", lab)
 	runE2EStep(t, "taxiway:install", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "install", lab, "--set", "model="+expectations.model)
 		runE2EAssert(t, "assert:phase-installed", func(t *testing.T) {
@@ -308,7 +310,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		})
 	})
 
-	runE2EScriptDryRunStep(t, "taxiway:verify[--dry-run]", root, tb, stateDir, id, dryRunLabels.Verify, "verify", lab)
+	runE2EScriptDryRunStep(t, "taxiway:verify[--dry-run]", root, tb, state, stateDir, id, dryRunLabels.Verify, "verify", lab)
 	runE2EStep(t, "taxiway:verify", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "verify", lab)
 		runE2EAssert(t, "assert:phase-verified", func(t *testing.T) {
@@ -321,7 +323,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		ref := config.LabRef{Lab: lab, Orch: orch, Driver: state.Driver.Name()}
 		sidecar := e2eLabLiteLLMContainer(state, ref)
 		sidecarStateBefore := e2eDockerContainerState(t, sidecar)
-		output := runE2EDryRunCommand(t, root, tb, "gateway", lab)
+		output := runE2EDryRunCommand(t, root, tb, state, "gateway", lab)
 		require.Contains(t, output, "Configuring lab gateway environment")
 		require.Contains(t, output, "Reconciling LiteLLM sidecar")
 		runE2EAssert(t, "assert:phase-markers-preserved", func(t *testing.T) {
@@ -342,7 +344,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		})
 	})
 
-	runE2EScriptDryRunStep(t, "taxiway:workspace[--dry-run]", root, tb, stateDir, id, dryRunLabels.Workspace, "workspace", lab)
+	runE2EScriptDryRunStep(t, "taxiway:workspace[--dry-run]", root, tb, state, stateDir, id, dryRunLabels.Workspace, "workspace", lab)
 	runE2EStep(t, "taxiway:workspace", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "workspace", lab)
 		runE2EAssert(t, "assert:phase-workspace-created", func(t *testing.T) {
@@ -361,15 +363,15 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		})
 	})
 
-	runE2EScriptDryRunStep(t, "taxiway:auth[--dry-run]", root, tb, stateDir, id, dryRunLabels.Auth, "auth", lab)
+	runE2EScriptDryRunStep(t, "taxiway:auth[--dry-run]", root, tb, state, stateDir, id, dryRunLabels.Auth, "auth", lab)
 	runE2EStep(t, "taxiway:auth", func(t *testing.T) {
-		runE2ECommand(t, root, tb, "auth", lab)
+		runE2ECommand(t, root, tb, "auth", lab, "--set", "auth_mode=api-key")
 		runE2EAssert(t, "assert:phase-authenticated", func(t *testing.T) {
 			assertE2EPhase(t, stateDir, id, phases.PhaseAuth)
 		})
 	})
 
-	runE2EScriptDryRunStep(t, "taxiway:start[--dry-run]", root, tb, stateDir, id, dryRunLabels.Start, "start", lab)
+	runE2EScriptDryRunStep(t, "taxiway:start[--dry-run]", root, tb, state, stateDir, id, dryRunLabels.Start, "start", lab)
 	runE2EStep(t, "taxiway:start", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "start", lab)
 		runE2EAssert(t, "assert:phase-started", func(t *testing.T) {
@@ -411,13 +413,29 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		runE2ECommand(t, root, tb, "doctor", lab)
 	})
 
+	for _, args := range [][]string{{"destroy", "--yes", "--dry-run"}, {"observe", "rm", "--volumes", "--dry-run"}, {"observe", "reset", "--rotate-secrets", "--dry-run"}} {
+		runE2EStep(t, "taxiway:"+strings.Join(args, " ")+"[rejected]", func(t *testing.T) {
+			phaseStateBefore := captureE2EPhaseState(stateDir, id)
+			_, _, err := execDockerRoot(t, root, tb, args...)
+			require.ErrorContains(t, err, "unknown flag: --dry-run")
+			runE2EAssert(t, "assert:runtime-preserved", func(t *testing.T) {
+				running, err := state.Driver.Running(context.Background(), id)
+				require.NoError(t, err)
+				require.True(t, running)
+				assertE2EGatewayRuntimeRunning(t, state, lab, orch)
+				assertE2EObservabilityRunning(t, state)
+				require.Equal(t, phaseStateBefore, captureE2EPhaseState(stateDir, id))
+			})
+		})
+	}
+
 	runE2EStep(t, "taxiway:down[--dry-run]", func(t *testing.T) {
 		runningBefore, err := state.Driver.Running(context.Background(), id)
 		require.NoError(t, err)
 		ref := config.LabRef{Lab: lab, Orch: orch, Driver: state.Driver.Name()}
 		sidecar := e2eLabLiteLLMContainer(state, ref)
 		sidecarStateBefore := e2eDockerContainerState(t, sidecar)
-		output := runE2EDryRunCommand(t, root, tb, "down", lab)
+		output := runE2EDryRunCommand(t, root, tb, state, "down", lab)
 		require.Contains(t, output, "Stopping lab runtime")
 		require.Contains(t, output, "Stopping LiteLLM sidecar")
 		runE2EAssert(t, "assert:lab-runtime-preserved", func(t *testing.T) {
@@ -443,7 +461,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		ref := config.LabRef{Lab: lab, Orch: orch, Driver: state.Driver.Name()}
 		sidecar := e2eLabLiteLLMContainer(state, ref)
 		sidecarStateBefore := e2eDockerContainerState(t, sidecar)
-		runE2EDryRunCommand(t, root, tb, "up", lab, "--type", orch, "--skip-auth-check")
+		runE2EDryRunCommand(t, root, tb, state, "up", lab, "--type", orch, "--skip-auth-check")
 		runE2EAssert(t, "assert:lab-runtime-preserved", func(t *testing.T) {
 			runningAfter, err := state.Driver.Running(context.Background(), id)
 			require.NoError(t, err)
@@ -483,7 +501,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 
 	runE2ERecordScenario(t, root, tb, state, lab, orch)
 
-	runE2EScriptDryRunStep(t, "taxiway:reset[--yes,--dry-run]", root, tb, stateDir, id, []string{"Stopping workspace services", "Clearing lifecycle phase markers"}, "reset", "--yes", lab)
+	runE2EScriptDryRunStep(t, "taxiway:reset[--yes,--dry-run]", root, tb, state, stateDir, id, []string{"Stopping workspace services", "Clearing lifecycle phase markers"}, "reset", "--yes", lab)
 	runE2EStep(t, "taxiway:reset[--yes]", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "reset", "--yes", lab)
 		runE2EAssert(t, "assert:lab-listed", func(t *testing.T) {
@@ -497,7 +515,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		ref := config.LabRef{Lab: lab, Orch: orch, Driver: state.Driver.Name()}
 		sidecar := e2eLabLiteLLMContainer(state, ref)
 		sidecarStateBefore := e2eDockerContainerState(t, sidecar)
-		output := runE2EDryRunCommand(t, root, tb, "rm", "--yes", lab)
+		output := runE2EDryRunCommand(t, root, tb, state, "rm", "--yes", lab)
 		require.Contains(t, output, "Deleting lab runtime and storage")
 		require.Contains(t, output, "Clearing lifecycle phase markers")
 		runE2EAssert(t, "assert:lab-runtime-preserved", func(t *testing.T) {
@@ -689,10 +707,114 @@ func cleanupE2EOrchestratorLab(t *testing.T, state *RootState, id, lab, orch str
 	})
 }
 
-func runE2EDryRunCommand(t *testing.T, root *cobra.Command, tb *dockerTestBuf, args ...string) string {
+func runE2EDryRunCommand(t *testing.T, root *cobra.Command, tb *dockerTestBuf, state *RootState, args ...string) string {
 	t.Helper()
+	before := captureE2EDryRunRuntime(t, state)
 	dryRunArgs := append(append([]string(nil), args...), "--dry-run")
-	return runE2ECommand(t, root, tb, dryRunArgs...)
+	output := runE2ECommand(t, root, tb, dryRunArgs...)
+	runE2EAssert(t, "assert:runtime-and-files-preserved", func(t *testing.T) {
+		after := captureE2EDryRunRuntime(t, state)
+		var changed []string
+		for path, digest := range before {
+			if after[path] != digest {
+				changed = append(changed, path)
+			}
+		}
+		for path := range after {
+			if _, existed := before[path]; !existed {
+				changed = append(changed, path)
+			}
+		}
+		sort.Strings(changed)
+		require.Empty(t, changed, "preview must preserve Docker resources, credentials, gateway configuration, lab settings, and workspace files")
+	})
+	return output
+}
+
+func captureE2EDryRunRuntime(t *testing.T, state *RootState) map[string]string {
+	t.Helper()
+	hash := sha256.New()
+	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+	for _, directory := range []string{stateDir, authStateDir(state), state.proxyRuntime().StateDir, observabilityStateDir(state)} {
+		err := filepath.WalkDir(directory, func(path string, entry os.DirEntry, err error) error {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			info, err := entry.Info()
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(hash, "%s %s\n", path, info.Mode())
+			if info.Mode().IsRegular() {
+				contents, err := os.ReadFile(path)
+				if err != nil {
+					return err
+				}
+				_, _ = hash.Write(contents)
+			}
+			return nil
+		})
+		require.NoError(t, err)
+	}
+	prefix := "taxiway-e2e-" + state.Observability.ContextID
+	for _, args := range [][]string{
+		{"ps", "-a", "--filter", "name=" + prefix, "--format", "{{.ID}} {{.Names}} {{.State}}"},
+		{"network", "ls", "--filter", "name=" + prefix, "--format", "{{.ID}} {{.Name}}"},
+		{"volume", "ls", "--filter", "name=" + prefix, "--format", "{{.Name}}"},
+	} {
+		output, err := exec.Command("docker", args...).Output()
+		require.NoError(t, err)
+		lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+		sort.Strings(lines)
+		fmt.Fprintln(hash, strings.Join(lines, "\n"))
+	}
+	snapshot := map[string]string{"host state and Docker resources": fmt.Sprintf("%x", hash.Sum(nil))}
+	refs, err := collectDestroyLabRefs(stateDir)
+	require.NoError(t, err)
+	d := driver.NewDockerDriver(stateDir)
+	for _, ref := range refs {
+		id := idName(ref.Lab)
+		running, err := d.Running(context.Background(), id)
+		require.NoError(t, err)
+		if !running {
+			continue
+		}
+		var output bytes.Buffer
+		result, err := d.Exec(context.Background(), id, driver.ExecRequest{
+			Argv: []string{"bash", "-c", `set -euo pipefail
+for path in "$HOME/.config/taxiway" "$HOME/.codex" "$HOME/.claude" /lab/work; do
+  if [ -d "$path" ]; then
+    # GasTown's running database and daemon logs change independently of previews.
+    # Keep their directory presence while hashing persistent configuration and workspace files.
+    find "$path" \( -path /lab/work/gt/.dolt-data -o -path /lab/work/gt/daemon \) -printf 'mode|%m|%p\n' -prune -o -printf 'mode|%m|%p\n'
+    find "$path" \( -path /lab/work/gt/.dolt-data -o -path /lab/work/gt/daemon \) -prune -o -type f ! -path /lab/work/gt/.runtime/doctor-fix.log -exec sha256sum {} +
+  fi
+done
+if command -v tmux >/dev/null 2>&1; then
+  tmux list-sessions -F 'session|#{session_name}|#{session_id}' 2>/dev/null || true
+fi`},
+			Stdout: &output,
+		})
+		require.NoError(t, err)
+		require.Zero(t, result.ExitCode)
+		for _, line := range strings.Split(strings.TrimSpace(output.String()), "\n") {
+			if strings.HasPrefix(line, "session|") {
+				fields := strings.SplitN(line, "|", 3)
+				snapshot[ref.Lab+":tmux:"+fields[1]] = fields[2]
+			} else if strings.HasPrefix(line, "mode|") {
+				fields := strings.SplitN(line, "|", 3)
+				key := ref.Lab + ":" + fields[2]
+				snapshot[key] = fields[1]
+			} else if len(line) > 66 {
+				key := ref.Lab + ":" + line[66:]
+				snapshot[key] += ":" + line[:64]
+			}
+		}
+	}
+	return snapshot
 }
 
 func runE2EScriptDryRunStep(
@@ -700,6 +822,7 @@ func runE2EScriptDryRunStep(
 	stepName string,
 	root *cobra.Command,
 	tb *dockerTestBuf,
+	state *RootState,
 	stateDir, id string,
 	expected []string,
 	args ...string,
@@ -708,7 +831,7 @@ func runE2EScriptDryRunStep(
 	require.NotEmpty(t, args)
 	phaseStateBefore := captureE2EPhaseState(stateDir, id)
 	runE2EStep(t, stepName, func(t *testing.T) {
-		output := runE2EDryRunCommand(t, root, tb, args...)
+		output := runE2EDryRunCommand(t, root, tb, state, args...)
 		for _, label := range expected {
 			require.Contains(t, output, label)
 		}

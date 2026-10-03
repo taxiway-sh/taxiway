@@ -6,13 +6,14 @@ import (
 	"github.com/taxiway-sh/taxiway/internal/config"
 )
 
-// dryRunDriver wraps any Driver and prints write operations instead of executing them.
+// dryRunDriver wraps any Driver and suppresses write operations.
+// The CLI renders the semantic operation plans.
 // Read operations (Exists, Running, Status, List) pass through.
 type dryRunDriver struct {
 	inner Driver
 }
 
-// NewDryRun wraps d so that all write operations print a description and return nil.
+// NewDryRun wraps d so that all write operations return nil without executing.
 func NewDryRun(d Driver) Driver {
 	if _, ok := d.(*dryRunDriver); ok {
 		return d

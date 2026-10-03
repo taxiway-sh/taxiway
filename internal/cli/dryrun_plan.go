@@ -90,7 +90,7 @@ func planSinglePhase(ctx context.Context, cmd *cobra.Command, state *RootState, 
 }
 
 func planPhase(ctx context.Context, state *RootState, ref config.LabRef, phase phases.Phase, stdout, stderr io.Writer, opts phasePlanOptions) error {
-	baseEnv, err := buildBaseEnv(ref)
+	baseEnv, err := buildBaseEnv(state.RepoDir, ref)
 	if err != nil {
 		return err
 	}
@@ -151,7 +151,19 @@ func planCreate(state *RootState, ref config.LabRef, plan *dryRunPlan) error {
 	if driverName == "" {
 		driverName = state.Driver.Name()
 	}
-	plan.Step("create", fmt.Sprintf("Creating %s lab runtime", driverDisplayName(driverName)))
+	d, err := driverForRef(state, ref)
+	if err != nil {
+		return err
+	}
+	exists, err := d.Exists(context.Background(), idName(ref.Lab))
+	if err != nil {
+		return err
+	}
+	if exists {
+		plan.Step("create", fmt.Sprintf("Starting existing %s lab runtime", driverDisplayName(driverName)))
+	} else {
+		plan.Step("create", fmt.Sprintf("Creating %s lab runtime", driverDisplayName(driverName)))
+	}
 	plan.Step("create", "Preparing Taxiway lab state")
 	plan.Detail("runtime reference, workspace directories, and lifecycle metadata")
 	return nil
@@ -213,7 +225,7 @@ func planAuth(ctx context.Context, state *RootState, ref config.LabRef, stdout, 
 		}
 		agents = manifestAgents(manifest)
 	}
-	baseEnv, err := buildBaseEnv(ref)
+	baseEnv, err := buildBaseEnv(state.RepoDir, ref)
 	if err != nil {
 		return err
 	}

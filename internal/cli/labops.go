@@ -431,6 +431,19 @@ func execScriptToWithRef(ctx context.Context, state *RootState, ref config.LabRe
 }
 
 func execPlannableScriptToWithRef(ctx context.Context, state *RootState, ref config.LabRef, scriptPath string, stdout, stderr io.Writer, env map[string]string) error {
+	if state.Flags.DryRun {
+		d, err := driverForRef(state, ref)
+		if err != nil {
+			return err
+		}
+		running, err := d.Running(ctx, idName(ref.Lab))
+		if err != nil {
+			return err
+		}
+		if !running {
+			return execOfflinePlanScript(ctx, scriptPath, stdout, stderr, env)
+		}
+	}
 	return execScriptToWithRefMode(ctx, state, ref, scriptPath, stdout, stderr, env, true)
 }
 

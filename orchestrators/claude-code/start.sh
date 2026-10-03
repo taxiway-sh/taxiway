@@ -21,6 +21,12 @@ if [ -f "${HOME}/.config/taxiway/env" ]; then
     set +a
 fi
 
+if ! taxiway_is_plan; then
+    # shellcheck source=../../agents/claude-code/env.sh
+    source "$(dirname "${BASH_SOURCE[0]}")/../../agents/claude-code/env.sh"
+    claude_code_write_env "${TAXIWAY_SET_TOOL_SEARCH:-true}" "${TAXIWAY_SET_CLAUDEAI_MCP_SERVERS:-false}"
+fi
+
 log()  { printf '\n\033[1;34m[claude-code-start]\033[0m %s\n' "$*"; }
 pass() { printf '  \033[1;32mOK\033[0m   %s\n' "$*"; }
 
@@ -29,6 +35,9 @@ CLAUDE_CODE_MODEL="${TAXIWAY_SET_MODEL:?Missing model: start this orchestrator t
 TAXIWAY_LITELLM_BASE_URL="${TAXIWAY_LITELLM_BASE_URL:-http://${TAXIWAY_LAB:-lab}.litellm.internal:4000}"
 
 if taxiway_is_plan; then
+    log "Configuring Claude Code tool search and MCP settings"
+    taxiway_plan_detail "tool search: ${TAXIWAY_SET_TOOL_SEARCH:-true}"
+    taxiway_plan_detail "Claude AI MCP servers: ${TAXIWAY_SET_CLAUDEAI_MCP_SERVERS:-false}"
     log "Configuring Claude Code for the Taxiway LiteLLM gateway"
     taxiway_plan_detail "model: $CLAUDE_CODE_MODEL"
     taxiway_plan_detail "base URL: $TAXIWAY_LITELLM_BASE_URL"
@@ -44,10 +53,6 @@ if taxiway_is_plan; then
     taxiway_plan_detail "claude --model $CLAUDE_CODE_MODEL"
     exit 0
 fi
-
-# shellcheck source=../../agents/claude-code/env.sh
-source "$(dirname "${BASH_SOURCE[0]}")/../../agents/claude-code/env.sh"
-claude_code_write_env "${TAXIWAY_SET_TOOL_SEARCH:-true}" "${TAXIWAY_SET_CLAUDEAI_MCP_SERVERS:-false}"
 
 lab_emit_event phase start
 

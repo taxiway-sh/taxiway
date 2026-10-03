@@ -506,7 +506,6 @@ func runUp(ctx context.Context, state *RootState, ref config.LabRef, id, stateDi
 		}
 		inspectionAvailable, err = d.Exists(ctx, id)
 		if err != nil {
-
 			return err
 		}
 	}
@@ -593,6 +592,8 @@ func runUp(ctx context.Context, state *RootState, ref config.LabRef, id, stateDi
 		if !opts.force && !profileMustRun && !settingsMustRun && !authMustRun && !startMustRunAfterResume && phaseDone {
 			if phase == phases.PhaseGateway {
 				if opts.dryRun {
+					plan.Step("gateway", "Reconciling LiteLLM sidecar")
+					plan.Step("gateway", "Reloading shared gateway proxy")
 					fmt.Fprintf(opts.out, "  ✓  %-20s (ready)\n", phase)
 					continue
 				}

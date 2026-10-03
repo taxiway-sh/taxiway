@@ -1112,6 +1112,8 @@ func TestRunCommandDryRunDoesNotReconcileCachedGateway(t *testing.T) {
 	out, _, err := execUpRoot(t, root, stdout, stderr, "run", "gastown", "--skip-workspace", "--skip-auth-check", "--dry-run")
 	require.NoError(t, err)
 	require.Zero(t, ensured)
+	require.Contains(t, out, "Reconciling LiteLLM sidecar")
+	require.Contains(t, out, "Reloading shared gateway proxy")
 	require.Contains(t, out, "gateway              (ready)")
 	require.Contains(t, out, "No changes were made.")
 }

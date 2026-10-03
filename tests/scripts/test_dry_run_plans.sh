@@ -11,6 +11,7 @@ TEST_HOME="$TEST_ROOT/home"
 FORBIDDEN_LOG="$TEST_ROOT/forbidden.log"
 mkdir -p "$SAFE_BIN" "$TEST_HOME"
 export FORBIDDEN_LOG
+export CODEX_VERSION=9.8.7 CLAUDE_CODE_VERSION=9.8.7
 
 for command_name in sudo apt-get curl npm gt bd dolt sqlite3 codex claude git tmux docker; do
   printf '%s\n' \
@@ -30,6 +31,10 @@ run_plan() {
   PATH="$SAFE_BIN:$PATH" \
   "$@" bash "$script"
   [[ ! -s "$FORBIDDEN_LOG" ]]
+  if [[ -n "$(find "$TEST_HOME" -mindepth 1 -print -quit)" ]]; then
+    printf 'dry-run changed temporary HOME in %s\n' "$script" >&2
+    return 1
+  fi
 }
 
 assert_contains() {
@@ -44,11 +49,11 @@ assert_contains() {
 output="$(run_plan "$ROOT_DIR/agents/codex/install.sh")"
 assert_contains "$output" "[codex-agent-install]"
 assert_contains "$output" "Installing bubblewrap (codex sandbox prerequisite)"
-assert_contains "$output" "Installing @openai/codex@latest"
+assert_contains "$output" "Installing @openai/codex@9.8.7"
 
 output="$(run_plan "$ROOT_DIR/agents/claude-code/install.sh")"
 assert_contains "$output" "[claude-code-agent-install]"
-assert_contains "$output" "Installing @anthropic-ai/claude-code@latest"
+assert_contains "$output" "Installing @anthropic-ai/claude-code@9.8.7"
 
 output="$(run_plan "$ROOT_DIR/orchestrators/gastown/install.sh")"
 assert_contains "$output" "[gastown-install]"
@@ -97,17 +102,17 @@ output="$(run_plan "$ROOT_DIR/agents/claude-code/auth.sh")"
 assert_contains "$output" "Checking Claude Code authentication"
 assert_contains "$output" "Starting Claude Code interactive authentication if credentials are missing"
 
-output="$(run_plan "$ROOT_DIR/orchestrators/codex/start.sh" env TAXIWAY_LAB=demo TAXIWAY_LITELLM_API_KEY=test)"
+output="$(run_plan "$ROOT_DIR/orchestrators/codex/start.sh" env TAXIWAY_LAB=demo TAXIWAY_LITELLM_API_KEY=test TAXIWAY_SET_MODEL=test-model)"
 assert_contains "$output" "Configuring Codex for the Taxiway LiteLLM gateway"
 assert_contains "$output" "Starting tmux session 'codex'"
 
-output="$(run_plan "$ROOT_DIR/orchestrators/claude-code/start.sh" env TAXIWAY_LAB=demo TAXIWAY_LITELLM_API_KEY=test)"
+output="$(run_plan "$ROOT_DIR/orchestrators/claude-code/start.sh" env TAXIWAY_LAB=demo TAXIWAY_LITELLM_API_KEY=test TAXIWAY_SET_MODEL=test-model)"
 assert_contains "$output" "Configuring Claude Code for the Taxiway LiteLLM gateway"
 assert_contains "$output" "Starting tmux session 'claude-code'"
 
 output="$(run_plan "$ROOT_DIR/orchestrators/gastown/start.sh" env \
   TAXIWAY_LAB=demo \
-  TAXIWAY_LITELLM_API_KEY=test \
+  TAXIWAY_LITELLM_API_KEY=test TAXIWAY_SET_MODEL=test-model \
   TAXIWAY_RIG_NAME=project \
   TAXIWAY_CREW_NAME=developer)"
 assert_contains "$output" "Checking Gas Town runtime health"
