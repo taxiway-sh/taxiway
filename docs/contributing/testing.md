@@ -164,30 +164,10 @@ tool search is enabled and Claude.ai connector import is disabled by default.
 The same assertion runs after each Gas Town handoff. Overrides and clearing
 settings are covered by the runtime script tests.
 
-Model expectations come from `infra/gateway/litellm/models.yaml` and the
-orchestrator manifests in the tested source tree. The fixture keeps public model
-IDs and providers, snapshots their lifecycle status, and routes requests to a
-local simulated upstream. It does not fetch new model lists from the internet.
-This avoids duplicating changing defaults in the tests while keeping a run tied
-to the commit being tested. Unknown and retired selections use controlled
-fixture entries.
-
-The `prepare-run` scenarios omit `--set` and check that agents use the manifest
-default without persisting it as an explicit setting. The `up` and
-`phase-by-phase` scenarios explicitly select a compatible alternative made
-deprecated in the fixture, verifying that the selection remains routable.
-They check the principal selection and
-the models exposed by the running gateway from inside the lab, excluding other
-providers, retired models, and unselected deprecated models. Each exposed model
-is exercised through its native Messages or Responses endpoint from both the
-host and the lab. Codex's configured principal/provider and Claude's process
-arguments, tier aliases, and exact enforced managed model policy are checked in
-the guest. These assertions run at startup, after the phase-by-phase lab restart,
-and for the Claude processes replaced by Gas Town handoff.
-
-These configuration and simulated-provider requests do not prove real
-principal/subagent delegation or interactive readiness. Use the authenticated
-[model gateway scenarios](model-gateway-tests.md) for real model delegation.
+Model expectations come from the catalog and orchestrator manifests of the tested commit.
+Provider requests are simulated locally with fake credentials; no online model discovery is needed.
+Existing scenarios verify model defaults, explicit selections, provider exposure, routing, and restart/handoff propagation.
+Real principal/subagent delegation requires the authenticated [model gateway scenarios](model-gateway-tests.md).
 
 Tests use `--skip-auth-check`. They do not run interactive authentication,
 use real API keys, or exercise browser/device login. Authenticated execution
