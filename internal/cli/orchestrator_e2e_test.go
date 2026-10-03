@@ -142,7 +142,7 @@ func testE2EOrchestratorPrepareRun(t *testing.T, orch string) {
 	})
 
 	runE2EStep(t, fmt.Sprintf("taxiway:prepare[--type=%s]", orch), func(t *testing.T) {
-		runE2ECommand(t, root, tb, "prepare", lab, "--type", orch, "--set", "model="+expectations.model)
+		runE2ECommand(t, root, tb, "prepare", lab, "--type", orch)
 		configureE2EFixtureWorkspace(t, state, id)
 		runE2EAssert(t, "assert:phase-verified", func(t *testing.T) {
 			assertE2EPhase(t, stateDir, id, phases.PhaseVerify)
@@ -817,6 +817,12 @@ func e2eModelProvider(orch string) string {
 	return "anthropic"
 }
 
+// Subtests retain their parent scenario name. Prepare/run covers manifest
+// defaults; up and phase-by-phase cover explicit deprecated selections.
+func e2eUsesManifestDefault(t *testing.T) bool {
+	return strings.HasSuffix(strings.SplitN(t.Name(), "/", 2)[0], "_PrepareRun")
+}
+
 func e2ePrincipalModel(t *testing.T, orch string) string {
 	t.Helper()
 	manifest, err := config.LoadOrchManifest(findRepoRoot(t), orch)
@@ -852,6 +858,9 @@ func e2ePrincipalModel(t *testing.T, orch string) string {
 		}
 	}
 	require.True(t, foundDefault, "shipped default must be in the provider catalog")
+	if e2eUsesManifestDefault(t) {
+		return defaultModel
+	}
 	require.NotEmpty(t, alternative, "need a provider-compatible alternative to prove explicit selection")
 	return alternative
 }
@@ -1392,7 +1401,7 @@ func configureE2ELiteLLMModelCatalog(t *testing.T, state *RootState, fakeUpstrea
 		model := &catalog.Models[i]
 		model.Status = model.StatusAt(modelNow())
 		model.RetirementDate = ""
-		if selected[model.Name] {
+		if selected[model.Name] && !e2eUsesManifestDefault(t) {
 			model.Status = "deprecated"
 		}
 		if model.Provider == "chatgpt" {
@@ -1445,7 +1454,12 @@ func assertE2EGatewayModels(t *testing.T, state *RootState, id, orch string) {
 	ref, ok, err := state.Driver.ReadLabRef(context.Background(), id)
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.Equal(t, e2eExpectations(t, orch).model, ref.Settings["model"], "explicit principal selection must persist")
+	if e2eUsesManifestDefault(t) {
+		_, persisted := ref.Settings["model"]
+		require.False(t, persisted, "manifest default must not be persisted as an explicit setting")
+	} else {
+		require.Equal(t, e2eExpectations(t, orch).model, ref.Settings["model"], "explicit principal selection must persist")
+	}
 	values, err := readLabGatewayEnv(config.StateDir(state.Flags.StateDir, state.RepoDir), ref)
 	require.NoError(t, err)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -1467,6 +1481,13 @@ func assertE2EGatewayModels(t *testing.T, state *RootState, id, orch string) {
 	for _, model := range result.Data {
 		names = append(names, model.ID)
 	}
+	// Controlled fixture entries give independent lifecycle expectations even
+	// if parsing/status logic shared with production regresses.
+	for _, prefix := range []string{"gpt", "claude"} {
+		require.NotContains(t, names, prefix+"-e2e-deprecated")
+		require.NotContains(t, names, prefix+"-e2e-retired")
+	}
+	require.Contains(t, names, e2ePrincipalModel(t, orch), "principal must remain exposed, including an explicitly selected deprecated model")
 	require.ElementsMatch(t, e2eGatewayModelNames(t, orch), names,
 		"gateway must expose the provider catalog, retain the selected deprecated principal, and exclude other providers/retired/unselected deprecated models")
 }

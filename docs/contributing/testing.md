@@ -172,9 +172,11 @@ This avoids duplicating changing defaults in the tests while keeping a run tied
 to the commit being tested. Unknown and retired selections use controlled
 fixture entries.
 
-The scenarios explicitly select a compatible model different from the shipped
-default and make it deprecated in the fixture, verifying that an explicit
-selection remains routable. They check the persisted principal selection and
+The `prepare-run` scenarios omit `--set` and check that agents use the manifest
+default without persisting it as an explicit setting. The `up` and
+`phase-by-phase` scenarios explicitly select a compatible alternative made
+deprecated in the fixture, verifying that the selection remains routable.
+They check the principal selection and
 the models exposed by the running gateway from inside the lab, excluding other
 providers, retired models, and unselected deprecated models. Each exposed model
 is exercised through its native Messages or Responses endpoint from both the
