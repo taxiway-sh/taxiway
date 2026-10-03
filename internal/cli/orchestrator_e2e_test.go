@@ -627,6 +627,7 @@ func buildRealOrchestratorDockerRoot(t *testing.T, orch, scope string) (*cobra.C
 	require.NoError(t, os.MkdirAll(stateDir, 0o700))
 
 	require.NoError(t, os.MkdirAll(filepath.Join(tmp, "infra"), 0o755))
+	copyRuntimeTree(t, filepath.Join("infra", "agents"), filepath.Join(tmp, "infra", "agents"))
 	copyRuntimeTree(t, filepath.Join("infra", "commands"), filepath.Join(tmp, "infra", "commands"))
 	copyRuntimeTree(t, filepath.Join("infra", "gateway"), filepath.Join(tmp, "infra", "gateway"))
 	copyRuntimeTree(t, filepath.Join("infra", "observability"), filepath.Join(tmp, "infra", "observability"))
@@ -1050,6 +1051,11 @@ func assertE2EStartedAgents(t *testing.T, state *RootState, id, orch, stage stri
 		require.NoError(t, err)
 		require.Zero(t, res.ExitCode, stderr.String())
 		require.Contains(t, stdout.String(), requested)
+		if agent == "claude-code" {
+			res, err = state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: []string{"bash", "-lc", `test "$DISABLE_AUTOUPDATER" = 1`}, Stderr: &stderr})
+			require.NoError(t, err)
+			require.Zero(t, res.ExitCode, "ordinary guest shells must suppress pinned Claude updates: %s", stderr.String())
+		}
 	})
 	runE2EStep(t, "models:configuration@"+stage, func(t *testing.T) {
 		runE2EAssert(t, "assert:gateway-provider-models", func(t *testing.T) {

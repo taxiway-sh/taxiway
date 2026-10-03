@@ -34,6 +34,7 @@ CLAUDE="$(command -v claude || true)"
 
 # shellcheck source=env.sh
 source "$(dirname "${BASH_SOURCE[0]}")/env.sh"
+claude_code_write_update_policy
 if claude_code_version_pinned "${TAXIWAY_SET_CLAUDE_CODE_VERSION:-}"; then
     export DISABLE_AUTOUPDATER=1
     source "$(dirname "${BASH_SOURCE[0]}")/../../infra/agents/npm-agent.sh"

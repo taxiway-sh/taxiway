@@ -8,9 +8,39 @@ claude_code_version_pinned() {
     [[ -n "${1:-}" && "$1" != "latest" ]]
 }
 
+# The common environment is already sourced by guest login shells. Keep the
+# agent's update policy in its own managed block, preserving gateway settings.
+claude_code_write_update_policy() {
+    local pinned=false
+    if claude_code_version_pinned "${TAXIWAY_SET_CLAUDE_CODE_VERSION:-}"; then
+        pinned=true
+    fi
+    python3 - "$pinned" <<'POLICY_PY'
+import os, pathlib, re, sys, tempfile
+path = pathlib.Path.home() / '.config/taxiway/env'
+path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+os.chmod(path.parent, 0o700)
+start = '# >>> taxiway agent-version scope=claude-code'
+end = '# <<< taxiway agent-version scope=claude-code'
+existing = path.read_text() if path.exists() else ''
+existing = re.sub(r'(?m)^' + re.escape(start) + r'\n.*?^' + re.escape(end) + r'\n?', '', existing, flags=re.S).rstrip('\n')
+block = start + '\nDISABLE_AUTOUPDATER=1\n' + end if sys.argv[1] == 'true' else ''
+content = '\n\n'.join(part for part in (existing, block) if part) + '\n'
+fd, name = tempfile.mkstemp(prefix='.version-policy-', dir=path.parent)
+try:
+    with os.fdopen(fd, 'w') as output:
+        output.write(content)
+    os.chmod(name, 0o600)
+    os.replace(name, path)
+finally:
+    if os.path.exists(name): os.unlink(name)
+POLICY_PY
+}
+
 claude_code_write_env() (
     set -euo pipefail
     umask 077
+    claude_code_write_update_policy
     settings_dir="$HOME/.config/taxiway/agents"
     mkdir -p "$settings_dir"
     chmod 700 "$settings_dir"

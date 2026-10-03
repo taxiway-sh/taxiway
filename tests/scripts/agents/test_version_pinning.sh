@@ -113,6 +113,9 @@ for agent in claude-code codex; do
         _fail "$agent installs the pinned release in a fresh lab" "$out"
     fi
     _assert "$agent installer reports its actual executable version" test "${out#*'"type":"agent-version"'}" != "$out"
+    if [[ "$agent" == claude-code ]]; then
+        _assert "Claude pinned installation suppresses updates in ordinary login shells" grep -qx 'DISABLE_AUTOUPDATER=1' "$lab/home/.config/taxiway/env"
+    fi
     _assert "$agent npm installed the exact release" grep -q "@1.0.0$" "$lab/npm.log"
 
     lab_run "$lab" env "$setting_env=1.0.0" bash "$install_sh" >/dev/null 2>&1
@@ -155,6 +158,9 @@ for agent in claude-code codex; do
     before="$(npm_installs "$lab")"
     lab_run "$lab" env -u "$setting_env" bash "$install_sh" >/dev/null 2>&1
     _assert "$agent unpinned keeps the installed release" test "$(npm_installs "$lab")" = "$before"
+    if [[ "$agent" == claude-code ]]; then
+        _assert "Claude clearing its pin removes the common shell update policy" bash -c 'test -f "$1" && ! grep -q DISABLE_AUTOUPDATER "$1"' _ "$lab/home/.config/taxiway/env"
+    fi
 
     out="$(lab_run "$lab" env "$setting_env=9.9.9" bash "$install_sh" 2>&1)" && status=0 || status=$?
     if [[ "$status" -ne 0 && "$out" == *"npm view @"* && "$out" == *"--set ${agent}-version=<version>"* ]]; then
@@ -176,11 +182,13 @@ echo "=== Claude Code self-update policy ==="
 # shellcheck source=../../../agents/claude-code/env.sh
 source "$REPO_ROOT/agents/claude-code/env.sh"
 env_home="$tmp_dir/env-home"
-mkdir -p "$env_home"
+mkdir -p "$env_home/.config/taxiway"
+printf '# >>> taxiway gateway scope=gateway\nGATEWAY_FIXTURE=preserved\n# <<< taxiway gateway scope=gateway\n' > "$env_home/.config/taxiway/env"
 HOME="$env_home" TAXIWAY_SET_CLAUDE_CODE_VERSION=1.0.0 claude_code_write_env true false
 _assert "pinned Claude Code launches disable the autoupdater" \
     grep -qx 'export DISABLE_AUTOUPDATER=1' "$env_home/.config/taxiway/agents/claude-code.env"
 HOME="$env_home" TAXIWAY_SET_CLAUDE_CODE_VERSION=latest claude_code_write_env true false
+_assert "agent policy updates preserve the gateway owned environment" grep -qx GATEWAY_FIXTURE=preserved "$env_home/.config/taxiway/env"
 _assert "unpinned Claude Code launches keep the default update policy" \
     bash -c "! grep -q DISABLE_AUTOUPDATER '$env_home/.config/taxiway/agents/claude-code.env'"
 

@@ -40,4 +40,8 @@ command -v npm >/dev/null 2>&1 || { echo "npm missing - run taxiway bootstrap fi
 npm_agent_install claude-code claude-code-version @anthropic-ai/claude-code \
   "${TAXIWAY_SET_CLAUDE_CODE_VERSION:-latest}" claude_version
 
+# shellcheck source=env.sh
+source "$(dirname "${BASH_SOURCE[0]}")/env.sh"
+claude_code_write_update_policy
+
 lab_emit_event phase done
