@@ -67,7 +67,8 @@ direnv exec . python3 tests/live/taxiway_live.py run \
   claude -p 'Reply exactly LIVE_OK.' --tools '' --max-budget-usd 1
 ```
 
-`run` creates a uniquely named lab, propagates the login, restarts its session,
+`run` prepares a uniquely named lab, propagates the login before starting any
+agent roles, runs the ordinary runtime phases,
 runs the command with the lab's own gateway environment, then removes only that
 temporary lab. Captured command output is not printed. A missing marker,
 nonzero exit or timeout fails the smoke check and still triggers cleanup.
@@ -83,6 +84,27 @@ operate on the orchestrator itself can omit `--agent`.
 This is a smoke runner. A response marker alone is not proof of tool use,
 delegation, or a particular model. Add the relevant assertions in a feature
 scenario, as the [model gateway suites](model-gateway-tests.md) do.
+
+## Gas Town lifecycle and delegation
+
+With an authenticated reference lab, run:
+
+```bash
+direnv exec . python3 tests/live/test_gastown.py --auth-lab live-auth
+```
+
+The scenario creates a temporary Docker Gas Town lab with a small public
+repository (`octocat/Hello-World`, override with `--repo`). It verifies the rig
+and crew workspace, checks running Claude roles and their gateway/model/alias
+environment, then exercises the Mayor's real `gt handoff` restart. It stops
+background patrols before a bounded inference through the Gas Town launcher:
+an Opus principal invokes a Sonnet subagent and writes a proof file using Bash.
+Assertions inspect actual child responses, tool events and the resulting file.
+The temporary lab is removed and reference authentication is preserved.
+
+This is real account usage, including the short period of Gas Town startup
+and handoff before patrols are stopped. It does not validate a full polecat,
+refinery or merge-queue workload.
 
 ## Add a scenario
 
