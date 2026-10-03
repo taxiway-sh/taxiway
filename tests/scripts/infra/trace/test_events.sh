@@ -42,9 +42,9 @@ _assert_not_contains() {
   fi
 }
 
-# ── Backward-compatible tests (no LAB_TRACE_ID) ──────────────────────────────
+# ── Current event format and source selection ───────────────────────────────
 
-echo "=== Backward-compatibility tests ==="
+echo "=== Current event format and source selection tests ==="
 
 # Source the library in a subshell to isolate env for each test.
 out=$(env -i bash -c "source '$LIB'; lab_emit_event phase start")

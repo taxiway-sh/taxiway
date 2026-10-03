@@ -561,27 +561,6 @@ func TestEnsureProxyRuntimeAllocatesDevPortWithoutPersistingBeforeLaunch(t *test
 	assert.NotEqual(t, 4000, first.Port)
 }
 
-func TestObservabilityRuntimeKeepsLegacyRuntimeStateButDoesNotExposePorts(t *testing.T) {
-	observabilityDir := filepath.Join(t.TempDir(), ".observability")
-	require.NoError(t, os.MkdirAll(observabilityDir, 0o700))
-	require.NoError(t, os.WriteFile(filepath.Join(observabilityDir, "runtime.json"), []byte(`{
-  "worker_port": 32000,
-  "langfuse_port": 32000
-}
-`), 0o600))
-	t.Setenv("TAXIWAY_CONTEXT", "dev")
-	t.Setenv("TAXIWAY_CONTEXT_ID", "a1b2c3d4")
-	t.Setenv("TAXIWAY_OBSERVABILITY_DIR", observabilityDir)
-	state := &RootState{}
-
-	runtime, err := state.ensureObservabilityRuntime()
-
-	require.NoError(t, err)
-	assert.Zero(t, runtime.WorkerPort)
-	assert.Zero(t, runtime.LangfusePort)
-	assert.NotContains(t, runtime.ComposeEnv(proxyRuntime{Port: 45123}), "HOST_PORT")
-}
-
 func TestObservabilityRuntimeRejectsIncompleteDevContext(t *testing.T) {
 	t.Setenv("TAXIWAY_CONTEXT", "dev")
 	t.Setenv("TAXIWAY_CONTEXT_ID", "")
@@ -1630,7 +1609,7 @@ func TestObserveDown_DockerMissing(t *testing.T) {
 	assert.Contains(t, strings.ToLower(err.Error()), "docker")
 }
 
-func TestObserveDownStopsStackAndKeepsRuntimePorts(t *testing.T) {
+func TestObserveDownStopsStackAndKeepsRuntimeState(t *testing.T) {
 	tmp := t.TempDir()
 	observabilityDir := filepath.Join(tmp, ".observability")
 	proxyDir := filepath.Join(tmp, ".proxy")
@@ -1649,7 +1628,7 @@ exit 0
 	require.NoError(t, os.MkdirAll(filepath.Join(tmp, "infra", "observability"), 0o755))
 	require.NoError(t, os.MkdirAll(observabilityDir, 0o700))
 	require.NoError(t, os.WriteFile(filepath.Join(observabilityDir, "runtime.json"), []byte(`{
-  "langfuse_port": 55123
+  "initialized": true
 }
 `), 0o600))
 
@@ -1684,7 +1663,7 @@ func TestObserveDownKeepsProxyRunningWhenNoTargetsRemainRunning(t *testing.T) {
 	require.NoError(t, os.MkdirAll(observabilityDir, 0o700))
 	require.NoError(t, os.WriteFile(filepath.Join(observabilityDir, ".env"), []byte("LANGFUSE_INIT_USER_PASSWORD=test\n"), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(observabilityDir, "runtime.json"), []byte(`{
-  "langfuse_port": 55123
+  "initialized": true
 }
 `), 0o600))
 	require.NoError(t, os.MkdirAll(proxyDir, 0o700))
@@ -1698,7 +1677,6 @@ func TestObserveDownKeepsProxyRunningWhenNoTargetsRemainRunning(t *testing.T) {
 		ContextID:      "a1b2c3d4",
 		StateDir:       observabilityDir,
 		ComposeProject: "taxiway-dev-a1b2c3d4-observability",
-		LangfusePort:   55123,
 	}))
 	require.NoError(t, err)
 	writeFakeDocker(t, fmt.Sprintf(`#!/bin/sh
@@ -1738,7 +1716,7 @@ exit 0
 	assert.Empty(t, stderr.String())
 }
 
-func TestObserveRmVolumesRemovesComposeVolumesAndRuntimePorts(t *testing.T) {
+func TestObserveRmVolumesRemovesComposeVolumesAndRuntimeState(t *testing.T) {
 	tmp := t.TempDir()
 	observabilityDir := filepath.Join(tmp, ".observability")
 	proxyDir := filepath.Join(tmp, ".proxy")
@@ -1757,7 +1735,7 @@ exit 0
 	require.NoError(t, os.MkdirAll(filepath.Join(tmp, "infra", "observability"), 0o755))
 	require.NoError(t, os.MkdirAll(observabilityDir, 0o700))
 	require.NoError(t, os.WriteFile(filepath.Join(observabilityDir, "runtime.json"), []byte(`{
-  "langfuse_port": 55123
+  "initialized": true
 }
 `), 0o600))
 
@@ -1791,7 +1769,7 @@ func TestObserveRmKeepsProxyRuntimeWhenNoTargetsRemain(t *testing.T) {
 	require.NoError(t, os.MkdirAll(observabilityDir, 0o700))
 	require.NoError(t, os.WriteFile(filepath.Join(observabilityDir, ".env"), []byte("LANGFUSE_INIT_USER_PASSWORD=test\n"), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(observabilityDir, "runtime.json"), []byte(`{
-  "langfuse_port": 55123
+  "initialized": true
 }
 `), 0o600))
 	require.NoError(t, os.MkdirAll(proxyDir, 0o700))
@@ -1805,7 +1783,6 @@ func TestObserveRmKeepsProxyRuntimeWhenNoTargetsRemain(t *testing.T) {
 		ContextID:      "a1b2c3d4",
 		StateDir:       observabilityDir,
 		ComposeProject: "taxiway-dev-a1b2c3d4-observability",
-		LangfusePort:   55123,
 	}))
 	require.NoError(t, err)
 	writeFakeDocker(t, fmt.Sprintf(`#!/bin/sh
@@ -2243,7 +2220,7 @@ exit 1
 	require.NoError(t, os.MkdirAll(observabilityDir, 0o700))
 	require.NoError(t, os.WriteFile(filepath.Join(observabilityDir, ".env"), []byte("LANGFUSE_INIT_USER_PASSWORD=test\n"), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(observabilityDir, "runtime.json"), []byte(`{
-  "langfuse_port": 55123
+  "initialized": true
 }
 `), 0o600))
 
