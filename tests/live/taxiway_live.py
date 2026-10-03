@@ -138,11 +138,13 @@ def temporary_lab(orch, *, auth_lab=None, driver="docker", settings=None,
         argv += ["--set", f"{key}={value}"]
     if repo:
         argv += ["--repo", repo]
+    if auth_lab:
+        argv += ["--prepare-only"]
     try:
         command(argv, timeout=timeout)
         if auth_lab:
             propagate_claude_auth(auth_lab, name)
-            command([taxiway, "start", name])
+            command([taxiway, "run", name, "--skip-auth-check"], timeout=timeout)
         yield name
     finally:
         scenario_failed = sys.exc_info()[0] is not None

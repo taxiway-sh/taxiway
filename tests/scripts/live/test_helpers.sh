@@ -50,6 +50,14 @@ with tempfile.TemporaryDirectory(prefix="taxiway-helper-test-") as root:
             assert str(error).startswith("Cleanup failed for live-test-")
         else:
             raise AssertionError("cleanup error after successful scenario was lost")
+    with patch.dict(os.environ, environment), patch.object(live, "command", lambda argv, **kwargs: calls.append(argv) or b""), patch.object(live, "require_claude_auth"), patch.object(live, "propagate_claude_auth", side_effect=lambda source, target: calls.append(["copy-auth", target])):
+        calls.clear()
+        with live.temporary_lab("gastown", auth_lab="reference"):
+            pass
+        assert "--prepare-only" in calls[0], "agents started before credentials were propagated"
+        assert calls[1][0] == "copy-auth"
+        assert calls[2][1] == "run"
+print("PASS: reference auth is propagated before the first orchestrator start")
 print("PASS: cleanup preserves the original error and reports owned-lab failures")
 
 # Missing internal functions should report the required compatibility check.

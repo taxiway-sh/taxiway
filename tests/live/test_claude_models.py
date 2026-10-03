@@ -9,7 +9,7 @@ import json
 import subprocess
 import sys
 
-from taxiway_live import guest, require_claude_auth, run_in_lab, temporary_lab, validate_context
+from taxiway_live import command, guest, require_claude_auth, run_in_lab, temporary_lab, validate_context
 
 
 def run_claude(lab, model, prompt, agents=None):
@@ -100,6 +100,7 @@ def main():
     assert {defaults["sonnet"], defaults["haiku"]} <= nested, "Subagent models were not confirmed"
     with temporary_lab("claude-code", auth_lab=args.auth_lab,
                        settings={"model": defaults["sonnet"]}, taxiway=args.taxiway) as target:
+        command([args.taxiway, "start", target])
         check(target, "auth propagation and restarted lab", defaults["sonnet"], {defaults["sonnet"]},
               "Reply exactly TAXIWAY_MODEL_OK.")
     print("All 6 live Claude cases passed. Reference lab preserved.")
