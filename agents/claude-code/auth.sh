@@ -32,6 +32,12 @@ fi
 CLAUDE="$(command -v claude || true)"
 [ -n "$CLAUDE" ] || fail "claude not found - run: taxiway install <lab>"
 
+# shellcheck source=env.sh
+source "$(dirname "${BASH_SOURCE[0]}")/env.sh"
+if claude_code_version_pinned "${TAXIWAY_SET_CLAUDE_CODE_VERSION:-}"; then
+    export DISABLE_AUTOUPDATER=1
+fi
+
 case "${TAXIWAY_AUTH_MODE:-subscription}" in
   api-key)
     if [ -n "${TAXIWAY_LITELLM_API_KEY:-}" ]; then

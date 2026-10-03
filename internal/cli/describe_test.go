@@ -46,6 +46,26 @@ func TestDescribeClaudeMCPOrchestratorSettings(t *testing.T) {
 	}
 }
 
+func TestDescribeAgentVersionSettings(t *testing.T) {
+	for orch, setting := range map[string]string{
+		"claude-code": "claude-code-version",
+		"gastown":     "claude-code-version",
+		"codex":       "codex-version",
+	} {
+		t.Run(orch, func(t *testing.T) {
+			root, state, _, stdout, stderr := buildUpTestRoot(t)
+			var err error
+			state.RepoDir, err = filepath.Abs(filepath.Join("..", ".."))
+			require.NoError(t, err)
+			out, _, err := execUpRoot(t, root, stdout, stderr, "describe", orch)
+			require.NoError(t, err)
+			require.Contains(t, out, "\n  "+setting+"\n")
+			require.Contains(t, out, "--set "+setting+"=latest")
+			require.Contains(t, out, "Phases: install, start")
+		})
+	}
+}
+
 func TestDescribeWithoutSettingsShowsNone(t *testing.T) {
 	root, state, _, stdout, stderr := buildUpTestRoot(t)
 	setManifest(t, state, "gastown", "name: gastown\ndescription: Gas Town\n")

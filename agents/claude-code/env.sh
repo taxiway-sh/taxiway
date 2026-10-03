@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 # The orchestrator resolves its settings; this helper only stores and reloads
 # the resulting environment for Claude Code launches and handoffs.
+
+# claude_code_version_pinned <claude-code-version>
+# A pinned Claude Code must not replace itself with another release.
+claude_code_version_pinned() {
+    [[ -n "${1:-}" && "$1" != "latest" ]]
+}
+
 claude_code_write_env() (
     set -euo pipefail
     umask 077
@@ -18,6 +25,9 @@ claude_code_write_env() (
                 printf 'export %s=%q\n' "$name" "${!name}"
             fi
         done
+        if claude_code_version_pinned "${TAXIWAY_SET_CLAUDE_CODE_VERSION:-}"; then
+            printf 'export DISABLE_AUTOUPDATER=1\n'
+        fi
     } > "$settings_tmp"
     mv -f "$settings_tmp" "$settings_dir/claude-code.env"
     if [[ -n "${TAXIWAY_CLAUDE_AVAILABLE_MODELS:-}" ]]; then

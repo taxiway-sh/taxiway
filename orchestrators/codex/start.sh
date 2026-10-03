@@ -19,6 +19,8 @@ if [ -f "${HOME}/.config/taxiway/env" ]; then
     set +a
 fi
 
+# shellcheck source=../../agents/codex/env.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../agents/codex/env.sh"
 log()  { printf '\n\033[1;34m[codex-start]\033[0m %s\n' "$*"; }
 pass() { printf '  \033[1;32mOK\033[0m   %s\n' "$*"; }
 
@@ -78,15 +80,17 @@ tmp_config="$(mktemp)"
 {
     printf 'model_provider = "taxiway-litellm"\n'
     printf 'model = "%s"\n' "$CODEX_MODEL"
+    codex_update_policy_config "${TAXIWAY_SET_CODEX_VERSION:-latest}"
     printf '\n'
 } > "$tmp_config"
 if [ -f "$CODEX_CONFIG" ]; then
     awk '
         /^\[model_providers\.taxiway-litellm\]$/ { skip=1; next }
-        /^\[/ { skip=0 }
+        /^\[/ { skip=0; top=1 }
         skip { next }
         /^model_provider = / { next }
         /^model = / { next }
+        !top && /^check_for_update_on_startup = / { next }
         { print }
     ' "$CODEX_CONFIG" >> "$tmp_config"
 fi
