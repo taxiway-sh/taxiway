@@ -51,7 +51,18 @@ type Discovery struct {
 	Notes       []string
 }
 
-var chatRetirement = regexp.MustCompile(`(?s)On ([A-Z][a-z]+ [0-9]{1,2}, [0-9]{4}), (GPT-[0-9.]+) will retire from ChatGPT, ChatGPT Work, and Codex`)
+// Reference URLs are recorded in the catalog; download URLs remain provenance.
+var ReferenceURLs = map[string]string{
+	"codex":        "https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json",
+	"chatgpt":      "https://learn.chatgpt.com/docs/models",
+	"anthropic":    "https://platform.claude.com/docs/en/models/overview",
+	"deprecations": "https://platform.claude.com/docs/en/about-claude/model-deprecations",
+}
+
+var chatRetirement = regexp.MustCompile(`(?s)On ([A-Z][a-z]+ [0-9]{1,2}, [0-9]{4}), ((?i:GPT)-[A-Za-z0-9. -]+?) will retire from ChatGPT, ChatGPT Work, and Codex`)
+
+var chatRetirementAnnouncement = regexp.MustCompile(`(?i)\b(?:will retire|will be retired|retires? from)\b`)
+var chatVersionID = regexp.MustCompile(`^gpt-[0-9.]+$`)
 
 func clean(s string) string { return strings.Trim(strings.TrimSpace(s), "`") }
 func table(line string) []string {
@@ -161,7 +172,7 @@ func Discover(s Sources) (Discovery, error) {
 		}
 		if m.Visibility == "list" && text && string(m.Specialty) == "null" && strings.Contains(string(s.ChatGPT), "`"+m.Slug+"`") {
 			documented++
-			add(m.Slug, "chatgpt", CodexURL+"; "+ChatGPTURL)
+			add(m.Slug, "chatgpt", ReferenceURLs["chatgpt"])
 		}
 	}
 	if documented == 0 {
@@ -183,7 +194,7 @@ func Discover(s Sources) (Discovery, error) {
 					d.Notes = append(d.Notes, "Skipped "+id+": specialty or restricted-access model.")
 					continue
 				}
-				add(id, "anthropic", AnthropicURL)
+				add(id, "anthropic", ReferenceURLs["anthropic"])
 			}
 		}
 	}
@@ -208,7 +219,7 @@ func Discover(s Sources) (Discovery, error) {
 			if status == "active" {
 				continue
 			}
-			r := Retirement{Status: status, Scope: "api", Source: DeprecationsURL}
+			r := Retirement{Status: status, Scope: "api", Source: ReferenceURLs["deprecations"]}
 			if p[3] != "To be announced" {
 				v, e := date(p[3])
 				if e != nil {
@@ -246,20 +257,39 @@ func Discover(s Sources) (Discovery, error) {
 			d.Retirements[p[1]] = r
 		}
 	}
-	for _, match := range chatRetirement.FindAllStringSubmatch(string(s.ChatGPT), -1) {
-		if !strings.Contains(string(s.ChatGPT), "retirement does not apply to the OpenAI API") {
+	// Check each Markdown section independently: one understood announcement
+	// must never hide another or lend it an API-scope disclaimer.
+	sections := regexp.MustCompile(`(?m)^#{1,6} `).Split(string(s.ChatGPT), -1)
+	for _, section := range sections {
+		// Historical summaries and links are not primary announcements.
+		// A retirement heading or future announcement always requires parsing.
+		heading, _, _ := strings.Cut(section, "\n")
+		if !strings.Contains(strings.ToLower(heading), "retirement") && !strings.Contains(strings.ToLower(section), "will retire") && !strings.Contains(strings.ToLower(section), "will be retired") {
+			continue
+		}
+		matches := chatRetirement.FindAllStringSubmatch(section, -1)
+		if len(matches) != 1 || len(chatRetirementAnnouncement.FindAllString(section, -1)) != 1 {
+			return d, fmt.Errorf("chatgpt: unrecognized retirement notice; manual source review required")
+		}
+		if !strings.Contains(section, "retirement does not apply to the OpenAI API") {
 			return d, fmt.Errorf("ChatGPT retirement API scope unclear")
 		}
+		match := matches[0]
 		dt, e := date(match[1])
 		if e != nil {
 			return d, e
 		}
-		id := strings.ToLower(match[2])
-		d.Retirements[id] = Retirement{Status: "deprecated", Date: dt, Scope: "subscription", Source: ChatGPTURL}
+		id := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(match[2])), " ", "-")
+		// Plain historical version IDs are unambiguous. Suffix names must resolve
+		// to an exact public Codex slug; no fuzzy family matching.
+		if !chatVersionID.MatchString(id) && !seen[id] {
+			return d, fmt.Errorf("chatgpt: ambiguous retirement model %q", match[2])
+		}
+		if old, ok := d.Retirements[id]; ok && old.Date != dt {
+			return d, fmt.Errorf("conflicting retirement dates for %s", id)
+		}
+		d.Retirements[id] = Retirement{Status: "deprecated", Date: dt, Scope: "subscription", Source: ReferenceURLs["chatgpt"]}
 		d.Notes = append(d.Notes, id+" retirement applies only to ChatGPT/Codex subscriptions; OpenAI API retirement is explicitly excluded. Replacement depends on account/plan and requires review.")
-	}
-	if strings.Contains(strings.ToLower(string(s.ChatGPT)), "retirement") && len(chatRetirement.FindAllString(string(s.ChatGPT), -1)) == 0 {
-		return d, fmt.Errorf("chatgpt: unrecognized retirement notice; manual source review required")
 	}
 	sort.Slice(d.Candidates, func(i, j int) bool { return d.Candidates[i].Name < d.Candidates[j].Name })
 	sort.Strings(d.Notes)

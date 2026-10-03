@@ -39,3 +39,5 @@ JSON sources retain their public JSON schema; documentation sources use their Ma
 ```sh
 go test ./internal/modelupdate ./cmd/model-catalog-update
 ```
+
+No provider credentials are needed. In GitHub Actions, the updater uses the workflow token only for `https://api.github.com` to avoid shared-runner anonymous rate limits. Other source hosts receive no authentication header.

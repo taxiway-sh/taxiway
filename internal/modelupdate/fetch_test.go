@@ -40,3 +40,17 @@ func TestFetchRejectsHTTPFailureAndOversizedResponse(t *testing.T) {
 		t.Fatal("oversized source accepted")
 	}
 }
+
+func TestGitHubAuthorizationIsRestrictedToAPIHost(t *testing.T) {
+	for _, url := range []string{"https://api.github.com/repos/BerriAI/litellm/releases", "https://raw.githubusercontent.com/file", "https://api.github.com.example.org/file", "http://api.github.com/file"} {
+		req, err := http.NewRequest(http.MethodGet, url, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		setGitHubAuthorization(req, "test-placeholder")
+		expected := url == "https://api.github.com/repos/BerriAI/litellm/releases"
+		if (req.Header.Get("Authorization") != "") != expected {
+			t.Fatal("authorization host scope violated")
+		}
+	}
+}

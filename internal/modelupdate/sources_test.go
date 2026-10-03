@@ -69,3 +69,52 @@ func TestDiscoverRejectsTruncatedDocumentsAndLifecycleRows(t *testing.T) {
 		t.Fatal("partial lifecycle row accepted")
 	}
 }
+
+func TestDiscoverChecksEveryChatGPTRetirement(t *testing.T) {
+	for _, test := range []struct {
+		name, notice string
+		wantError    bool
+	}{
+		{"suffix", "## GPT-6 Sol retirement\nOn November 1, 2026, GPT-6 Sol will retire from ChatGPT, ChatGPT Work, and Codex\nretirement does not apply to the OpenAI API.\n", false},
+		{"missing scope", "## GPT-6 Sol retirement\nOn November 1, 2026, GPT-6 Sol will retire from ChatGPT, ChatGPT Work, and Codex\n", true},
+		{"unknown model", "## GPT-6 Mystery retirement\nOn November 1, 2026, GPT-6 Mystery will retire from ChatGPT, ChatGPT Work, and Codex\nretirement does not apply to the OpenAI API.\n", true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			s := fixtureSources()
+			s.ChatGPT = append(s.ChatGPT, []byte(test.notice)...)
+			d, err := Discover(s)
+			if test.wantError {
+				if err == nil {
+					t.Fatal("partial announcement accepted")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(d.Retirements) != 3 || d.Retirements["gpt-6-sol"].Date != "2026-11-01" {
+				t.Fatalf("announcement silently lost: %#v", d.Retirements)
+			}
+		})
+	}
+}
+
+func TestDiscoverIgnoresHistoricalSummaryLinks(t *testing.T) {
+	s := fixtureSources()
+	s.ChatGPT = append(s.ChatGPT, []byte("## Deprecated Codex models\nAn older model retired previously. See [retirement notice](https://example.org).\n")...)
+	d, err := Discover(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(d.Retirements) != 2 {
+		t.Fatal("summary treated as primary announcement")
+	}
+}
+
+func TestDiscoverRejectsMixedAnnouncementFormatsInOneSection(t *testing.T) {
+	s := fixtureSources()
+	s.ChatGPT = append(s.ChatGPT, []byte("On November 1, 2026, GPT-6 Sol will be retired from Codex.\n")...)
+	if _, err := Discover(s); err == nil {
+		t.Fatal("unrecognized second announcement ignored")
+	}
+}

@@ -23,7 +23,9 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Prepare from complete public sources
-        run: go run ./cmd/model-catalog-update -write -report "$RUNNER_TEMP/model-catalog-review.md" > "$RUNNER_TEMP/model-catalog-output.txt"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: go run ./cmd/model-catalog-update -write -report "$RUNNER_TEMP/model-catalog-review.md"
 
       # Run CI here: pull requests created with GITHUB_TOKEN do not trigger CI events.
       # Lifecycle changes affecting a default must still be visible in the draft PR.

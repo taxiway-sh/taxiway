@@ -1,7 +1,6 @@
 package modelupdate
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"fmt"
 	"sort"
@@ -81,6 +80,7 @@ func Prepare(original []byte, s Sources, now time.Time) ([]byte, string, bool, e
 	if models == nil || models.Kind != yaml.SequenceNode || len(models.Content) == 0 {
 		return nil, "", false, fmt.Errorf("catalog must contain models")
 	}
+	beforeModels := clone(models)
 	byName := map[string]*yaml.Node{}
 	templates := map[string]*yaml.Node{}
 	for _, m := range models.Content {
@@ -150,7 +150,9 @@ func Prepare(original []byte, s Sources, now time.Time) ([]byte, string, bool, e
 		if r.Replacement != "" {
 			local = set(m, "replacement", r.Replacement) || local
 		}
-		local = set(m, "source", r.Source) || local
+		if local {
+			set(m, "source", r.Source)
+		}
 		if local {
 			changed = true
 			changes = append(changes, "Marked `"+value(m, "name")+"` "+status+" ("+r.Scope+", retirement "+r.Date+").")
@@ -173,14 +175,10 @@ func Prepare(original []byte, s Sources, now time.Time) ([]byte, string, bool, e
 	}
 	out := original
 	if changed {
-		var buf bytes.Buffer
-		enc := yaml.NewEncoder(&buf)
-		enc.SetIndent(2)
-		if err = enc.Encode(&doc); err != nil {
+		out, err = patchModels(original, beforeModels, models)
+		if err != nil {
 			return nil, "", false, err
 		}
-		_ = enc.Close()
-		out = buf.Bytes()
 	}
 	sort.Strings(changes)
 	sort.Strings(d.Notes)

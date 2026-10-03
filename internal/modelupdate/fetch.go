@@ -11,6 +11,12 @@ import (
 
 const maxSourceBytes = 8 << 20
 
+func setGitHubAuthorization(req *http.Request, token string) {
+	if token != "" && req.URL.Scheme == "https" && req.URL.Host == "api.github.com" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+}
+
 func fetch(ctx context.Context, client *http.Client, url string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -18,7 +24,22 @@ func fetch(ctx context.Context, client *http.Client, url string) ([]byte, error)
 	}
 	req.Header.Set("User-Agent", "taxiway-model-catalog-update")
 	req.Header.Set("Accept", "application/json, text/markdown, text/plain")
-	res, err := client.Do(req)
+	setGitHubAuthorization(req, os.Getenv("GITHUB_TOKEN"))
+	// Never forward the optional GitHub credential to a redirected download host.
+	scopedClient := *client
+	scopedClient.CheckRedirect = func(next *http.Request, via []*http.Request) error {
+		if next.URL.Scheme != "https" || next.URL.Host != "api.github.com" {
+			next.Header.Del("Authorization")
+		}
+		if client.CheckRedirect != nil {
+			return client.CheckRedirect(next, via)
+		}
+		if len(via) >= 10 {
+			return fmt.Errorf("too many source redirects")
+		}
+		return nil
+	}
+	res, err := scopedClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +57,7 @@ func fetch(ctx context.Context, client *http.Client, url string) ([]byte, error)
 	return body, nil
 }
 
-// Load performs unauthenticated public GETs, or reads a complete local fixture set.
+// Load performs public GETs (optionally authenticated for GitHub rate limits), or reads a complete local fixture set.
 // Fixture data uses the same parsers as online data, with no validation bypass.
 func Load(ctx context.Context, client *http.Client, fixtureDir string) (Sources, error) {
 	var s Sources

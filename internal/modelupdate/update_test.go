@@ -1,6 +1,8 @@
 package modelupdate
 
 import (
+	"bytes"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -77,5 +79,54 @@ func TestPrepareRejectsInvalidExistingLifecycleMetadata(t *testing.T) {
 	invalid = strings.Replace(existing, "    api: responses", "    api: responses\n    retirement_date: sometime", 1)
 	if _, _, _, err := Prepare([]byte(invalid), fixtureSources(), time.Now()); err == nil {
 		t.Fatal("invalid date accepted")
+	}
+}
+
+func TestPrepareRealCatalogIsUnchanged(t *testing.T) {
+	original, err := os.ReadFile("../../infra/gateway/litellm/models.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, _, changed, err := Prepare(original, fixtureSources(), time.Date(2026, 10, 3, 0, 0, 0, 0, time.UTC))
+	if err != nil || changed || !bytes.Equal(original, out) {
+		t.Fatalf("unchanged catalog rewritten: changed=%v err=%v", changed, err)
+	}
+}
+func TestPrepareChangesOnlyRetiredModel(t *testing.T) {
+	original, err := os.ReadFile("../../infra/gateway/litellm/models.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, _, changed, err := Prepare(original, fixtureSources(), time.Date(2026, 10, 14, 0, 0, 0, 0, time.UTC))
+	expected := bytes.Replace(original, []byte("status: deprecated"), []byte("status: retired"), 1)
+	if err != nil || !changed || !bytes.Equal(expected, out) {
+		t.Fatalf("retirement changed unrelated formatting: changed=%v err=%v", changed, err)
+	}
+}
+
+func TestPreparePreservesInlineCommentsAndSpacing(t *testing.T) {
+	original, err := os.ReadFile("../../infra/gateway/litellm/models.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	original = bytes.Replace(original, []byte("status: deprecated"), []byte("status: deprecated  # keep this comment"), 1)
+	out, _, changed, err := Prepare(original, fixtureSources(), time.Date(2026, 10, 14, 0, 0, 0, 0, time.UTC))
+	expected := bytes.Replace(original, []byte("status: deprecated"), []byte("status: retired"), 1)
+	if err != nil || !changed || !bytes.Equal(out, expected) {
+		t.Fatalf("comment or spacing changed: %v", err)
+	}
+}
+
+func TestPrepareAddsRetirementFieldsWithoutReformatting(t *testing.T) {
+	original, err := os.ReadFile("../../infra/gateway/litellm/models.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := []byte("    status: deprecated\n    retirement_date: '2026-10-14'\n    replacement: gpt-6.1-sol\n")
+	original = bytes.Replace(original, old, []byte("    status: active\n"), 1)
+	out, _, changed, err := Prepare(original, fixtureSources(), time.Date(2026, 10, 3, 0, 0, 0, 0, time.UTC))
+	expected := bytes.Replace(original, []byte("    api: responses\n    status: active\n    source: https://learn.chatgpt.com/docs/models\n\n  - name: gpt-5.4"), []byte("    api: responses\n    status: deprecated\n    source: https://learn.chatgpt.com/docs/models\n    retirement_date: \"2026-10-14\"\n\n  - name: gpt-5.4"), 1)
+	if err != nil || !changed || !bytes.Equal(out, expected) {
+		t.Fatalf("new retirement changed unrelated text: %v", err)
 	}
 }
