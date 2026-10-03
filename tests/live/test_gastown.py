@@ -44,6 +44,8 @@ for name in names:
     proc=pathlib.Path('/proc')/pid
     args=(proc/'cmdline').read_bytes().split(b'\0')
     env=dict(v.split(b'=',1) for v in (proc/'environ').read_bytes().split(b'\0') if b'=' in v)
+    assert b'--dangerously-skip-permissions' in args, 'role lost mandatory bypass permissions'
+    assert b'{"skipDangerousModePermissionPrompt":true}' in args, 'role lost bypass startup warning suppression'
     assert b'--model' in args, 'role lost model argument'
     assert args[args.index(b'--model')+1]==model.encode(), 'role model changed'
     for key in ('ANTHROPIC_BASE_URL','ANTHROPIC_CUSTOM_HEADERS'):
@@ -180,13 +182,13 @@ def main():
 
         # Stop patrols before the bounded scenario to keep subscription usage small.
         guest(lab, 'export PATH="$HOME/.local/bin:$PATH"; cd /lab/work/gt; gt down >/tmp/taxiway-down-check.log 2>&1', timeout=120)
-        agents={"sonnet-worker":{"description":"Invoke for the explicit Taxiway delegation test.","prompt":"Reply exactly GASTOWN_CHILD_OK. Use no tools.","tools":[],"model":"sonnet"}}
+        agents={"sonnet-worker":{"description":"Invoke for the explicit Taxiway delegation test.","prompt":"Use Bash to run curl --max-time 20 -fsSI https://example.com > /lab/work/gt/network-proof. Then reply GASTOWN_CHILD_OK.","tools":["Bash"],"model":"sonnet"}}
         argv=["env","-u","CLAUDE_CODE_SUBAGENT_MODEL","-u","CLAUDE_CODE_SUBAGENT_MODEL_FORCE","CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS=1",
               "/lab/orchestrators/gastown/launch-agent.sh","/lab/work/gt","claude","-p",
-              "Invoke sonnet-worker once and wait for its result. Then use Bash to run: printf GASTOWN_TOOL_OK > /lab/work/gt/live-proof.txt. Finally reply exactly GASTOWN_OK.",
+              "Invoke sonnet-worker once and wait for its result. Then use Bash to run: printf GASTOWN_TOOL_OK > /lab/work/gt/live-proof.txt; printf 'print(42)\\n' > /lab/work/gt/build-proof.py; python3 -m py_compile /lab/work/gt/build-proof.py. Finally reply exactly GASTOWN_OK.",
               "--model",checked["model"],"--output-format","stream-json","--verbose","--forward-subagent-text",
-              "--no-session-persistence","--effort","low","--permission-mode","bypassPermissions",
-              "--tools","Agent,Bash","--allowedTools","Agent,Bash","--max-budget-usd","2","--agents",json.dumps(agents)]
+              "--no-session-persistence","--effort","low",
+              "--tools","Agent,Bash","--max-budget-usd","2","--agents",json.dumps(agents)]
         # Deliberately omit injected gateway env: exercise the actual Gastown launcher.
         output=guest(lab,"timeout 180s "+shlex.join(argv),timeout=210,workdir="/lab/work/gt")
         events=[json.loads(line) for line in output.splitlines() if line.startswith(b"{")]
@@ -210,6 +212,7 @@ def main():
         assert "claude-sonnet-5-5" in nested and "sonnet-worker" in spawned, "Sonnet delegation not evidenced"
         assert "Bash" in tools, "No actual Bash tool invocation"
         assert guest(lab,"cat /lab/work/gt/live-proof.txt").strip()==b"GASTOWN_TOOL_OK", "Tool did not create proof file"
+        assert guest(lab,"test -s /lab/work/gt/network-proof && find /lab/work/gt/__pycache__ -name 'build-proof*' -print -quit").strip(), "Delegated network/build effects missing"
         print("PASS Gastown launcher inference: Opus principal, Sonnet subagent, actual tool/file effect",flush=True)
     # A separate fresh installation catches startup failures hidden by an
     # already-populated hook or a recovered Deacon from the first lab.

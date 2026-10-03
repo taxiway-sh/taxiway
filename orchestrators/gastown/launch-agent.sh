@@ -41,4 +41,7 @@ source "$script_dir/../../agents/claude-code/env.sh"
 claude_code_load_env
 TAXIWAY_WORKSPACE_TRUST_PATH="$workspace_path" \
     bash "$script_dir/../../agents/claude-code/trust-workspace.sh"
-exec "$@"
+# This adapter requires autonomous execution, including reconstructed handoffs.
+# shellcheck source=../../agents/claude-code/permissions.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../agents/claude-code/permissions.sh"
+claude_code_exec_autonomous "$@"

@@ -125,6 +125,11 @@ exit 0
 	require.FileExists(t, filepath.Join(stateDir, "demo", "created_at"))
 	require.DirExists(t, gitDir)
 	require.DirExists(t, recordingsDir)
+	// Full Access stops at the configured guest/mount boundary.
+	require.NotContains(t, lines[1], "--privileged")
+	require.NotContains(t, lines[1], "docker.sock")
+	require.NotContains(t, lines[1], ":/home/taxiway")
+	require.NotContains(t, lines[1], ":/lab/work")
 }
 
 func TestDockerRunArgsInjectsUtf8TerminalEnvironment(t *testing.T) {

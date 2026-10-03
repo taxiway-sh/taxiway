@@ -83,8 +83,12 @@ pass "LiteLLM gateway key found"
 log "LiteLLM provider"
 mkdir -p "${HOME}/.codex"
 CODEX_CONFIG="${HOME}/.codex/config.toml"
+# This adapter owns the autonomous default; native settings also cover children.
+# shellcheck source=../../agents/codex/permissions.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../agents/codex/permissions.sh"
 tmp_config="$(mktemp)"
 {
+    codex_autonomous_config
     printf 'model_provider = "taxiway-litellm"\n'
     printf 'model = "%s"\n' "$CODEX_MODEL"
     codex_update_policy_config "${TAXIWAY_SET_CODEX_VERSION:-latest}"
@@ -98,6 +102,8 @@ if [ -f "$CODEX_CONFIG" ]; then
         /^model_provider = / { next }
         /^model = / { next }
         !top && /^check_for_update_on_startup = / { next }
+        /^approval_policy[[:space:]]*=/ { next }
+        /^sandbox_mode[[:space:]]*=/ { next }
         { print }
     ' "$CODEX_CONFIG" >> "$tmp_config"
 fi
@@ -129,7 +135,9 @@ do
         tmux_env_args+=(-e "${name}=${!name}")
     fi
 done
-agent_cmd="codex resume --last || codex"
+# Explicit flags also override a resumed session's saved permission settings.
+printf -v agent_cmd 'codex resume --last %q || codex %q' \
+    "${codex_autonomous_args[@]}" "${codex_autonomous_args[@]}"
 tmux new-session -d -s "$SESSION" -c "$start_dir" "${tmux_env_args[@]}" "$agent_cmd"
 pass "Codex started in tmux session '$SESSION'"
 printf '  Attach with: taxiway shell codex\n'

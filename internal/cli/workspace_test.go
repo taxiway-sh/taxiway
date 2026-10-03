@@ -477,7 +477,7 @@ func TestCodexStartConfiguresLiteLLMSubscriptionProvider(t *testing.T) {
 	require.NotContains(t, script, "langfuse_session_id")
 	require.NotContains(t, script, `TAXIWAY_LITELLM_SESSION_ID`)
 	require.Contains(t, script, `TAXIWAY_LITELLM_AGENT_ID`)
-	require.Contains(t, script, `agent_cmd="codex resume --last || codex"`)
+	require.Contains(t, script, `printf -v agent_cmd 'codex resume --last %q || codex %q'`)
 	require.Contains(t, script, `"$agent_cmd"`)
 	require.Contains(t, script, `TAXIWAY_SET_MODEL`)
 }

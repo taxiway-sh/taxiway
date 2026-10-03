@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 func TestRenderLimaYAML(t *testing.T) {
@@ -190,6 +191,20 @@ func TestRealLimaTemplateUsesMinimalRuntimeMounts(t *testing.T) {
 	require.NotContains(t, rendered, `mountPoint: "/lab/agent-lab"`)
 	require.NotContains(t, rendered, `mountPoint: "/lab/skills"`)
 	require.NotContains(t, rendered, `mountPoint: "/lab/assets"`)
+	var spec struct {
+		Mounts []struct {
+			Location   string `yaml:"location"`
+			MountPoint string `yaml:"mountPoint"`
+			Writable   bool   `yaml:"writable"`
+		} `yaml:"mounts"`
+	}
+	require.NoError(t, yaml.Unmarshal(renderedBytes, &spec))
+	require.Len(t, spec.Mounts, 5, "only runtime assets and scoped output directories may be mounted")
+	for _, mount := range spec.Mounts {
+		require.Equal(t, mount.MountPoint == "/lab/git" || mount.MountPoint == "/lab/recordings", mount.Writable, mount.MountPoint)
+		require.NotContains(t, mount.Location, "~")
+	}
+
 	require.NotContains(t, rendered, `mountPoint: "/lab/observability"`)
 }
 

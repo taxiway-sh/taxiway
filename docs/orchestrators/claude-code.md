@@ -100,3 +100,11 @@ installed release and executable path. Installation and `taxiway verify <lab>`
 refresh that observation in the lab's `agent-versions.json` state; the requested
 version remains in its saved settings. Verification fails if the executable on
 the launch PATH differs from an exact pin.
+
+## Autonomous permissions
+
+Claude Code runs with `--dangerously-skip-permissions` inside the guest.
+The launcher suppresses the separate initial bypass warning; authentication
+and onboarding remain independent prerequisites.
+
+See [guest capabilities and existing-lab migration](../contributing/live-tests.md#autonomous-guest-permissions).

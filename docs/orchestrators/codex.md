@@ -97,3 +97,12 @@ installed release and executable path. Installation and `taxiway verify <lab>`
 refresh that observation in the lab's `agent-versions.json` state; the requested
 version remains in its saved settings. Verification fails if the executable on
 the launch PATH differs from an exact pin.
+
+## Autonomous permissions
+
+Codex runs with Full Access inside the guest: `approval_policy = "never"` and
+`sandbox_mode = "danger-full-access"`, including delegated agents. Fresh and
+resumed interactive launches also explicitly pass
+`--dangerously-bypass-approvals-and-sandbox` to override saved session restrictions.
+
+See [guest capabilities and existing-lab migration](../contributing/live-tests.md#autonomous-guest-permissions).

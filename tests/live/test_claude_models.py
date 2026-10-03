@@ -12,13 +12,12 @@ import sys
 from taxiway_live import command, guest, require_claude_auth, run_in_lab, temporary_lab, validate_context
 
 
-def run_claude(lab, model, prompt, agents=None):
-    argv = ["claude", "-p", prompt, "--model", model,
+def run_claude(lab, model, prompt, agents=None, *, tools=False):
+    argv = ["bash", "/lab/orchestrators/claude-code/launch-agent.sh", "claude", "-p", prompt, "--model", model,
             "--output-format", "stream-json", "--verbose",
             "--forward-subagent-text", "--no-session-persistence",
-            "--effort", "low", "--permission-mode", "dontAsk",
-            "--tools", "Agent" if agents else "",
-            "--allowedTools", "Agent", "--max-budget-usd", "2"]
+            "--effort", "low",
+            "--tools", "Agent,Bash" if tools else "Agent" if agents else "", "--max-budget-usd", "2"]
     if agents:
         argv += ["--agents", json.dumps(agents)]
     output = run_in_lab(lab, ["env", "-u", "CLAUDE_CODE_SUBAGENT_MODEL",
@@ -48,6 +47,12 @@ def run_claude(lab, model, prompt, agents=None):
             for block in message.get("content", []):
                 if block.get("type") == "tool_use" and block.get("name") == "Agent":
                     spawned.add(block.get("input", {}).get("subagent_type"))
+    if tools:
+        tool_names = {block.get("name") for event in events if event.get("type") == "assistant"
+                      for block in event.get("message", {}).get("content", []) if block.get("type") == "tool_use"}
+        assert "Bash" in tool_names, "No command tool event"
+        assert guest(lab, "cat /lab/work/autonomous-proof.py").strip() == b"print('AUTONOMOUS_TOOL_OK')", "Actual edit missing"
+        assert guest(lab, "test -s /lab/work/network-proof && find /lab/work/__pycache__ -name 'autonomous-proof*' -print -quit").strip(), "Network/build effects missing"
     return result.get("result", ""), models, spawned, nested_models
 
 
@@ -83,24 +88,31 @@ def main():
                               "claude_code_load_env; python3 -c 'import json, os; "
                               "print(json.dumps({k:os.environ[\"ANTHROPIC_DEFAULT_\"+k.upper()+\"_MODEL\"] "
                               "for k in (\"opus\",\"sonnet\",\"haiku\")}))'"))
-    check(args.auth_lab, "principal Opus", defaults["opus"], {defaults["opus"]},
-          "Reply exactly TAXIWAY_MODEL_OK.")
-    check(args.auth_lab, "Sonnet alias", "sonnet", {defaults["sonnet"]},
-          "Reply exactly TAXIWAY_MODEL_OK.")
-    check(args.auth_lab, "Haiku full ID", defaults["haiku"], {defaults["haiku"]},
-          "Reply exactly TAXIWAY_MODEL_OK.")
-    nested = check(args.auth_lab, "inherited subagent", defaults["opus"], {defaults["opus"]},
-                   "You must invoke the inherit-worker agent once and wait for its result. "
-                   "Then reply exactly TAXIWAY_MODEL_OK.", {"inherit-worker": worker("inherit")})
-    assert defaults["opus"] in nested, "Inherited subagent used a different model"
-    nested = check(args.auth_lab, "Sonnet and Haiku subagents", defaults["opus"], set(defaults.values()),
-                   "You must invoke both sonnet-worker and haiku-worker agents, "
-                   "in parallel, and wait for both results. Then reply exactly TAXIWAY_MODEL_OK.",
-                   {"sonnet-worker": worker("sonnet"), "haiku-worker": worker("haiku")})
-    assert {defaults["sonnet"], defaults["haiku"]} <= nested, "Subagent models were not confirmed"
     with temporary_lab("claude-code", auth_lab=args.auth_lab,
-                       settings={"model": defaults["sonnet"]}, taxiway=args.taxiway) as target:
+                       settings={"model": defaults["opus"]}, taxiway=args.taxiway) as target:
+        check(target, "principal Opus", defaults["opus"], {defaults["opus"]},
+              "Reply exactly TAXIWAY_MODEL_OK.")
+        check(target, "Sonnet alias", "sonnet", {defaults["sonnet"]},
+              "Reply exactly TAXIWAY_MODEL_OK.")
+        check(target, "Haiku full ID", defaults["haiku"], {defaults["haiku"]},
+              "Reply exactly TAXIWAY_MODEL_OK.")
+        nested = check(target, "inherited subagent", defaults["opus"], {defaults["opus"]},
+                       "You must invoke the inherit-worker agent once and wait for its result. "
+                       "Then reply exactly TAXIWAY_MODEL_OK.", {"inherit-worker": worker("inherit")})
+        assert defaults["opus"] in nested, "Inherited subagent used a different model"
+        nested = check(target, "Sonnet and Haiku subagents", defaults["opus"], set(defaults.values()),
+                       "You must invoke both sonnet-worker and haiku-worker agents, "
+                       "in parallel, and wait for both results. Then reply exactly TAXIWAY_MODEL_OK.",
+                       {"sonnet-worker": worker("sonnet"), "haiku-worker": worker("haiku")})
+        assert {defaults["sonnet"], defaults["haiku"]} <= nested, "Subagent models were not confirmed"
         command([args.taxiway, "start", target])
+        proof = "printf \"print('AUTONOMOUS_TOOL_OK')\\n\" > /lab/work/autonomous-proof.py; python3 -m py_compile /lab/work/autonomous-proof.py; curl --max-time 20 -fsSI https://example.com > /lab/work/network-proof"
+        agents = {"tool-worker": {"description": "Perform the requested autonomous command test.",
+                                  "prompt": "Use Bash to execute this command exactly: " + proof + ". Then reply TAXIWAY_MODEL_OK.",
+                                  "tools": ["Bash"], "model": "inherit"}}
+        answer, _, spawned, nested = run_claude(target, defaults["sonnet"],
+            "Invoke tool-worker once and wait. Then use Bash to cat /lab/work/autonomous-proof.py. Reply TAXIWAY_MODEL_OK.", agents, tools=True)
+        assert "tool-worker" in spawned and nested and "TAXIWAY_MODEL_OK" in answer, "Actual autonomous delegation missing"
         check(target, "auth propagation and restarted lab", defaults["sonnet"], {defaults["sonnet"]},
               "Reply exactly TAXIWAY_MODEL_OK.")
     print("All 6 live Claude cases passed. Reference lab preserved.")
