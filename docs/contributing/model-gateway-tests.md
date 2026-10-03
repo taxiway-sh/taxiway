@@ -1,5 +1,8 @@
 # Testing model selection and subagents
 
+These suites use the shared `taxiway_live.py` helpers. For authentication reuse,
+temporary labs and scenarios for other features, see [reusable live tests](live-tests.md).
+
 ## Automated checks without provider calls
 
 From the repository or development worktree:

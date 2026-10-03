@@ -67,6 +67,8 @@ Typical flow:
 
 - [Development](contributing/development.md)
 - [Testing](contributing/testing.md)
+- [Reusable live tests](contributing/live-tests.md)
+- [Model gateway tests](contributing/model-gateway-tests.md)
 - [Issues](contributing/issues.md)
 - [Release](contributing/release.md)
 - [Installation qualification](contributing/installation-qualification.md)
