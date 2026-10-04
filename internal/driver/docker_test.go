@@ -274,8 +274,9 @@ exit 1
 	require.False(t, status.Created.IsZero())
 }
 
-func TestDockerInspectFailuresMeanAbsent(t *testing.T) {
+func TestDockerMissingInspectionMeansAbsent(t *testing.T) {
 	installFakeDocker(t, `#!/bin/sh
+echo 'Error: No such object: taxiway-missing' >&2
 exit 1
 `)
 	d := NewDockerDriver(t.TempDir())
@@ -352,4 +353,14 @@ func readCommandLog(t *testing.T, logPath string) []string {
 	raw, err := os.ReadFile(logPath)
 	require.NoError(t, err)
 	return strings.Split(strings.TrimSpace(string(raw)), "\n")
+}
+
+func TestDockerRunningPropagatesInspectionFailure(t *testing.T) {
+	installFakeDocker(t, `#!/bin/sh
+ echo 'Cannot connect to the Docker daemon' >&2
+ exit 1
+ `)
+	running, err := NewDockerDriver(t.TempDir()).Running(context.Background(), "taxiway-demo")
+	require.Error(t, err)
+	require.False(t, running)
 }

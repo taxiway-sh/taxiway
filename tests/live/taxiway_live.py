@@ -64,7 +64,54 @@ def guest(lab, script, *, data=None, timeout=300, workdir="/lab/work"):
 
 
 def require_claude_auth(lab):
-    guest(lab, 'command -v claude >/dev/null && test -s "$HOME/.claude/.credentials.json"')
+    """A native bounded request permits native refresh; only categories leave the guest."""
+    status = guest(lab, '''python3 - <<'PY'
+import os, pathlib, shutil, subprocess
+if not shutil.which('claude'):
+    print('setup')
+    raise SystemExit
+if not (pathlib.Path.home() / '.claude/.credentials.json').is_file():
+    print('auth')
+    raise SystemExit
+env = dict(os.environ)
+for key in list(env):
+    if key.startswith('ANTHROPIC_') or key in ('CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_USE_FOUNDRY'):
+        env.pop(key, None)
+try:
+    result = subprocess.run(['claude', '-p', 'Reply exactly LIVE_AUTH_OK.', '--model', 'claude-haiku-4-5-20251001', '--tools', '', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--no-session-persistence', '--max-turns', '1', '--max-budget-usd', '0.10'], env=env, capture_output=True, timeout=90)
+except subprocess.TimeoutExpired:
+    print('network')
+else:
+    text = (result.stdout + result.stderr).decode(errors='replace').lower()
+    if result.returncode == 0 and 'live_auth_ok' in text:
+        print('ok')
+    elif any(message in text for message in ('not logged in', 'please run /login', 'please run claude auth login', 'oauth token has expired', 'invalid oauth token', 'authentication_error', 'token has been revoked', 'invalid bearer token')):
+        print('auth')
+    elif any(message in text for message in ('connection refused', 'timed out', 'timeout', 'enotfound', 'econnreset', 'network')):
+        print('network')
+    elif any(message in text for message in ('invalid configuration', 'invalid mcp configuration', 'unknown option', 'configuration error')):
+        print('setup')
+    elif any(message in text for message in ('model', 'permission', 'forbidden', 'not allowed')):
+        print('model')
+    else:
+        print('provider')
+PY''', timeout=120).strip()
+    if status == b'ok':
+        return
+    if status == b'auth':
+        ref = lab_ref(lab)
+        runtime = runtime_id(lab)
+        if ref['driver'] == 'docker':
+            login = ['docker', 'exec', '-it', '-u', 'taxiway', '-e', 'HOME=/home/taxiway', runtime,
+                     'bash', '-lc', 'unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL CLAUDE_CODE_OAUTH_TOKEN; claude auth login']
+        elif ref['driver'] == 'lima':
+            login = ['limactl', 'shell', runtime, 'bash', '-lc',
+                     'unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL CLAUDE_CODE_OAUTH_TOKEN; claude auth login']
+        else:
+            raise RuntimeError('Unsupported lab driver')
+        raise RuntimeError(f'Claude reference {lab} requires native login. Run: {shlex.join(login)}; then rerun the failed scenario to verify before provisioning')
+    category = status.decode() if status in (b'setup', b'network', b'model', b'provider') else 'setup'
+    raise RuntimeError(f'Claude reference {lab} preflight failed ({category}); authentication was not confirmed rejected; captured output withheld')
 
 
 def _claude_onboarding(source):
@@ -168,8 +215,9 @@ def temporary_lab(orch, *, auth_lab=None, driver="docker", settings=None,
     """Own one randomly named lab; preserve reference labs and shared runtime."""
     validate_context()
     if auth_lab:
-        # Fail before creating resources if the reference login is missing.
+        # A real native request (including native refresh) must pass before provisioning.
         require_claude_auth(auth_lab)
+        _claude_onboarding(auth_lab)
     if driver not in ("docker", "lima"):
         raise RuntimeError("Unsupported lab driver")
     name = "live-test-" + uuid.uuid4().hex[:12]
@@ -204,6 +252,8 @@ def temporary_lab(orch, *, auth_lab=None, driver="docker", settings=None,
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     actions = parser.add_subparsers(dest="action", required=True)
+    preflight = actions.add_parser("preflight", help="Verify a reference with a bounded native Claude request")
+    preflight.add_argument("--source", required=True)
     auth = actions.add_parser("auth", help="Propagate an existing Claude lab login")
     auth.add_argument("--source", required=True)
     auth.add_argument("--target", required=True)
@@ -221,6 +271,10 @@ def main():
     run.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
     validate_context()
+    if args.action == "preflight":
+        require_claude_auth(args.source)
+        print("PASS: native Claude reference request completed; no scenario lab created.")
+        return
     if args.action == "auth":
         propagate_claude_auth(args.source, args.target, overwrite=args.overwrite)
         print("Claude authentication propagated; restart the target session with taxiway start.")

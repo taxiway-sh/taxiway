@@ -49,13 +49,23 @@ Stop the latest active recording:
 taxiway record stop mylab
 ```
 
-Omit `--name` to stop the latest active recording.
+Omit `--name` to stop the latest active recording. Taxiway detaches only the
+recorder’s client, independently of tmux key bindings, and waits for the recorder
+to end before marking the entry stopped. A timeout leaves it active for retry.
 
 Or stop a recording by name:
 
 ```bash
 taxiway record stop mylab --name delivery-run
 ```
+
+If the recorder session has disappeared or the lab is stopped, `record stop`
+reconciles the index and preserves the cast file. `record rm --force` can also
+recover these entries, but removes the cast. Inspection or transport failures
+leave the entry active so they can be retried safely.
+
+Recording entries are saved before the recorder starts. If a start fails, use
+`record stop` to recover the entry before starting another recording.
 
 Stopped recordings can be listed, replayed in the browser player, analyzed, or
 removed.
@@ -74,7 +84,9 @@ List recordings across all labs:
 taxiway record list
 ```
 
-The output shows the recording name, state, start time, stop time, and cast file.
+The output shows the recording name, state, start time, stop time, cast file,
+and ID. Global listing warns by lab name when an index cannot be read and
+continues with the healthy labs.
 
 ## Replay Recordings
 
@@ -98,7 +110,8 @@ Useful options:
 | `--write-only` | Write `index.html` without starting the HTTP server |
 
 The player reads `recordings.json` and local `.cast` files from the recordings
-directory.
+directory. Its pinned asciinema-player bundle is served locally with its license;
+playback needs no CDN or internet connection.
 
 ## Analyze Recordings
 
@@ -162,6 +175,17 @@ Remove a stopped recording and its cast file:
 ```bash
 taxiway record rm mylab delivery-run
 ```
+
+Each start gets a unique ID, including repeated starts with the same name in
+one second. Names must be unique for removal. If a name appears more than once, select
+the ID shown by `record list`:
+
+```bash
+taxiway record rm mylab --id '<ID-from-record-list>'
+```
+
+Taxiway saves the index before deleting the cast. A failed index save preserves
+the cast; a failed cast deletion prints a warning with the remaining path.
 
 Active recordings are protected by default. Use `--force` only when you want
 Taxiway to stop the active recorder process and remove the recording in one
