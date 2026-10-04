@@ -44,7 +44,7 @@ if taxiway_is_plan; then
         log "Stopping existing tmux session '$SESSION'"
     fi
     log "Starting tmux session '$SESSION'"
-    taxiway_plan_detail "codex resume --last || codex"
+    taxiway_plan_detail "codex resume --last --dangerously-bypass-approvals-and-sandbox || codex --dangerously-bypass-approvals-and-sandbox"
     exit 0
 fi
 
