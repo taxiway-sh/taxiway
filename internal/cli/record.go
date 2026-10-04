@@ -317,10 +317,12 @@ func runRecordStart(cmd *cobra.Command, state *RootState, lab, name string) erro
 	if err != nil {
 		return err
 	}
-	if err := startRecordingProcess(ctx, d, driverID, target, recorderSession, castlab); err != nil {
+	if err := checkRecordingDependencies(ctx, d, driverID); err != nil {
 		return err
 	}
-
+	if err := checkRecordingMount(ctx, d, driverID); err != nil {
+		return err
+	}
 	session := recording.Session{
 		ID:              recordingID,
 		Name:            name,
@@ -336,6 +338,11 @@ func runRecordStart(cmd *cobra.Command, state *RootState, lab, name string) erro
 	}
 	idx.Upsert(session)
 	if err := store.Save(idx); err != nil {
+		return err
+	}
+
+	// Save first: interrupted or ambiguous launches remain visible and recoverable.
+	if err := startRecordingProcess(ctx, d, driverID, target, recorderSession, castlab); err != nil {
 		return err
 	}
 
@@ -1339,12 +1346,6 @@ func openBrowserURL(url string) error {
 }
 
 func startRecordingProcess(ctx context.Context, d driver.Driver, id string, target shellTarget, recorderSession, castPath string) error {
-	if err := checkRecordingDependencies(ctx, d, id); err != nil {
-		return err
-	}
-	if err := checkRecordingMount(ctx, d, id); err != nil {
-		return err
-	}
 	attachCommand := target.AttachCommand
 	if target.RequiresTmux && target.SessionName != "" {
 		attachCommand = "tmux attach-session -f read-only,ignore-size -t " + target.SessionName
@@ -1393,7 +1394,32 @@ func checkRecordingMount(ctx context.Context, d driver.Driver, id string) error 
 }
 
 func stopRecordingProcess(ctx context.Context, d driver.Driver, id, recorderSession string) error {
-	stopCmd := "tmux send-keys -t " + shellQuote(recorderSession) + " C-b d"
+	running, err := d.Running(ctx, id)
+	if err != nil {
+		return fmt.Errorf("check recording lab: %w", err)
+	}
+	if !running {
+		return nil
+	}
+	var stderr bytes.Buffer
+	probe, err := d.Exec(ctx, id, driver.ExecRequest{
+		Argv:   []string{"tmux", "has-session", "-t", "=" + recorderSession},
+		Env:    map[string]string{"LC_ALL": "C"},
+		Stderr: &stderr,
+	})
+	if err != nil {
+		return fmt.Errorf("check recorder session: %w", err)
+	}
+	if probe.ExitCode != 0 {
+		message := strings.TrimSpace(stderr.String())
+		if probe.ExitCode == 1 && (strings.HasPrefix(message, "can't find session:") ||
+			strings.HasPrefix(message, "no server running on ") ||
+			(strings.HasPrefix(message, "error connecting to ") && strings.HasSuffix(message, "(No such file or directory)"))) {
+			return nil
+		}
+		return fmt.Errorf("check recorder session failed: exit code %d", probe.ExitCode)
+	}
+	stopCmd := "tmux send-keys -t " + shellQuote("="+recorderSession) + " C-b d"
 	res, err := d.Exec(ctx, id, driver.ExecRequest{
 		Argv: []string{"/bin/sh", "-c", stopCmd},
 	})
