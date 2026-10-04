@@ -441,3 +441,109 @@ func joinedCommands(commands [][]string) string {
 	}
 	return strings.Join(parts, "\n")
 }
+
+func TestRecordRecovery(t *testing.T) {
+	for _, stoppedLab := range []bool{false, true} {
+		for _, remove := range []bool{false, true} {
+			t.Run(fmt.Sprintf("stopped=%t/remove=%t", stoppedLab, remove), func(t *testing.T) {
+				root, state, mock, stdout, stderr := buildRecordTestRoot(t)
+				createRecordLab(t, state, mock, "demo", "sampleorch")
+				mock.ExecResponder = func(_ string, _ driver.ExecRequest) driver.MockExecResponse { return driver.MockExecResponse{} }
+				_, _, err := execRoot(t, root, stdout, stderr, "record", "start", "demo", "--name", "recovery")
+				require.NoError(t, err)
+				store := recording.NewStore(config.StateDir(state.Flags.StateDir, state.RepoDir), "demo")
+				idx, err := store.Load()
+				require.NoError(t, err)
+				cast := idx.Sessions[0].CastPathHost
+				require.NoError(t, os.WriteFile(cast, []byte("recorded evidence"), 0600))
+				mock.ExecResponder = func(_ string, req driver.ExecRequest) driver.MockExecResponse {
+					require.NotContains(t, strings.Join(req.Argv, " "), "send-keys")
+					return driver.MockExecResponse{ExitCode: 1, Stderr: "can't find session: recorder"}
+				}
+				if stoppedLab {
+					require.NoError(t, mock.Stop(context.Background(), config.IDOf("demo")))
+				}
+				args := []string{"record", "stop", "demo"}
+				if remove {
+					args = []string{"record", "rm", "demo", "--name", "recovery", "--force"}
+				}
+				_, _, err = execRoot(t, root, stdout, stderr, args...)
+				require.NoError(t, err)
+				idx, err = store.Load()
+				require.NoError(t, err)
+				if remove {
+					require.Empty(t, idx.Sessions)
+					require.NoFileExists(t, cast)
+				} else {
+					require.Equal(t, recording.StateStopped, idx.Sessions[0].State)
+					data, err := os.ReadFile(cast)
+					require.NoError(t, err)
+					require.Equal(t, "recorded evidence", string(data))
+				}
+			})
+		}
+	}
+}
+
+func TestRecordStartPersistsBeforeLaunch(t *testing.T) {
+	root, state, mock, stdout, stderr := buildRecordTestRoot(t)
+	createRecordLab(t, state, mock, "demo", "sampleorch")
+	launched := false
+	mock.ExecResponder = func(_ string, req driver.ExecRequest) driver.MockExecResponse {
+		if strings.Contains(strings.Join(req.Argv, " "), "asciinema rec") {
+			idx, err := recording.NewStore(config.StateDir(state.Flags.StateDir, state.RepoDir), "demo").Load()
+			require.NoError(t, err)
+			require.Len(t, idx.Sessions, 1)
+			require.Equal(t, recording.StateRecording, idx.Sessions[0].State)
+			launched = true
+			return driver.MockExecResponse{ExitCode: 1}
+		}
+		return driver.MockExecResponse{}
+	}
+	_, _, err := execRoot(t, root, stdout, stderr, "record", "start", "demo", "--name", "recovery")
+	require.Error(t, err)
+	require.True(t, launched)
+	mock.ExecResponder = func(_ string, _ driver.ExecRequest) driver.MockExecResponse {
+		return driver.MockExecResponse{ExitCode: 1, Stderr: "can't find session: recorder"}
+	}
+	_, _, err = execRoot(t, root, stdout, stderr, "record", "stop", "demo")
+	require.NoError(t, err)
+}
+
+func TestRecordStopKeepsStateOnInspectionFailure(t *testing.T) {
+	for _, response := range []driver.MockExecResponse{
+		{ExitCode: 1, Stderr: "error connecting to /tmp/tmux (Permission denied)"},
+		{ExitCode: 127, Stderr: "tmux: not found"},
+		{Err: fmt.Errorf("transport unavailable")},
+	} {
+		t.Run(fmt.Sprintf("%v", response), func(t *testing.T) {
+			root, state, mock, stdout, stderr := buildRecordTestRoot(t)
+			createRecordLab(t, state, mock, "demo", "sampleorch")
+			mock.ExecResponder = func(_ string, _ driver.ExecRequest) driver.MockExecResponse { return driver.MockExecResponse{} }
+			_, _, err := execRoot(t, root, stdout, stderr, "record", "start", "demo", "--name", "evidence")
+			require.NoError(t, err)
+			mock.ExecResponder = func(_ string, _ driver.ExecRequest) driver.MockExecResponse { return response }
+			_, _, err = execRoot(t, root, stdout, stderr, "record", "stop", "demo")
+			require.Error(t, err)
+			idx, err := recording.NewStore(config.StateDir(state.Flags.StateDir, state.RepoDir), "demo").Load()
+			require.NoError(t, err)
+			require.Equal(t, recording.StateRecording, idx.Sessions[0].State)
+		})
+	}
+}
+
+func TestRecordStartPreflightFailureLeavesNoActiveEntry(t *testing.T) {
+	root, state, mock, stdout, stderr := buildRecordTestRoot(t)
+	createRecordLab(t, state, mock, "demo", "sampleorch")
+	mock.ExecResponder = func(_ string, req driver.ExecRequest) driver.MockExecResponse {
+		if strings.Contains(strings.Join(req.Argv, " "), "command -v asciinema") {
+			return driver.MockExecResponse{ExitCode: 1}
+		}
+		return driver.MockExecResponse{}
+	}
+	_, _, err := execRoot(t, root, stdout, stderr, "record", "start", "demo", "--name", "failed")
+	require.ErrorContains(t, err, "recording requires asciinema and tmux")
+	idx, err := recording.NewStore(config.StateDir(state.Flags.StateDir, state.RepoDir), "demo").Load()
+	require.NoError(t, err)
+	require.Empty(t, idx.Sessions)
+}

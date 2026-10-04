@@ -1533,6 +1533,43 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 			require.NotContains(t, out, recordName)
 		})
 	})
+
+	for _, stoppedLab := range []bool{false, true} {
+		for _, remove := range []bool{false, true} {
+			name := fmt.Sprintf("e2e-recovery-stopped-%t-remove-%t", stoppedLab, remove)
+			runE2EStep(t, "record:recovery["+name+"]", func(t *testing.T) {
+				runE2ECommand(t, root, tb, "record", "start", lab, "--name", name)
+				session := requireE2ERecordingSession(t, state, lab, name)
+				assertE2EAsciicastFile(t, session.CastPathHost)
+				if stoppedLab {
+					runE2ECommand(t, root, tb, "down", lab)
+				} else {
+					res, err := state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{
+						Argv: []string{"tmux", "kill-session", "-t", "=" + session.RecorderSession},
+					})
+					require.NoError(t, err)
+					require.Zero(t, res.ExitCode)
+				}
+				if remove {
+					runE2ECommand(t, root, tb, "record", "rm", lab, "--name", name, "--force")
+					require.NoFileExists(t, session.CastPathHost)
+					out := runE2ECommand(t, root, tb, "record", "list", lab)
+					require.NotContains(t, out, name)
+				} else {
+					runE2ECommand(t, root, tb, "record", "stop", lab, "--name", name)
+					recovered := requireE2ERecordingSession(t, state, lab, name)
+					require.Equal(t, recording.StateStopped, recovered.State)
+					require.NotNil(t, recovered.StoppedAt)
+					assertE2EAsciicastFile(t, session.CastPathHost)
+					runE2ECommand(t, root, tb, "record", "rm", lab, "--name", name)
+				}
+				if stoppedLab {
+					runE2ECommand(t, root, tb, "up", lab, "--from", "start", "--force", "--skip-auth-check")
+					assertE2EShellCheck(t, root, tb, lab, orch)
+				}
+			})
+		}
+	}
 }
 
 func requireE2ERecordingSession(t *testing.T, state *RootState, lab, name string) recording.Session {

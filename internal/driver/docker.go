@@ -12,6 +12,7 @@ package driver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -79,7 +80,14 @@ func (d *DockerDriver) Exists(_ context.Context, id string) (bool, error) {
 func (d *DockerDriver) Running(ctx context.Context, id string) (bool, error) {
 	out, err := dockerCmd(ctx, "inspect", "--format={{.State.Running}}", id)
 	if err != nil {
-		return false, nil // container absent
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+			message := strings.TrimSpace(string(exitErr.Stderr))
+			if strings.EqualFold(message, "Error: No such object: "+id) || strings.EqualFold(message, "Error: No such container: "+id) {
+				return false, nil
+			}
+		}
+		return false, fmt.Errorf("inspect running lab %s: %w", id, err)
 	}
 	return strings.TrimSpace(string(out)) == "true", nil
 }
