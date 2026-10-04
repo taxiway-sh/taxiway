@@ -47,7 +47,7 @@ The adapter exposes these settings through `--set`:
 
 | Setting | Description | Default |
 |---|---|---|
-| `version` | Gas Town version or tag to install from release archive | `latest` |
+| `version` | Gas Town release version or tag to install | `latest` |
 | `beads-version` | [Beads](https://github.com/gastownhall/beads) (Gas Town's Git-backed work-tracking unit) version override; omitted uses the Gas Town compatibility matrix | Adapter default |
 | `model` | Claude Code model name passed through LiteLLM | `claude-opus-5-5` |
 | `tool-search` | Load MCP tool definitions on demand: `true`, `false`, `auto`, or `auto:N` | `true` |
@@ -61,8 +61,14 @@ for connector examples.
 Example:
 
 ```bash
-taxiway up mylab --type gastown --set version=1.1.0 --set model=claude-sonnet-4-6
+taxiway up mylab --type gastown --set version=1.2.1 --set model=claude-sonnet-5-5
 ```
+
+For Gas Town 1.2.1, Taxiway builds the pinned release source with the
+[upstream self-sling correction](https://github.com/gastownhall/gastown/pull/4050).
+This lets Deacon attach its initial patrol without interrupting its own Claude
+session. The first installation downloads a verified Go toolchain and builds
+`gt`; its version identifies the backport as `1.2.1-taxiway-self-sling-4050`.
 
 ## Shell Behavior
 

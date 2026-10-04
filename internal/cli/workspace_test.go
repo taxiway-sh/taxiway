@@ -156,10 +156,9 @@ func TestGastownInstallUsesSetVersionWithLatestDefault(t *testing.T) {
 	require.Contains(t, script, `install_github_release_binary gastownhall gastown gastown "$GASTOWN_INSTALL_REF" gt`)
 	require.NotContains(t, script, `go install`)
 	require.NotContains(t, script, `GO_VERSION`)
-	require.NotContains(t, script, `go.dev/dl`)
 }
 
-func TestGastownInstallUsesReleaseArchivesOnly(t *testing.T) {
+func TestGastownInstallUsesReleaseArchivesWithPinnedSelfSlingBackport(t *testing.T) {
 	content, err := os.ReadFile(filepath.Join("..", "..", "orchestrators", "gastown", "install.sh"))
 	require.NoError(t, err)
 
@@ -173,6 +172,15 @@ func TestGastownInstallUsesReleaseArchivesOnly(t *testing.T) {
 	require.Contains(t, script, `install -m 0755 "$bin" "$target"`)
 	require.Contains(t, script, `install_github_release_binary gastownhall gastown gastown "$GASTOWN_INSTALL_REF" gt`)
 	require.Contains(t, script, `install_github_release_binary gastownhall beads beads "$BEADS_INSTALL_REF" bd`)
+	require.Contains(t, script, `if [ "$GASTOWN_INSTALL_REF" = "v1.2.1" ]; then`)
+	require.Contains(t, script, `local source_commit="319d33a91b2deca59bba6dd26be6b9daf8eaacf6"`)
+	require.Contains(t, script, `https://github.com/gastownhall/gastown/archive/${source_commit}.tar.gz`)
+	require.Contains(t, script, `https://go.dev/dl/go1.25.8.linux-${arch}.tar.gz`)
+	require.Contains(t, script, `printf '%s  %s\n' "$source_sha" "$builddir/source.tar.gz" | sha256sum --check --status`)
+	require.Contains(t, script, `printf '%s  %s\n' "$go_sha" "$builddir/go.tar.gz" | sha256sum --check --status`)
+	require.Contains(t, script, `/patches/self-sling-4050.patch`)
+	require.Contains(t, script, `CGO_ENABLED=0 GOTOOLCHAIN=local "$builddir/go/bin/go" build -buildvcs=false -trimpath`)
+	require.Contains(t, script, `local build="taxiway-self-sling-4050"`)
 	require.Contains(t, script, `Release archive unavailable for ${owner}/${repo} ${ref}`)
 	require.NotContains(t, script, `falling back to go install`)
 	require.NotContains(t, script, `$HOME/go/bin`)
@@ -239,7 +247,7 @@ func TestGastownManifestDocumentsBeadsVersionSetting(t *testing.T) {
 	require.NoError(t, err)
 
 	manifest := string(content)
-	require.Contains(t, manifest, `Gastown version/tag to install from release archive`)
+	require.Contains(t, manifest, `Gastown release version/tag to install`)
 	require.Contains(t, manifest, `name: beads-version`)
 	require.Contains(t, manifest, `Beads version/tag override`)
 	require.Contains(t, manifest, "phases:\n      - install")

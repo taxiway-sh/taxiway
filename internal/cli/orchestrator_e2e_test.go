@@ -1360,6 +1360,16 @@ func assertE2EGastownHandoff(t *testing.T, state *RootState, id string) {
 	}
 	require.NoError(t, json.Unmarshal([]byte(run("gt", "status", "--json")), &status))
 	require.NotEmpty(t, status.Tmux.Socket)
+	// Exercise the installed CLI from Deacon's own pane context. A named
+	// self-target must hook work without injecting a notification into Claude.
+	deaconPane := run("tmux", "-L", status.Tmux.Socket, "display-message", "-p", "-t", "hq-deacon", "#{pane_id}")
+	sling := run("env", "GT_ROLE=deacon", "TMUX_PANE="+deaconPane,
+		"gt", "sling", "mol-deacon-patrol", "deacon")
+	require.Contains(t, sling, "Self-sling: work hooked, will process on next turn")
+	// Resolve hook status from the target's workspace so phase-by-phase labs
+	// query the same Beads database that sling used for the town-level role.
+	hook := run("bash", "-c", "cd /lab/work/gt/deacon && gt hook status --json")
+	require.Contains(t, hook, "mol-deacon-patrol", "self-sling must attach real patrol work")
 	// Initiate from Mayor (no patrol cooldown): repeat remote refinery handoff,
 	// then exercise Mayor's self-handoff through the same restart builder.
 	for _, target := range []string{"ah-refinery", "ah-refinery", "hq-mayor"} {
