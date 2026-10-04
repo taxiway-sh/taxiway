@@ -501,9 +501,33 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 
 	runE2ERecordScenario(t, root, tb, state, lab, orch)
 
+	runE2EStep(t, "taxiway:reset[confirmation-required]", func(t *testing.T) {
+		before, err := os.ReadDir(phases.Dir(stateDir, id))
+		require.NoError(t, err)
+		require.NotEmpty(t, before)
+		_, _, err = execDockerRoot(t, root, tb, "reset", lab)
+		require.ErrorContains(t, err, "--yes")
+		for _, input := range []string{"printf 'n\\n' |", "true |"} {
+			var output bytes.Buffer
+			result, err := state.Driver.Exec(context.Background(), id, driver.ExecRequest{
+				Argv:   []string{"bash", "-lc", input + " bash /lab/infra/commands/reset.sh"},
+				Stdout: &output,
+			})
+			require.NoError(t, err)
+			require.Equal(t, 0, result.ExitCode)
+			require.Contains(t, output.String(), "Aborted.")
+		}
+		after, err := os.ReadDir(phases.Dir(stateDir, id))
+		require.NoError(t, err)
+		require.Equal(t, before, after)
+		assertE2EFixtureWorkspace(t, state, id, orch)
+	})
+
 	runE2EScriptDryRunStep(t, "taxiway:reset[--yes,--dry-run]", root, tb, state, stateDir, id, []string{"Stopping workspace services", "Clearing lifecycle phase markers"}, "reset", "--yes", lab)
 	runE2EStep(t, "taxiway:reset[--yes]", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "reset", "--yes", lab)
+		_, err := os.Stat(phases.Dir(stateDir, id))
+		require.True(t, os.IsNotExist(err), "successful reset clears lifecycle markers")
 		runE2EAssert(t, "assert:lab-listed", func(t *testing.T) {
 			assertE2EList(t, root, tb, lab, orch, "degraded", "-")
 		})
