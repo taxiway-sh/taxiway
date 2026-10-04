@@ -211,7 +211,7 @@ export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
 
 @contextmanager
 def temporary_lab(orch, *, auth_lab=None, driver="docker", settings=None,
-                  repo=None, taxiway="./taxiway", timeout=900):
+                  repo=None, taxiway="./taxiway", timeout=900, prepare_only=False):
     """Own one randomly named lab; preserve reference labs and shared runtime."""
     validate_context()
     if auth_lab:
@@ -228,13 +228,14 @@ def temporary_lab(orch, *, auth_lab=None, driver="docker", settings=None,
         argv += ["--set", f"{key}={value}"]
     if repo:
         argv += ["--repo", repo]
-    if auth_lab:
+    if auth_lab or prepare_only:
         argv += ["--prepare-only"]
     try:
         command(argv, timeout=timeout)
         if auth_lab:
             propagate_claude_auth(auth_lab, name)
-            command([taxiway, "run", name, "--skip-auth-check"], timeout=timeout)
+            if not prepare_only:
+                command([taxiway, "run", name, "--skip-auth-check"], timeout=timeout)
         yield name
     finally:
         scenario_failed = sys.exc_info()[0] is not None
