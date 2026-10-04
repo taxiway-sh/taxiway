@@ -11,7 +11,7 @@ TEST_HOME="$TEST_ROOT/home"
 FORBIDDEN_LOG="$TEST_ROOT/forbidden.log"
 mkdir -p "$SAFE_BIN" "$TEST_HOME"
 export FORBIDDEN_LOG
-export CODEX_VERSION=9.8.7 CLAUDE_CODE_VERSION=9.8.7
+export TAXIWAY_SET_CODEX_VERSION=9.8.7 TAXIWAY_SET_CLAUDE_CODE_VERSION=9.8.7
 
 for command_name in sudo apt-get curl npm gt bd dolt sqlite3 codex claude git tmux docker node corepack python3 java asciinema; do
   printf '%s\n' \

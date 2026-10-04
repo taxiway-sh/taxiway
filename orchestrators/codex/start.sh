@@ -7,10 +7,6 @@
 
 set -euo pipefail
 
-if [[ -n "${TAXIWAY_SET_CODEX_VERSION:-}" && "$TAXIWAY_SET_CODEX_VERSION" != latest ]]; then
-    source "$(dirname "${BASH_SOURCE[0]}")/../../infra/agents/npm-agent.sh"
-    npm_agent_verify_version codex codex-version "$TAXIWAY_SET_CODEX_VERSION" "$(codex --version | awk 'NR == 1 { print $NF }')" "$(command -v codex)"
-fi
 
 # shellcheck source=../../infra/trace/events.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../../infra/trace/events.sh" 2>/dev/null || true
@@ -53,6 +49,12 @@ if taxiway_is_plan; then
 fi
 
 lab_emit_event phase start
+
+if [[ -n "${TAXIWAY_SET_CODEX_VERSION:-}" && "$TAXIWAY_SET_CODEX_VERSION" != latest ]]; then
+    source "$(dirname "${BASH_SOURCE[0]}")/../../infra/agents/npm-agent.sh"
+    npm_agent_verify_version codex codex-version "$TAXIWAY_SET_CODEX_VERSION" "$(codex --version | awk 'NR == 1 { print $NF }')" "$(command -v codex)"
+fi
+
 
 # Use TAXIWAY_WORKSPACE_DIR as the working directory if set and exists.
 # Without a cloned repo, start in /lab/work rather than $HOME so the session
