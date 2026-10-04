@@ -42,9 +42,35 @@ whole reference configuration. The reference must have completed interactive
 onboarding, so authenticated noninteractive calls alone are not sufficient.
 
 Each target retains its own gateway key and environment. Only the Claude
-login and the completed first-run setup flags are copied. Normal client token refresh still applies; propagation does
-not make an expired or revoked login valid. Re-authenticate the reference lab
-if the client can no longer use or refresh its login, then propagate again.
+login and the completed first-run setup flags are copied.
+Before provisioning each authenticated scenario, and immediately before copying
+its login, the helper runs a native Claude Haiku request in the reference. It
+allows native OAuth refresh, removes gateway/API-key environment overrides,
+disables tools and MCP servers, and bounds the request to 90 seconds and a $0.10
+budget. Only a sanitized result category leaves the guest; response/error text
+is withheld. This uses subscription allowance even if the scenario never starts.
+
+To verify a reference without creating any scenario lab:
+
+```bash
+direnv exec . python3 tests/live/taxiway_live.py preflight --source test-claude
+```
+
+Missing or explicitly rejected authentication stops before scenario provisioning
+and prints the exact native `claude auth login` command for the reference's
+Docker or Lima driver. Complete that command once, then rerun preflight or the
+failed scenario: the renewed reference is verified before credentials are
+copied. `taxiway auth` can short-circuit on an existing file and is not a renewal
+command. Network/timeouts, unavailable models, setup and other provider failures
+do not request login. Diagnose them separately; unknown errors are not treated
+as proof of rejected authentication.
+
+If auth expires during a suite, the failing action is not replayed automatically.
+The next propagation runs another bounded preflight; after confirmed rejection,
+reconnect once and explicitly rerun the failed scenario. There are no infinite
+refresh/login/setup retries, and temporary-lab cleanup preserves the reference.
+Native refresh success is established by a successful real request, never by
+credential-file presence.
 The helper does not synchronize subsequent refreshes between running labs.
 
 Codex works differently: Taxiway prepares ChatGPT authentication in the
