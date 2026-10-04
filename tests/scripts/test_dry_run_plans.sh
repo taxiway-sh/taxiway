@@ -13,7 +13,7 @@ mkdir -p "$SAFE_BIN" "$TEST_HOME"
 export FORBIDDEN_LOG
 export CODEX_VERSION=9.8.7 CLAUDE_CODE_VERSION=9.8.7
 
-for command_name in sudo apt-get curl npm gt bd dolt sqlite3 codex claude git tmux docker; do
+for command_name in sudo apt-get curl npm gt bd dolt sqlite3 codex claude git tmux docker node corepack python3 java asciinema; do
   printf '%s\n' \
     '#!/usr/bin/env bash' \
     'printf "%s\\n" "$(basename "$0") $*" >> "$FORBIDDEN_LOG"' \
@@ -30,7 +30,11 @@ run_plan() {
   HOME="$TEST_HOME" \
   PATH="$SAFE_BIN:$PATH" \
   "$@" bash "$script"
-  [[ ! -s "$FORBIDDEN_LOG" ]]
+  if [[ -s "$FORBIDDEN_LOG" ]]; then
+    printf 'offline dry-run executed host commands in %s:\n' "$script" >&2
+    cat "$FORBIDDEN_LOG" >&2
+    return 1
+  fi
   if [[ -n "$(find "$TEST_HOME" -mindepth 1 -print -quit)" ]]; then
     printf 'dry-run changed temporary HOME in %s\n' "$script" >&2
     return 1
@@ -45,6 +49,12 @@ assert_contains() {
     return 1
   fi
 }
+
+output="$(run_plan "$ROOT_DIR/infra/commands/bootstrap.sh")"
+assert_contains "$output" "Installing Docker"
+assert_contains "$output" "Installing Node.js 22"
+assert_contains "$output" "Enabling Corepack"
+assert_contains "$output" "unknown (guest inspection unavailable)"
 
 output="$(run_plan "$ROOT_DIR/agents/codex/install.sh")"
 assert_contains "$output" "[codex-agent-install]"

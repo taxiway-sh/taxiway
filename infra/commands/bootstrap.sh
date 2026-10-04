@@ -35,7 +35,7 @@ install_docker() {
   sudo usermod -aG docker "$USER"
 }
 
-if ! command -v docker >/dev/null 2>&1; then
+if ! taxiway_can_inspect || ! command -v docker >/dev/null 2>&1; then
   taxiway_step "Installing Docker" install_docker
 else
   log "Docker already installed ($(docker --version))"
@@ -47,7 +47,7 @@ install_node() {
 }
 
 node_install_planned=false
-if ! command -v node >/dev/null 2>&1; then
+if ! taxiway_can_inspect || ! command -v node >/dev/null 2>&1; then
   if taxiway_is_plan; then
     node_install_planned=true
   fi
@@ -60,31 +60,37 @@ fi
 enable_corepack() {
   sudo corepack enable >/dev/null 2>&1
 }
-if command -v corepack >/dev/null 2>&1 || [[ "$node_install_planned" == "true" ]]; then
+if [[ "$node_install_planned" == "true" ]] || command -v corepack >/dev/null 2>&1; then
   taxiway_step "Enabling Corepack" enable_corepack || true
 fi
 
 log "Toolchain summary"
-printf '  %-10s : %s\n' "docker" "$(docker --version 2>/dev/null || echo 'missing')"
-printf '  %-10s : %s\n' "node" "$(node --version 2>/dev/null || echo 'missing')"
-printf '  %-10s : %s\n' "npm" "$(npm --version 2>/dev/null || echo 'missing')"
-printf '  %-10s : %s\n' "python" "$(python3 --version 2>/dev/null || echo 'missing')"
-if command -v java >/dev/null 2>&1; then
-  java_version="$(java -version 2>&1 | head -n1)"
+if ! taxiway_can_inspect; then
+  for tool in docker node npm python java git tmux asciinema; do
+    printf '  %-10s : %s\n' "$tool" 'unknown (guest inspection unavailable)'
+  done
 else
-  java_version="missing"
+  printf '  %-10s : %s\n' "docker" "$(docker --version 2>/dev/null || echo 'missing')"
+  printf '  %-10s : %s\n' "node" "$(node --version 2>/dev/null || echo 'missing')"
+  printf '  %-10s : %s\n' "npm" "$(npm --version 2>/dev/null || echo 'missing')"
+  printf '  %-10s : %s\n' "python" "$(python3 --version 2>/dev/null || echo 'missing')"
+  if command -v java >/dev/null 2>&1; then
+    java_version="$(java -version 2>&1 | head -n1)"
+  else
+    java_version="missing"
+  fi
+  printf '  %-10s : %s\n' "java" "$java_version"
+  printf '  %-10s : %s\n' "git" "$(git --version 2>/dev/null || echo 'missing')"
+  printf '  %-10s : %s\n' "tmux" "$(tmux -V 2>/dev/null || echo 'missing')"
+  printf '  %-10s : %s\n' "asciinema" "$(asciinema --version 2>/dev/null || echo 'missing')"
 fi
-printf '  %-10s : %s\n' "java" "$java_version"
-printf '  %-10s : %s\n' "git" "$(git --version 2>/dev/null || echo 'missing')"
-printf '  %-10s : %s\n' "tmux" "$(tmux -V 2>/dev/null || echo 'missing')"
-printf '  %-10s : %s\n' "asciinema" "$(asciinema --version 2>/dev/null || echo 'missing')"
 
 # --- tmux configuration ---
 TMUX_CONF="$HOME/.tmux.conf"
 enable_tmux_mouse() {
   echo "set -g mouse on" >> "$TMUX_CONF"
 }
-if ! grep -qF "set -g mouse on" "$TMUX_CONF" 2>/dev/null; then
+if ! taxiway_can_inspect || ! grep -qF "set -g mouse on" "$TMUX_CONF" 2>/dev/null; then
     taxiway_step "Enabling tmux mouse support in $TMUX_CONF" enable_tmux_mouse
 else
     log "tmux mouse support already configured, skipping"
@@ -105,7 +111,7 @@ fi
 # <<< taxiway-managed
 EOF
 }
-if ! grep -qF "$TAXIWAY_PROFILE_MARKER" "$HOME/.profile" 2>/dev/null; then
+if ! taxiway_can_inspect || ! grep -qF "$TAXIWAY_PROFILE_MARKER" "$HOME/.profile" 2>/dev/null; then
   taxiway_step "Configuring login shells to load the Taxiway environment" add_taxiway_profile_block
 else
   log "Taxiway environment block already present in ~/.profile, skipping"
