@@ -50,7 +50,7 @@ with tempfile.TemporaryDirectory(prefix="taxiway-helper-test-") as root:
             assert str(error).startswith("Cleanup failed for live-test-")
         else:
             raise AssertionError("cleanup error after successful scenario was lost")
-    with patch.dict(os.environ, environment), patch.object(live, "command", lambda argv, **kwargs: calls.append(argv) or b""), patch.object(live, "require_claude_auth"), patch.object(live, "propagate_claude_auth", side_effect=lambda source, target: calls.append(["copy-auth", target])):
+    with patch.dict(os.environ, environment), patch.object(live, "command", lambda argv, **kwargs: calls.append(argv) or b""), patch.object(live, "require_claude_auth"), patch.object(live, "_claude_onboarding"), patch.object(live, "propagate_claude_auth", side_effect=lambda source, target: calls.append(["copy-auth", target])):
         calls.clear()
         with live.temporary_lab("gastown", auth_lab="reference"):
             pass
@@ -59,6 +59,83 @@ with tempfile.TemporaryDirectory(prefix="taxiway-helper-test-") as root:
         assert calls[2][1] == "run"
 print("PASS: reference auth is propagated before the first orchestrator start")
 print("PASS: cleanup preserves the original error and reports owned-lab failures")
+
+# Rejected native auth must stop before provisioning, even with a credential file.
+with patch.dict(os.environ, environment), patch.object(live, "guest", return_value=b"auth\n"), patch.object(live, "lab_ref", return_value={"driver": "docker"}), patch.object(live, "command") as provision:
+    try:
+        with live.temporary_lab("claude-code", auth_lab="reference"):
+            pass
+    except RuntimeError as error:
+        assert "claude auth login" in str(error)
+        assert "docker exec -it" in str(error)
+    else:
+        raise AssertionError("expired reference accepted before provisioning")
+    provision.assert_not_called()
+print("PASS: expired reference rejected before provisioning")
+
+# Execute the native probe itself with a fixture client (no real credentials).
+import subprocess
+with tempfile.TemporaryDirectory(prefix="taxiway-preflight-test-") as root:
+    home = Path(root)
+    (home / '.claude').mkdir()
+    (home / '.claude/.credentials.json').write_text('{}')
+    native = home / 'claude'
+    native.write_text('''#!/usr/bin/env python3
+import os, sys
+assert not any(key.startswith('ANTHROPIC_') for key in os.environ)
+assert '--tools' in sys.argv and '--no-session-persistence' in sys.argv
+assert sys.argv[sys.argv.index('--mcp-config') + 1] == '{"mcpServers":{}}'
+print(os.environ['FIXTURE_RESPONSE'])
+sys.exit(int(os.environ['FIXTURE_EXIT']))
+''')
+    native.chmod(0o700)
+    response, exitcode = '', 1
+    def probe_guest(lab, script, **kwargs):
+        env = dict(os.environ, HOME=root, PATH=root + os.pathsep + os.environ['PATH'],
+                   FIXTURE_RESPONSE=response, FIXTURE_EXIT=str(exitcode),
+                   ANTHROPIC_API_KEY='fixture-secret', ANTHROPIC_BASE_URL='fixture-gateway')
+        return subprocess.run(['bash', '-c', script], env=env, capture_output=True, check=True).stdout
+    with patch.object(live, 'guest', probe_guest), patch.object(live, 'lab_ref', return_value={'driver': 'lima'}), patch.object(live, 'runtime_id', return_value='fixture-reference'):
+        response, exitcode = 'LIVE_AUTH_OK', 0
+        live.require_claude_auth('reference')
+        for response, category in [('OAuth token has expired fixture-secret', 'native login'),
+                                    ('Network connection timed out fixture-secret', '(network)'),
+                                    ('Failed to refresh token: Network connection timed out fixture-secret', '(network)'),
+                                    ('Failed to refresh token: HTTP 503 Service unavailable fixture-secret', '(provider)'),
+                                    ('Invalid MCP configuration fixture-secret', '(setup)'),
+                                    ('Model not available fixture-secret', '(model)'),
+                                    ('Service overloaded fixture-secret', '(provider)')]:
+            exitcode = 1
+            try: live.require_claude_auth('reference')
+            except RuntimeError as error:
+                assert category in str(error), str(error)
+                assert 'fixture-secret' not in str(error)
+                assert ('claude auth login' in str(error)) == (category == 'native login')
+                if category == 'native login': assert 'limactl shell fixture-reference' in str(error)
+            else: raise AssertionError('native failure accepted')
+print('PASS: native request distinguishes auth/network/model/provider; secrets withheld')
+
+with patch.dict(os.environ, environment), patch.object(live, 'require_claude_auth'), patch.object(live, '_claude_onboarding', side_effect=RuntimeError('Complete onboarding')), patch.object(live, 'propagate_claude_auth'), patch.object(live, 'command', return_value=b'') as commands:
+    try:
+        with live.temporary_lab('claude-code', auth_lab='reference'):
+            pass
+    except RuntimeError as error: assert str(error) == 'Complete onboarding'
+    else: raise AssertionError('incomplete reference onboarding accepted')
+    commands.assert_not_called()
+
+# Expiry between initial preflight and propagation fails once and removes only the target.
+with patch.dict(os.environ, environment), patch.object(live, 'require_claude_auth'), patch.object(live, '_claude_onboarding'), patch.object(live, 'propagate_claude_auth', side_effect=RuntimeError('reference requires native login')), patch.object(live, 'command', return_value=b'') as commands:
+    try:
+        with live.temporary_lab('claude-code', auth_lab='reference'):
+            raise AssertionError('scenario started with rejected credentials')
+    except RuntimeError as error:
+        assert str(error) == 'reference requires native login'
+    else: raise AssertionError('mid-setup rejection ignored')
+    assert len(commands.call_args_list) == 2, 'unbounded recovery or replay'
+    created = commands.call_args_list[0].args[0][2]
+    assert commands.call_args_list[1].args[0] == ['./taxiway', 'rm', created, '--yes']
+    assert created != 'reference'
+print('PASS: mid-setup auth rejection is bounded and preserves the reference')
 
 # Exercise the actual guest scripts with isolated local homes, no credentials.
 import json
@@ -72,8 +149,21 @@ with tempfile.TemporaryDirectory(prefix="taxiway-onboarding-test-") as root:
               "projects": {"target-workspace": {"hasTrustDialogAccepted": True}}}
     for name, config in (("source", source), ("target", target)):
         (homes[name] / ".claude.json").write_text(json.dumps(config))
+    native = Path(root) / 'claude'
+    native.write_text('''#!/usr/bin/env python3
+import json
+from pathlib import Path
+path = Path.home() / '.claude/.credentials.json'
+credential = json.loads(path.read_text())
+credential['claudeAiOauth']['accessToken'] = 'fixture-refreshed'
+path.write_text(json.dumps(credential))
+print('LIVE_AUTH_OK')
+''')
+    native.chmod(0o700)
+    (homes['source'] / '.claude').mkdir()
+    (homes['source'] / '.claude/.credentials.json').write_text(json.dumps({'claudeAiOauth': {'accessToken': 'fixture-expired', 'refreshToken': 'fixture-refresh'}}))
     def local_guest(lab, script, *, data=None, **kwargs):
-        env = dict(os.environ, HOME=str(homes[lab]))
+        env = dict(os.environ, HOME=str(homes[lab]), PATH=root + os.pathsep + os.environ['PATH'])
         return subprocess.run(["bash", "-c", script], input=data, env=env,
                               capture_output=True, check=True).stdout
     with patch.object(live, "guest", local_guest):
@@ -85,6 +175,11 @@ with tempfile.TemporaryDirectory(prefix="taxiway-onboarding-test-") as root:
         before = path.read_bytes()
         live.propagate_claude_onboarding("source", "target")
         assert path.read_bytes() == before
+        live.propagate_claude_auth('source', 'target')
+        copied = homes['target'] / '.claude/.credentials.json'
+        assert json.loads(copied.read_text())['claudeAiOauth']['accessToken'] == 'fixture-refreshed'
+        assert copied.stat().st_mode & 0o777 == 0o600
+        assert copied.parent.stat().st_mode & 0o777 == 0o700
         source["hasCompletedOnboarding"] = False
         (homes["source"] / ".claude.json").write_text(json.dumps(source))
         try: live.propagate_claude_onboarding("source", "target")
