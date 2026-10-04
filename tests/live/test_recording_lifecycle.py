@@ -85,7 +85,7 @@ def record(lab, taxiway):
     # Require the real recording client before sending fixture output.
     print("STEP recording live-client", flush=True)
     wait_for(lambda: recorder_attached(lab, recorder_option_target))
-    guest(lab, "tmux send-keys -t '=claude-code' 'printf LIVE_RECORDING_PROOF' Enter", timeout=10)
+    guest(lab, "tmux send-keys -t claude-code 'printf LIVE_RECORDING_PROOF' Enter", timeout=10)
     print("STEP recording capture", flush=True)
     wait_for(lambda: "LIVE_RECORDING_PROOF" in cast_output(cast))
     print("STEP recording stop", flush=True)
