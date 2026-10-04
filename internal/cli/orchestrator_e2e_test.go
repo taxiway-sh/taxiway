@@ -289,6 +289,28 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		runE2EAssert(t, "assert:lab-listed", func(t *testing.T) {
 			assertE2EList(t, root, tb, lab, orch, "degraded", "created")
 		})
+		runE2EAssert(t, "assert:driver-inspection-contract", func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			_, err := state.Driver.Exists(ctx, id)
+			require.ErrorIs(t, err, context.Canceled, "inspection failure must not mean absent")
+			st, err := state.Driver.Status(ctx, id)
+			require.ErrorIs(t, err, context.Canceled)
+			require.Empty(t, st.State)
+			pauseCtx, stop := context.WithTimeout(context.Background(), 10*time.Second)
+			defer stop()
+			out, err := exec.CommandContext(pauseCtx, "docker", "pause", id).CombinedOutput()
+			require.NoError(t, err, "pause owned lab: %s", out)
+			defer func() {
+				resumeCtx, done := context.WithTimeout(context.Background(), 10*time.Second)
+				defer done()
+				out, err := exec.CommandContext(resumeCtx, "docker", "unpause", id).CombinedOutput()
+				require.NoError(t, err, "resume owned lab: %s", out)
+			}()
+			st, err = state.Driver.Status(context.Background(), id)
+			require.NoError(t, err)
+			require.Equal(t, "stopped", st.State, "paused lab must stay within the status contract")
+		})
 	})
 
 	runE2EScriptDryRunStep(t, "taxiway:bootstrap[--dry-run]", root, tb, state, stateDir, id, dryRunLabels.Bootstrap, "bootstrap", lab)

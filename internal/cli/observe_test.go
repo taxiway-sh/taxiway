@@ -2300,7 +2300,11 @@ func TestStatusIgnoresNonCanonicalRuntimeContextLabDirs(t *testing.T) {
 	t.Setenv("TAXIWAY_PROXY_DIR", proxyDir)
 	writeFakeDocker(t, `#!/bin/sh
 if [ "$1" = "version" ]; then exit 0; fi
-if [ "$1" = "inspect" ]; then exit 1; fi
+if [ "$1" = "inspect" ]; then
+  for id do :; done
+  printf 'Error: No such object: %s\n' "$id" >&2
+  exit 1
+fi
 if [ "$1" = "ps" ]; then exit 0; fi
 exit 1
 `)

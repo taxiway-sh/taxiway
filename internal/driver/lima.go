@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,11 +26,10 @@ func NewLimaDriver(stateDir string) *LimaDriver { return &LimaDriver{stateDir: s
 
 func (l *LimaDriver) Name() string { return "lima" }
 
-func (l *LimaDriver) Exists(_ context.Context, id string) (bool, error) {
-	out, err := exec.Command("limactl", "list", "--format={{.Name}}").Output()
+func (l *LimaDriver) Exists(ctx context.Context, id string) (bool, error) {
+	out, err := exec.CommandContext(ctx, "limactl", "list", "--format={{.Name}}").Output()
 	if err != nil {
-		slog.Debug("limactl list error", "err", err)
-		return false, nil // limactl may error if no labs exist yet
+		return false, inspectionError("limactl list", err)
 	}
 	scanner := bufio.NewScanner(strings.NewReader(string(out)))
 	for scanner.Scan() {
@@ -45,7 +43,7 @@ func (l *LimaDriver) Exists(_ context.Context, id string) (bool, error) {
 func (l *LimaDriver) Running(ctx context.Context, id string) (bool, error) {
 	out, err := exec.CommandContext(ctx, "limactl", "list", "--format={{.Name}} {{.Status}}").Output()
 	if err != nil {
-		return false, err
+		return false, inspectionError("limactl list", err)
 	}
 	scanner := bufio.NewScanner(strings.NewReader(string(out)))
 	for scanner.Scan() {
@@ -176,14 +174,14 @@ func (o *limaStartupOutput) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func (l *LimaDriver) Stop(_ context.Context, id string) error {
-	return exec.Command("limactl", "stop", id).Run()
+func (l *LimaDriver) Stop(ctx context.Context, id string) error {
+	return limaOperation(ctx, "stop", id)
 }
 
 // Delete stops, deletes the lima lab, and removes all on-disk state for the lab
 // (rendered YAML, work dirs, phase markers, events.jsonl).
-func (l *LimaDriver) Delete(_ context.Context, id string) error {
-	if err := exec.Command("limactl", "delete", "--force", id).Run(); err != nil {
+func (l *LimaDriver) Delete(ctx context.Context, id string) error {
+	if err := limaOperation(ctx, "delete", "--force", id); err != nil {
 		return err
 	}
 	// Remove the entire lab state directory so work/, phases/, agent-lab.yaml, etc.
@@ -203,7 +201,10 @@ func (l *LimaDriver) Status(ctx context.Context, id string) (Status, error) {
 	if !exists {
 		return Status{Name: id, State: "absent", Driver: "lima"}, nil
 	}
-	running, _ := l.Running(ctx, id)
+	running, err := l.Running(ctx, id)
+	if err != nil {
+		return Status{}, err
+	}
 	state := "stopped"
 	if running {
 		state = "running"
@@ -215,11 +216,10 @@ func (l *LimaDriver) Status(ctx context.Context, id string) (Status, error) {
 	return st, nil
 }
 
-func (l *LimaDriver) List(_ context.Context) ([]Status, error) {
-	out, err := exec.Command("limactl", "list", "--format={{.Name}} {{.Status}}").Output()
+func (l *LimaDriver) List(ctx context.Context) ([]Status, error) {
+	out, err := exec.CommandContext(ctx, "limactl", "list", "--format={{.Name}} {{.Status}}").Output()
 	if err != nil {
-		slog.Debug("limactl list error", "err", err)
-		return nil, nil
+		return nil, inspectionError("limactl list", err)
 	}
 	var result []Status
 	scanner := bufio.NewScanner(strings.NewReader(string(out)))
@@ -247,8 +247,16 @@ func (l *LimaDriver) List(_ context.Context) ([]Status, error) {
 
 // Copy copies a local file to the lab at the given destination path.
 // It uses `limactl copy <srcHost> <id>:<dstLab>`.
-func (l *LimaDriver) Copy(_ context.Context, id, srcHost, dstlab string) error {
-	return exec.Command("limactl", "copy", srcHost, id+":"+dstlab).Run()
+func (l *LimaDriver) Copy(ctx context.Context, id, srcHost, dstlab string) error {
+	return limaOperation(ctx, "copy", srcHost, id+":"+dstlab)
+}
+
+func limaOperation(ctx context.Context, args ...string) error {
+	out, err := exec.CommandContext(ctx, "limactl", args...).CombinedOutput()
+	if err != nil {
+		return toolOutputError("limactl "+args[0], err, out)
+	}
+	return nil
 }
 
 // Shell opens an interactive shell in the lab at /lab (the lab repo root).
