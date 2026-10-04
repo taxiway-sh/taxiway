@@ -64,6 +64,15 @@ def cast_output(path):
     return "".join(output)
 
 
+def recorder_attached(lab, recorder_option_target):
+    try:
+        tty = guest(lab, f"tmux show-option -qv -t {recorder_option_target} @taxiway-recorder-client", timeout=10).strip()
+        clients = guest(lab, "tmux list-clients -F '#{client_tty}'", timeout=10).splitlines()
+        return bool(tty) and tty in clients
+    except RuntimeError:
+        # record start launches its client asynchronously; poll within the bound.
+        return False
+
 def record(lab, taxiway):
     print("STEP recording target-session", flush=True)
     guest(lab, "tmux new-session -d -s claude-code 'bash --noprofile --norc'; tmux set-option -g prefix C-a")
@@ -74,12 +83,8 @@ def record(lab, taxiway):
     recorder_option_target = shlex.quote(recording["recorder_session"])
     cast = Path(recording["cast_path_host"])
     # Require the real recording client before sending fixture output.
-    def attached():
-        tty = guest(lab, f"tmux show-option -qv -t {recorder_option_target} @taxiway-recorder-client", timeout=10).strip()
-        clients = guest(lab, "tmux list-clients -F '#{client_tty}'", timeout=10).splitlines()
-        return bool(tty) and tty in clients
     print("STEP recording live-client", flush=True)
-    wait_for(attached)
+    wait_for(lambda: recorder_attached(lab, recorder_option_target))
     guest(lab, "tmux send-keys -t '=claude-code' 'printf LIVE_RECORDING_PROOF' Enter", timeout=10)
     print("STEP recording capture", flush=True)
     wait_for(lambda: "LIVE_RECORDING_PROOF" in cast_output(cast))
