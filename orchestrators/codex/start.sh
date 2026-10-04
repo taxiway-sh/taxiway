@@ -9,6 +9,8 @@ set -euo pipefail
 
 # shellcheck source=../../infra/trace/events.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../../infra/trace/events.sh" 2>/dev/null || true
+# shellcheck source=../../infra/commands/steps.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../infra/commands/steps.sh"
 
 if [ -f "${HOME}/.config/taxiway/env" ]; then
     set -a
@@ -16,8 +18,6 @@ if [ -f "${HOME}/.config/taxiway/env" ]; then
     . "${HOME}/.config/taxiway/env"
     set +a
 fi
-
-lab_emit_event phase start
 
 log()  { printf '\n\033[1;34m[codex-start]\033[0m %s\n' "$*"; }
 pass() { printf '  \033[1;32mOK\033[0m   %s\n' "$*"; }
@@ -27,6 +27,25 @@ CODEX_MODEL="${TAXIWAY_SET_MODEL:?Missing model: start this orchestrator through
 TAXIWAY_LITELLM_BASE_URL="${TAXIWAY_LITELLM_BASE_URL:-http://${TAXIWAY_LAB:-lab}.litellm.internal:4000}"
 TAXIWAY_LITELLM_OPENAI_BASE_URL="${TAXIWAY_LITELLM_BASE_URL%/}/v1"
 TAXIWAY_LITELLM_AGENT_ID="${TAXIWAY_LITELLM_AGENT_ID:-${TAXIWAY_AGENT:-codex}}"
+
+if taxiway_is_plan; then
+    log "Configuring Codex for the Taxiway LiteLLM gateway"
+    taxiway_plan_detail "model: $CODEX_MODEL"
+    taxiway_plan_detail "base URL: $TAXIWAY_LITELLM_OPENAI_BASE_URL"
+    if [[ -n "${TAXIWAY_LITELLM_API_KEY:-}" ]]; then
+        taxiway_plan_detail "LiteLLM gateway key is available"
+    else
+        taxiway_plan_detail "LiteLLM gateway key is missing"
+    fi
+    if taxiway_can_inspect && tmux has-session -t "$SESSION" 2>/dev/null; then
+        log "Stopping existing tmux session '$SESSION'"
+    fi
+    log "Starting tmux session '$SESSION'"
+    taxiway_plan_detail "codex resume --last || codex"
+    exit 0
+fi
+
+lab_emit_event phase start
 
 # Use TAXIWAY_WORKSPACE_DIR as the working directory if set and exists.
 # Without a cloned repo, start in /lab/work rather than $HOME so the session

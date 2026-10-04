@@ -3,8 +3,11 @@ package cli
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -24,24 +27,28 @@ func buildAliasTestRoot(t *testing.T) (*cobra.Command, *RootState, *driver.MockD
 	for _, orch := range []string{"codex", "gastown"} {
 		dir := filepath.Join(tmp, "orchestrators", orch)
 		require.NoError(t, os.MkdirAll(dir, 0755))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "install.sh"), []byte("#!/bin/bash\necho install\n"), 0755))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "verify.sh"), []byte("#!/bin/bash\necho verify\n"), 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "install.sh"), []byte("#!/bin/bash\nif [[ \"$TAXIWAY_EXECUTION_MODE\" == plan ]]; then echo '["+orch+"-install] Installing "+orch+"'; exit 0; fi\necho install\n"), 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "verify.sh"), []byte("#!/bin/bash\nif [[ \"$TAXIWAY_EXECUTION_MODE\" == plan ]]; then echo '["+orch+"-verify] Verifying "+orch+"'; exit 0; fi\necho verify\n"), 0755))
 	}
 	// gastown has start.sh; codex does not in this test fixture (for TestStart_MissingScript).
 	require.NoError(t, os.WriteFile(
 		filepath.Join(tmp, "orchestrators", "gastown", "start.sh"),
-		[]byte("#!/bin/bash\necho start\n"), 0755,
+		[]byte("#!/bin/bash\nif [[ \"$TAXIWAY_EXECUTION_MODE\" == plan ]]; then echo \"[gastown-start] Starting tmux session 'gastown'\"; exit 0; fi\necho start\n"), 0755,
+	))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(tmp, "orchestrators", "gastown", "workspace.sh"),
+		[]byte("#!/bin/bash\nif [[ \"$TAXIWAY_EXECUTION_MODE\" == plan ]]; then echo '[gastown-workspace] Cloning workspace repository'; exit 0; fi\necho workspace\n"), 0755,
 	))
 	for _, p := range []string{"infra/commands"} {
 		require.NoError(t, os.MkdirAll(filepath.Join(tmp, p), 0755))
 	}
-	for _, script := range []string{
-		"infra/commands/bootstrap.sh",
-		"infra/commands/doctor.sh",
-		"infra/commands/reset.sh",
-	} {
+	for _, script := range []string{"infra/commands/bootstrap.sh", "infra/commands/doctor.sh"} {
 		require.NoError(t, os.WriteFile(filepath.Join(tmp, script), []byte("#!/bin/bash\necho ok\n"), 0755))
 	}
+	require.NoError(t, os.WriteFile(
+		filepath.Join(tmp, "infra/commands/reset.sh"),
+		[]byte("#!/bin/bash\nif [[ \"$TAXIWAY_EXECUTION_MODE\" == plan ]]; then echo '[reset] Stopping workspace services'; echo '[reset] Clearing /lab/work contents'; exit 0; fi\necho ok\n"), 0755,
+	))
 
 	stateDir := filepath.Join(tmp, ".lab-state")
 	mock := driver.NewMockDriver(stateDir)
@@ -57,11 +64,13 @@ func buildAliasTestRoot(t *testing.T) (*cobra.Command, *RootState, *driver.MockD
 	root := &cobra.Command{Use: "taxiway", SilenceUsage: true}
 	root.SetOut(&stdout)
 	root.SetErr(&stderr)
+	wrapTestDriverForDryRun(root, state)
 
 	// Wire all commands exactly as Execute() does (including flat verbs).
 	root.AddCommand(
 		newVersionCmd(state),
 		newUpCmd(state),
+		newCreateCmd(state),
 		newDownCmd(state),
 		newShellCmd(state),
 		newListCmd(state),
@@ -72,6 +81,8 @@ func buildAliasTestRoot(t *testing.T) (*cobra.Command, *RootState, *driver.MockD
 		newStartCmd(state),
 		newInstallCmd(state),
 		newVerifyCmd(state),
+		newGatewayCmd(state),
+		newWorkspaceCmd(state),
 		newDoctorCmd(state),
 		newStatusCmd(state),
 		newAccessCmd(state),
@@ -352,6 +363,252 @@ func TestFlatVerbs_ResetYes_PassesNonInteractiveEnv(t *testing.T) {
 
 	require.NotEmpty(t, mock.ExecEnvLog)
 	require.Equal(t, "1", mock.ExecEnvLog[len(mock.ExecEnvLog)-1]["LAB_RESET_YES"])
+}
+
+func TestFlatVerbs_DryRunDoesNotMarkPhases(t *testing.T) {
+	tests := []struct {
+		name  string
+		phase phases.Phase
+		args  []string
+	}{
+		{name: "install", phase: phases.PhaseInstall, args: []string{"install", "gastown", "--dry-run"}},
+		{name: "verify", phase: phases.PhaseVerify, args: []string{"verify", "gastown", "--dry-run"}},
+		{name: "gateway", phase: phases.PhaseGateway, args: []string{"gateway", "gastown", "--dry-run"}},
+		{name: "workspace", phase: phases.PhaseWorkspace, args: []string{"workspace", "gastown", "--repo", "https://github.com/acme/project", "--dry-run"}},
+		{name: "start", phase: phases.PhaseStart, args: []string{"start", "gastown", "--dry-run"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root, state, _, stdout, stderr := buildAliasTestRoot(t)
+			id := createAliasLab(t, state, "gastown")
+			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+
+			_, _, err := execAlias(t, root, stdout, stderr, tt.args...)
+			require.NoError(t, err)
+			require.False(t, phases.Done(stateDir, id, tt.phase), "dry-run must not mark phase %s", tt.phase)
+		})
+	}
+}
+
+func TestFlatVerbs_DryRunPlansInstallAndVerify(t *testing.T) {
+	tests := []struct {
+		command string
+		label   string
+		phase   phases.Phase
+	}{
+		{command: "install", label: "[gastown-install] Installing gastown", phase: phases.PhaseInstall},
+		{command: "verify", label: "[gastown-verify] Verifying gastown", phase: phases.PhaseVerify},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.command, func(t *testing.T) {
+			root, state, _, stdout, stderr := buildAliasTestRoot(t)
+			id := createAliasLab(t, state, "gastown")
+			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+
+			out, _, err := execAlias(t, root, stdout, stderr, tt.command, "gastown", "--dry-run")
+
+			require.NoError(t, err)
+			require.Contains(t, out, fmt.Sprintf("Dry-run for phase %q on lab %q", tt.phase, "gastown"))
+			require.Contains(t, out, tt.label)
+			require.Contains(t, out, "No changes were made.")
+			require.False(t, phases.Done(stateDir, id, tt.phase))
+		})
+	}
+}
+
+func TestFlatVerbs_DryRunPlansWorkspaceAndStart(t *testing.T) {
+	tests := []struct {
+		command string
+		args    []string
+		label   string
+		phase   phases.Phase
+	}{
+		{command: "workspace", args: []string{"workspace", "gastown", "--repo", "https://github.com/acme/project", "--dry-run"}, label: "[gastown-workspace] Cloning workspace repository", phase: phases.PhaseWorkspace},
+		{command: "start", args: []string{"start", "gastown", "--dry-run"}, label: "[gastown-start] Starting tmux session 'gastown'", phase: phases.PhaseStart},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.command, func(t *testing.T) {
+			root, state, _, stdout, stderr := buildAliasTestRoot(t)
+			id := createAliasLab(t, state, "gastown")
+			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+
+			out, _, err := execAlias(t, root, stdout, stderr, tt.args...)
+
+			require.NoError(t, err)
+			require.Contains(t, out, tt.label)
+			require.Contains(t, out, "No changes were made.")
+			require.False(t, phases.Done(stateDir, id, tt.phase))
+		})
+	}
+}
+
+func TestWorkspaceDryRunWithoutRepositoryStillRendersACompletePlan(t *testing.T) {
+	root, state, _, stdout, stderr := buildAliasTestRoot(t)
+	createAliasLab(t, state, "gastown")
+
+	out, _, err := execAlias(t, root, stdout, stderr, "workspace", "gastown", "--dry-run")
+
+	require.NoError(t, err)
+	require.Contains(t, out, `Dry-run for phase "workspace" on lab "gastown"`)
+	require.Contains(t, out, "No repository configured; workspace phase would be skipped")
+	require.Equal(t, 1, strings.Count(out, "No changes were made."))
+}
+
+func TestFlatVerbs_DryRunPlansGoLifecycleOperations(t *testing.T) {
+	tests := []struct {
+		command string
+		args    []string
+		labels  []string
+		create  bool
+	}{
+		{command: "create", args: []string{"create", "demo", "--type", "gastown", "--dry-run"}, labels: []string{"Creating Mock lab runtime", "Preparing Taxiway lab state"}},
+		{command: "gateway", args: []string{"gateway", "gastown", "--dry-run"}, labels: []string{"Configuring lab gateway environment", "Reconciling LiteLLM sidecar"}, create: true},
+		{command: "down", args: []string{"down", "gastown", "--dry-run"}, labels: []string{"Stopping lab runtime", "Stopping LiteLLM sidecar"}, create: true},
+		{command: "reset", args: []string{"reset", "gastown", "--dry-run"}, labels: []string{"Stopping workspace services", "Clearing /lab/work contents", "Clearing lifecycle phase markers"}, create: true},
+		{command: "rm", args: []string{"rm", "gastown", "--dry-run"}, labels: []string{"Deleting lab runtime and storage", "Clearing lifecycle phase markers"}, create: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.command, func(t *testing.T) {
+			root, state, _, stdout, stderr := buildAliasTestRoot(t)
+			if tt.create {
+				createAliasLab(t, state, "gastown")
+			}
+
+			out, errOut, err := execAlias(t, root, stdout, stderr, tt.args...)
+
+			require.NoError(t, err)
+			combined := out + errOut
+			for _, label := range tt.labels {
+				require.Contains(t, combined, label)
+			}
+			require.Contains(t, combined, "No changes were made.")
+		})
+	}
+}
+
+func TestBootstrapDryRunPrintsSemanticSteps(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	binDir := t.TempDir()
+	for _, name := range []string{"bash", "dirname", "env", "head"} {
+		resolved, err := exec.LookPath(name)
+		require.NoError(t, err)
+		require.NoError(t, os.Symlink(resolved, filepath.Join(binDir, name)))
+	}
+	t.Setenv("PATH", binDir)
+	profilePath := filepath.Join(home, ".profile")
+	tmuxPath := filepath.Join(home, ".tmux.conf")
+	require.NoError(t, os.WriteFile(profilePath, []byte("existing profile\n"), 0o644))
+	require.NoError(t, os.WriteFile(tmuxPath, []byte("existing tmux config\n"), 0o644))
+
+	root, state, _, stdout, stderr := buildAliasTestRoot(t)
+	id := createAliasLab(t, state, "gastown")
+
+	for _, name := range []string{"bootstrap.sh", "steps.sh"} {
+		data, err := os.ReadFile(filepath.Join("..", "..", "infra", "commands", name))
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(filepath.Join(state.RepoDir, "infra", "commands", name), data, 0o755))
+	}
+
+	out, _, err := execAlias(t, root, stdout, stderr, "bootstrap", "gastown", "--dry-run")
+	require.NoError(t, err)
+	plainOut := strings.NewReplacer("\x1b[1;34m", "", "\x1b[0m", "").Replace(out)
+	require.Contains(t, plainOut, `Dry-run for phase "bootstrap" on lab "gastown"`)
+	var bootstrapSteps []string
+	for _, line := range strings.Split(plainOut, "\n") {
+		if step, found := strings.CutPrefix(line, "[bootstrap] "); found {
+			bootstrapSteps = append(bootstrapSteps, step)
+		}
+	}
+	require.Equal(t, []string{
+		"Updating apt cache",
+		"Installing base packages",
+		"Installing Docker",
+		"Installing Node.js 22",
+		"Enabling Corepack",
+		"Toolchain summary",
+		"Enabling tmux mouse support in " + tmuxPath,
+		"Configuring login shells to load the Taxiway environment",
+	}, bootstrapSteps)
+	require.Contains(t, plainOut, "java       : missing")
+	require.Contains(t, plainOut, "No changes were made.")
+	require.NotContains(t, plainOut, "docker: Exec")
+	require.False(t, phases.Done(config.StateDir(state.Flags.StateDir, state.RepoDir), id, phases.PhaseBootstrap))
+	profile, err := os.ReadFile(profilePath)
+	require.NoError(t, err)
+	require.Equal(t, "existing profile\n", string(profile))
+	tmuxConfig, err := os.ReadFile(tmuxPath)
+	require.NoError(t, err)
+	require.Equal(t, "existing tmux config\n", string(tmuxConfig))
+}
+
+func TestFlatVerbs_GatewayDryRunDoesNotCreateHostState(t *testing.T) {
+	root, state, _, stdout, stderr := buildAliasTestRoot(t)
+	createAliasLab(t, state, "gastown")
+	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+	ref := config.LabRef{Lab: "gastown", Orch: "gastown", Driver: "mock"}
+
+	out, _, err := execAlias(t, root, stdout, stderr, "gateway", "gastown", "--dry-run")
+	require.NoError(t, err)
+	require.Contains(t, out, "Configuring lab gateway environment")
+	require.Contains(t, out, "Reconciling LiteLLM sidecar")
+	require.Contains(t, out, "No changes were made.")
+	_, err = os.Stat(labGatewayDir(stateDir, ref))
+	require.ErrorIs(t, err, os.ErrNotExist)
+}
+
+func TestFlatVerbs_CreateDryRunDoesNotCreateOrMark(t *testing.T) {
+	root, state, mock, stdout, stderr := buildAliasTestRoot(t)
+	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+	id := idName("preview")
+
+	_, _, err := execAlias(t, root, stdout, stderr, "create", "preview", "--type", "gastown", "--dry-run")
+	require.NoError(t, err)
+	exists, err := mock.Exists(context.Background(), id)
+	require.NoError(t, err)
+	require.False(t, exists)
+	require.False(t, phases.Done(stateDir, id, phases.PhaseCreate))
+}
+
+func TestFlatVerbs_ResetDryRunKeepsMarkersAndShowsPlan(t *testing.T) {
+	root, state, _, stdout, stderr := buildAliasTestRoot(t)
+	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+	id := createAliasLab(t, state, "gastown")
+	require.NoError(t, phases.Mark(stateDir, id, phases.PhaseBootstrap))
+
+	out, _, err := execAlias(t, root, stdout, stderr, "reset", "gastown", "--yes", "--dry-run")
+	require.NoError(t, err)
+	require.True(t, phases.Done(stateDir, id, phases.PhaseBootstrap))
+	require.Contains(t, out, "Stopping workspace services")
+	require.Contains(t, out, "Clearing lifecycle phase markers")
+}
+
+func TestFlatVerbs_RmDryRunKeepsLabAndMarkers(t *testing.T) {
+	root, state, mock, stdout, stderr := buildAliasTestRoot(t)
+	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+	id := createAliasLab(t, state, "gastown")
+	require.NoError(t, phases.Mark(stateDir, id, phases.PhaseBootstrap))
+
+	_, _, err := execAlias(t, root, stdout, stderr, "rm", "gastown", "--yes", "--dry-run")
+	require.NoError(t, err)
+	exists, err := mock.Exists(context.Background(), id)
+	require.NoError(t, err)
+	require.True(t, exists)
+	require.True(t, phases.Done(stateDir, id, phases.PhaseBootstrap))
+}
+
+func TestFlatVerbs_RmDryRunDoesNotPrompt(t *testing.T) {
+	root, state, _, stdout, stderr := buildAliasTestRoot(t)
+	createAliasLab(t, state, "gastown")
+
+	out, _, err := execAlias(t, root, stdout, stderr, "rm", "gastown", "--dry-run")
+	require.NoError(t, err)
+	require.NotContains(t, out, "Delete lab")
+	require.NotContains(t, out, "Aborted")
 }
 
 func TestHiddenNouns_HiddenInHelp(t *testing.T) {

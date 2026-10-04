@@ -3,6 +3,9 @@
 
 set -euo pipefail
 
+# shellcheck source=../../infra/commands/steps.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../infra/commands/steps.sh"
+
 if [ -f "${HOME}/.config/taxiway/env" ]; then
     set -a
     # shellcheck disable=SC1091
@@ -13,6 +16,18 @@ fi
 log()  { printf '\n\033[1;34m[claude-code-auth]\033[0m %s\n' "$*"; }
 pass() { printf '  \033[1;32mOK\033[0m   %s\n' "$*"; }
 fail() { printf '  \033[1;31mFAIL\033[0m %s\n' "$*" >&2; exit 1; }
+
+if taxiway_is_plan; then
+    log "Checking Claude Code authentication"
+    if [[ "${TAXIWAY_AUTH_MODE:-subscription}" == "api-key" ]]; then
+        taxiway_plan_detail "Authentication is managed by the Taxiway LiteLLM gateway"
+    elif taxiway_can_inspect && [[ -s "${HOME}/.claude/.credentials.json" ]]; then
+        taxiway_plan_detail "OAuth credentials are available"
+    else
+        log "Starting Claude Code interactive authentication if credentials are missing"
+    fi
+    exit 0
+fi
 
 CLAUDE="$(command -v claude || true)"
 [ -n "$CLAUDE" ] || fail "claude not found - run: taxiway install <lab>"

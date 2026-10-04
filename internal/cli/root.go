@@ -68,7 +68,6 @@ func Execute() {
 	}
 
 	root.PersistentFlags().StringVar(&state.Flags.DriverName, "driver", "", "driver: lima|docker (default: auto)")
-	root.PersistentFlags().BoolVar(&state.Flags.DryRun, "dry-run", false, "print driver calls without executing")
 	root.PersistentFlags().StringVar(&state.Flags.StateDir, "state-dir", "", "override TAXIWAY_LAB_STATE_DIR")
 	root.PersistentFlags().BoolVarP(&state.Flags.Verbose, "verbose", "v", false, "verbose logging")
 
@@ -112,6 +111,10 @@ func Execute() {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func addDryRunFlag(cmd *cobra.Command, state *RootState) {
+	cmd.Flags().BoolVar(&state.Flags.DryRun, "dry-run", false, "print operations without executing or changing state")
 }
 
 func topLevelCommandName(cmd *cobra.Command) string {

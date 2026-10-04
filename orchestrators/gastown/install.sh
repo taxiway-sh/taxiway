@@ -9,10 +9,41 @@ set -euo pipefail
 
 # shellcheck source=../../infra/trace/events.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../../infra/trace/events.sh" 2>/dev/null || true
-
-lab_emit_event phase start
+# shellcheck source=../../infra/commands/steps.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../infra/commands/steps.sh"
 
 log() { printf '\n\033[1;34m[gastown-install]\033[0m %s\n' "$*"; }
+
+if taxiway_is_plan; then
+  if taxiway_can_inspect && command -v dolt >/dev/null 2>&1; then
+    log "Dolt already installed"
+  else
+    log "Installing Dolt"
+  fi
+  log "Configuring Dolt identity when missing"
+
+  if taxiway_can_inspect && command -v sqlite3 >/dev/null 2>&1 && [ -f /usr/include/unicode/uregex.h ]; then
+    log "apt dependencies already installed"
+  else
+    log "Installing apt dependencies"
+    taxiway_plan_detail "sqlite3 libicu-dev"
+  fi
+
+  if taxiway_can_inspect && command -v gt >/dev/null 2>&1; then
+    log "Checking the installed Gas Town version"
+  else
+    log "Installing Gas Town"
+  fi
+  if taxiway_can_inspect && command -v bd >/dev/null 2>&1; then
+    log "Checking the installed Beads version"
+  else
+    log "Installing Beads"
+  fi
+  log "Installing Gas Town shell completions when supported"
+  exit 0
+fi
+
+lab_emit_event phase start
 
 download() {
   local url="$1"

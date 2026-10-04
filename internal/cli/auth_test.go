@@ -11,6 +11,7 @@ import (
 
 	"github.com/taxiway-sh/taxiway/internal/config"
 	"github.com/taxiway-sh/taxiway/internal/driver"
+	"github.com/taxiway-sh/taxiway/internal/phases"
 )
 
 func TestFlatVerbs_CredentialsCodexPreparesGatewayAuth(t *testing.T) {
@@ -56,6 +57,23 @@ func TestFlatVerbs_AuthRunsInteractiveScript(t *testing.T) {
 	require.Contains(t, authArgv, "TAXIWAY_ORCH=gastown")
 	require.Contains(t, authArgv, "TAXIWAY_AGENT=claude-code")
 	require.Equal(t, LabWorkRoot, mock.InteractiveExecLog[0].Workdir)
+}
+
+func TestFlatVerbs_AuthDryRunDoesNotWriteEventsOrCredentials(t *testing.T) {
+	root, state, mock, stdout, stderr := buildAliasTestRoot(t)
+	id := createAliasLab(t, state, "gastown")
+	setAgents(t, state, "gastown", "claude-code")
+	addAuthScript(t, state, "claude-code")
+	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+
+	out, _, err := execAlias(t, root, stdout, stderr, "auth", "gastown", "--dry-run")
+	require.NoError(t, err)
+	require.Contains(t, out, "[claude-code-auth] Checking authentication")
+	require.Contains(t, out, "No changes were made.")
+	require.NoFileExists(t, driver.EventsJSONLPath(stateDir, id))
+	require.Empty(t, mock.CopyLog)
+	require.Empty(t, mock.InteractiveExecLog)
+	require.False(t, phases.Done(stateDir, id, phases.PhaseAuth))
 }
 
 func TestFlatVerbs_AuthCanRunExplicitAgent(t *testing.T) {

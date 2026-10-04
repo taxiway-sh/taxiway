@@ -81,7 +81,6 @@ func newUpCmd(state *RootState) *cobra.Command {
 		prepareOnly   bool
 		skipGateway   bool
 		skipWorkspace bool
-		dryRunUp      bool
 		skipAuthCheck bool
 		repo          string
 		repoRef       string
@@ -254,15 +253,14 @@ Use --from <phase> to resume from a specific phase.`,
 				}
 			}
 
-			isDryRun := state.Flags.DryRun || dryRunUp
-
 			return runUp(context.Background(), state, ref, id, stateDir, runUpOpts{
+				planName:             "up",
 				force:                force,
 				from:                 fromP,
 				prepareOnly:          prepareOnly,
 				skipGateway:          skipGateway,
 				skipWorkspace:        skipWorkspace,
-				dryRun:               isDryRun,
+				dryRun:               state.Flags.DryRun,
 				out:                  cmd.OutOrStdout(),
 				skipAuthCheck:        skipAuthCheck,
 				showPrepareOnlySkips: true,
@@ -280,7 +278,7 @@ Use --from <phase> to resume from a specific phase.`,
 	cmd.Flags().BoolVar(&skipGateway, "skip-gateway", false, "skip the gateway phase")
 	cmd.Flags().BoolVar(&skipWorkspace, "skip-workspace", false, "skip the workspace phase")
 	cmd.Flags().BoolVar(&skipAuthCheck, "skip-auth-check", false, "skip declared agent authentication checks before start")
-	cmd.Flags().BoolVar(&dryRunUp, "dry-run", false, "print phases without executing")
+	addDryRunFlag(cmd, state)
 	cmd.Flags().StringVar(&repo, "repo", "", "git URL of the workspace repository")
 	cmd.Flags().StringVar(&repoRef, "repo-ref", "", "branch, tag, or SHA to check out")
 	cmd.Flags().StringVar(&repoPath, "repo-path", "", "subdirectory inside the workspace repository to use as cwd")
@@ -294,7 +292,6 @@ func newPrepareCmd(state *RootState) *cobra.Command {
 	var (
 		orchType    string
 		force       bool
-		dryRun      bool
 		profileName string
 		noProfile   bool
 		setValues   []string
@@ -357,9 +354,10 @@ func newPrepareCmd(state *RootState) *cobra.Command {
 			}
 			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
 			return runUp(ctx, state, ref, id, stateDir, runUpOpts{
+				planName:             "prepare",
 				force:                force,
 				prepareOnly:          true,
-				dryRun:               state.Flags.DryRun || dryRun,
+				dryRun:               state.Flags.DryRun,
 				out:                  cmd.OutOrStdout(),
 				showPrepareOnlySkips: false,
 				profileChanged:       profileChanged,
@@ -371,7 +369,7 @@ func newPrepareCmd(state *RootState) *cobra.Command {
 
 	addTypeFlag(cmd, state, &orchType)
 	cmd.Flags().BoolVar(&force, "force", false, "re-run prepare phases even if already done")
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print phases without executing")
+	addDryRunFlag(cmd, state)
 	addProfileFlags(cmd, &profileName, &noProfile)
 	addSetFlags(cmd, &setValues, &clearSet)
 
@@ -384,7 +382,6 @@ func newRunCmd(state *RootState) *cobra.Command {
 		skipGateway   bool
 		skipWorkspace bool
 		skipAuthCheck bool
-		dryRun        bool
 		profileName   string
 		noProfile     bool
 		setValues     []string
@@ -431,12 +428,13 @@ func newRunCmd(state *RootState) *cobra.Command {
 			}
 			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
 			return runUp(ctx, state, ref, id, stateDir, runUpOpts{
+				planName:                "run",
 				force:                   force,
 				from:                    phases.PhaseGateway,
 				requirePrepareCompleted: true,
 				skipGateway:             skipGateway,
 				skipWorkspace:           skipWorkspace,
-				dryRun:                  state.Flags.DryRun || dryRun,
+				dryRun:                  state.Flags.DryRun,
 				out:                     cmd.OutOrStdout(),
 				skipAuthCheck:           skipAuthCheck,
 				profileChanged:          profileChanged,
@@ -450,7 +448,7 @@ func newRunCmd(state *RootState) *cobra.Command {
 	cmd.Flags().BoolVar(&skipGateway, "skip-gateway", false, "skip the gateway phase")
 	cmd.Flags().BoolVar(&skipWorkspace, "skip-workspace", false, "skip the workspace phase")
 	cmd.Flags().BoolVar(&skipAuthCheck, "skip-auth-check", false, "skip declared agent authentication checks before start")
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print phases without executing")
+	addDryRunFlag(cmd, state)
 	addProfileFlags(cmd, &profileName, &noProfile)
 	addSetFlags(cmd, &setValues, &clearSet)
 
@@ -458,6 +456,7 @@ func newRunCmd(state *RootState) *cobra.Command {
 }
 
 type runUpOpts struct {
+	planName                string
 	force                   bool
 	from                    phases.Phase
 	requirePrepareCompleted bool
@@ -494,6 +493,19 @@ func runUp(ctx context.Context, state *RootState, ref config.LabRef, id, stateDi
 				}
 			}
 		} else if !os.IsNotExist(err) {
+			return err
+		}
+	}
+	var plan *dryRunPlan
+	inspectionAvailable := false
+	if opts.dryRun {
+		plan = newDryRunPlan(opts.out, "lifecycle", opts.planName, ref.Lab)
+		d, err := driverForRef(state, ref)
+		if err != nil {
+			return err
+		}
+		inspectionAvailable, err = d.Exists(ctx, id)
+		if err != nil {
 			return err
 		}
 	}
@@ -560,7 +572,7 @@ func runUp(ctx context.Context, state *RootState, ref config.LabRef, id, stateDi
 		profileMustRun := opts.profileChanged && (phase == phases.PhaseWorkspace || phase == phases.PhaseStart)
 		settingsMustRun := opts.settingsChanged && phase != phases.PhaseCreate
 		phaseDone := phases.Done(stateDir, id, phase)
-		if phase == phases.PhaseCreate && phaseDone && !opts.force && !opts.dryRun {
+		if phase == phases.PhaseCreate && phaseDone && !opts.force {
 			d, err := driverForRef(state, ref)
 			if err != nil {
 				return fmt.Errorf("phase %s: resolve driver: %w", phase, err)
@@ -576,8 +588,15 @@ func runUp(ctx context.Context, state *RootState, ref config.LabRef, id, stateDi
 		}
 		startMustRunAfterResume := resumedStoppedLab && phase == phases.PhaseStart
 		authMustRun := phase == phases.PhaseAuth
+
 		if !opts.force && !profileMustRun && !settingsMustRun && !authMustRun && !startMustRunAfterResume && phaseDone {
 			if phase == phases.PhaseGateway {
+				if opts.dryRun {
+					plan.Step("gateway", "Reconciling LiteLLM sidecar")
+					plan.Step("gateway", "Reloading shared gateway proxy")
+					fmt.Fprintf(opts.out, "  ✓  %-20s (ready)\n", phase)
+					continue
+				}
 				fmt.Fprintf(opts.out, "  ⏵  %-20s …\n", phase)
 				if err := ensureLabLiteLLMSidecarForUp(ctx, state, ref); err != nil {
 					return fmt.Errorf("phase %s failed: %w", phase, err)
@@ -588,9 +607,14 @@ func runUp(ctx context.Context, state *RootState, ref config.LabRef, id, stateDi
 			fmt.Fprintf(opts.out, "  ✓  %-20s (cached)\n", phase)
 			continue
 		}
-
 		if opts.dryRun {
-			fmt.Fprintf(opts.out, "  ⏵  %-20s (dry-run)\n", phase)
+			fmt.Fprintf(opts.out, "  ⏵  %-20s …\n", phase)
+			if err := planPhase(ctx, state, ref, phase, opts.out, opts.out, phasePlanOptions{
+				InspectionAvailable: inspectionAvailable,
+				ClearProfile:        opts.profileClear,
+			}); err != nil {
+				return fmt.Errorf("phase %s plan failed: %w", phase, err)
+			}
 			continue
 		}
 
@@ -611,6 +635,9 @@ func runUp(ctx context.Context, state *RootState, ref config.LabRef, id, stateDi
 		}
 
 		fmt.Fprintf(opts.out, "  ✓  %-20s\n", phase)
+	}
+	if plan != nil {
+		plan.Finish()
 	}
 
 	return nil
@@ -991,7 +1018,7 @@ func runPhaseWithProfile(ctx context.Context, state *RootState, ref config.LabRe
 // ── taxiway down ─────────────────────────────────────────────────────────────────
 
 func newDownCmd(state *RootState) *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:               "down <lab>",
 		Short:             "Stop a lab (preserves its state)",
 		Args:              cobra.ExactArgs(1),
@@ -1005,11 +1032,19 @@ func newDownCmd(state *RootState) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 			id := idName(args[0])
-			fmt.Fprintf(cmd.ErrOrStderr(), "Stopping lab %q\n", args[0])
 			ref, err := loadLabRef(ctx, state, id)
 			if err != nil {
 				return err
 			}
+			if state.Flags.DryRun {
+				plan := newDryRunPlan(cmd.OutOrStdout(), "operation", "down", ref.Lab)
+				if err := planDown(state, ref, plan); err != nil {
+					return err
+				}
+				plan.Finish()
+				return nil
+			}
+			fmt.Fprintf(cmd.ErrOrStderr(), "Stopping lab %q\n", args[0])
 			d, err := driverForRef(state, ref)
 			if err != nil {
 				return err
@@ -1020,6 +1055,8 @@ func newDownCmd(state *RootState) *cobra.Command {
 			return stopLabLiteLLMSidecarForDown(ctx, state, ref)
 		},
 	}
+	addDryRunFlag(cmd, state)
+	return cmd
 }
 
 // ── taxiway shell ────────────────────────────────────────────────────────────────

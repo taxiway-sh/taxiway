@@ -97,7 +97,7 @@ func ensureLabGatewayEnv(state *RootState, ref config.LabRef) error {
 
 func ensureLabLiteLLMSidecar(ctx context.Context, state *RootState, ref config.LabRef) error {
 	_ = ctx
-	if state.Driver.Name() == "mock" {
+	if state.Flags.DryRun || state.Driver.Name() == "mock" {
 		return nil
 	}
 	if _, err := state.ensureProxyRuntime(); err != nil {

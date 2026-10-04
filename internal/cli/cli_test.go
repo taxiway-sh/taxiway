@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -51,6 +52,7 @@ func buildTestRoot(t *testing.T) (*cobra.Command, *RootState, *bytes.Buffer, *by
 	}
 	root.SetOut(&stdout)
 	root.SetErr(&stderr)
+	wrapTestDriverForDryRun(root, state)
 
 	root.AddCommand(
 		newVersionCmd(state),
@@ -71,6 +73,15 @@ func execRoot(t *testing.T, root *cobra.Command, stdout, stderr *bytes.Buffer, a
 	root.SetArgs(args)
 	err := root.Execute()
 	return stdout.String(), stderr.String(), err
+}
+
+func wrapTestDriverForDryRun(root *cobra.Command, state *RootState) {
+	root.PersistentPreRunE = func(_ *cobra.Command, _ []string) error {
+		if state.Flags.DryRun && state.Driver != nil {
+			state.Driver = driver.NewDryRun(state.Driver)
+		}
+		return nil
+	}
 }
 
 func createCLITestLab(t *testing.T, state *RootState, lab string) string {
@@ -510,14 +521,20 @@ func TestDryRun_LabUp(t *testing.T) {
 		dir := filepath.Join(tmp, "orchestrators", orch)
 		require.NoError(t, os.MkdirAll(dir, 0755))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "install.sh"), []byte("#!/bin/bash\n"), 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "verify.sh"), []byte("#!/bin/bash\n"), 0755))
 	}
+	for _, orch := range []string{"gastown", "claude-code"} {
+		require.NoError(t, os.WriteFile(filepath.Join(tmp, "orchestrators", orch, "start.sh"), []byte("#!/bin/bash\n"), 0755))
+	}
+	require.NoError(t, os.MkdirAll(filepath.Join(tmp, "infra", "commands"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(tmp, "infra", "commands", "bootstrap.sh"), []byte("#!/bin/bash\n"), 0755))
 	stateDir := filepath.Join(tmp, ".lab-state")
 	innerDriver := driver.NewMockDriver(stateDir)
 	dryDriver := driver.NewDryRun(innerDriver)
 
 	state := &RootState{
 		RepoDir: tmp,
-		Flags:   GlobalFlags{DryRun: true, StateDir: stateDir},
+		Flags:   GlobalFlags{StateDir: stateDir},
 		Driver:  dryDriver,
 	}
 	root := &cobra.Command{Use: "taxiway", SilenceUsage: true}
@@ -526,7 +543,7 @@ func TestDryRun_LabUp(t *testing.T) {
 	root.SetErr(&stderr)
 	root.AddCommand(newUpCmd(state))
 
-	root.SetArgs([]string{"up", "gastown"})
+	root.SetArgs([]string{"up", "gastown", "--dry-run"})
 	require.NoError(t, root.Execute())
 
 	// dry-run: lab should NOT exist in state
@@ -534,6 +551,86 @@ func TestDryRun_LabUp(t *testing.T) {
 	exists, err := innerDriver.Exists(ctx, "taxiway-gastown")
 	require.NoError(t, err)
 	require.False(t, exists, "dry-run must not create lab")
+}
+
+func TestDriverForRefPreservesDryRunForExistingLab(t *testing.T) {
+	ctx := context.Background()
+	stateDir := t.TempDir()
+	inner := driver.NewMockDriver(stateDir)
+	id := idName("demo")
+	require.NoError(t, inner.Create(ctx, id, driver.CreateOptions{}))
+
+	state := &RootState{
+		RepoDir: stateDir,
+		Flags:   GlobalFlags{DryRun: true, StateDir: stateDir},
+		Driver:  driver.NewDryRun(inner),
+	}
+	resolved, err := driverForRef(state, config.LabRef{Lab: "demo", Driver: "mock"})
+	require.NoError(t, err)
+	require.Same(t, state.Driver, resolved)
+
+	require.NoError(t, resolved.Delete(ctx, id))
+	exists, err := inner.Exists(ctx, id)
+	require.NoError(t, err)
+	require.True(t, exists, "resolved dry-run driver must not delete the existing lab")
+}
+
+func TestDryRunRejectedBeforeExecutingRuntimeCommands(t *testing.T) {
+	for _, args := range [][]string{{"destroy", "--yes", "--dry-run"}, {"observe", "rm", "--volumes", "--dry-run"}, {"observe", "reset", "--rotate-secrets", "--dry-run"}} {
+		t.Run(strings.Join(args[:len(args)-1], " "), func(t *testing.T) {
+			root, state, stdout, stderr := buildTestRoot(t)
+			root.AddCommand(newDestroyCmd(state), newObserveCmd(state))
+			called := false
+			root.PersistentPreRunE = func(_ *cobra.Command, _ []string) error {
+				called = true
+				return nil
+			}
+			_, _, err := execRoot(t, root, stdout, stderr, args...)
+			require.ErrorContains(t, err, "unknown flag: --dry-run")
+			require.False(t, called, "flag parsing must reject the command before runtime setup")
+		})
+	}
+}
+
+func TestDryRunFlagIsExposedOnLabLifecycleCommands(t *testing.T) {
+	for _, command := range [][]string{
+		{"up"}, {"prepare"}, {"run"},
+		{"create"}, {"bootstrap"}, {"install"}, {"verify"},
+		{"gateway"}, {"workspace"}, {"auth"}, {"start"},
+		{"down"}, {"rm"}, {"reset"},
+	} {
+		help := runTaxiwayHelp(t, append(command, "--help")...)
+		require.Containsf(t, help, "--dry-run", "%s must expose dry-run locally", strings.Join(command, " "))
+	}
+}
+
+func TestTaxiwayHelpProcess(t *testing.T) {
+	if os.Getenv("TAXIWAY_TEST_HELP_PROCESS") != "1" {
+		return
+	}
+	separator := -1
+	for i, arg := range os.Args {
+		if arg == "--" {
+			separator = i
+			break
+		}
+	}
+	if separator == -1 {
+		os.Exit(2)
+	}
+	os.Args = append([]string{"taxiway"}, os.Args[separator+1:]...)
+	Execute()
+}
+
+func runTaxiwayHelp(t *testing.T, args ...string) string {
+	t.Helper()
+	cmdArgs := []string{"-test.run=^TestTaxiwayHelpProcess$", "--"}
+	cmdArgs = append(cmdArgs, args...)
+	cmd := exec.Command(os.Args[0], cmdArgs...)
+	cmd.Env = append(os.Environ(), "TAXIWAY_TEST_HELP_PROCESS=1")
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(out))
+	return string(out)
 }
 
 // ---- driver --driver flag ----

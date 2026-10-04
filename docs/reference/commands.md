@@ -73,9 +73,17 @@ Run `taxiway help` or `taxiway help <command>` for the live CLI reference.
 | Flag | Description |
 |---|---|
 | `--driver <name>` | Force a driver: `lima` or `docker` |
-| `--dry-run` | Print phases without executing |
+| `--dry-run` | Preview lab lifecycle operations without changing runtime or state |
 | `--state-dir <path>` | Override state directory |
 | `-v`, `--verbose` | Enable verbose logging |
+
+`--dry-run` is available on `up`, `prepare`, `run`, `create`, `bootstrap`,
+`install`, `verify`, `gateway`, `workspace`, `auth`, `start`, `down`, `rm`, and
+`reset`. Plans can inspect an existing lab to describe the work needed. They
+do not provision credentials, change phase markers, or start services.
+
+Runtime commands such as `destroy`, `observe rm`, and `observe reset` reject
+`--dry-run` before performing any operation.
 
 `LAB_DRIVER` can set the default driver for the shell when `--driver` is not
 provided. The flag takes precedence over the environment variable.

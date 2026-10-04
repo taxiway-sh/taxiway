@@ -6,6 +6,13 @@
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/../../infra/trace/events.sh" 2>/dev/null || true
+# shellcheck source=../../infra/commands/steps.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../infra/commands/steps.sh"
+
+if taxiway_is_plan; then
+  printf '\n\033[1;34m[codex-orchestrator-verify]\033[0m no orchestrator-level verify required\n'
+  exit 0
+fi
 
 lab_emit_event phase start
 

@@ -3,6 +3,11 @@ set -euo pipefail
 
 export PATH="$HOME/.local/bin:$PATH"
 
+# shellcheck source=../../infra/commands/steps.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../infra/commands/steps.sh"
+
+log() { printf '\n\033[1;34m[gastown-start]\033[0m %s\n' "$*"; }
+
 if [ -f "${HOME}/.config/taxiway/env" ]; then
     set -a
     # shellcheck disable=SC1091
@@ -10,9 +15,11 @@ if [ -f "${HOME}/.config/taxiway/env" ]; then
     set +a
 fi
 
-# shellcheck source=../../agents/claude-code/env.sh
-source "$(dirname "${BASH_SOURCE[0]}")/../../agents/claude-code/env.sh"
-claude_code_write_env "${TAXIWAY_SET_TOOL_SEARCH:-true}" "${TAXIWAY_SET_CLAUDEAI_MCP_SERVERS:-false}"
+if ! taxiway_is_plan; then
+    # shellcheck source=../../agents/claude-code/env.sh
+    source "$(dirname "${BASH_SOURCE[0]}")/../../agents/claude-code/env.sh"
+    claude_code_write_env "${TAXIWAY_SET_TOOL_SEARCH:-true}" "${TAXIWAY_SET_CLAUDEAI_MCP_SERVERS:-false}"
+fi
 
 HQ_DIR="${TAXIWAY_HQ_DIR:-/lab/work/gt}"
 FORCE="${TAXIWAY_FORCE:-false}"
@@ -20,6 +27,35 @@ MARKER="$HQ_DIR/.taxiway-hq-initialized"
 GASTOWN_LITELLM_AGENT="claude-code-litellm"
 GASTOWN_MODEL="${TAXIWAY_SET_MODEL:?Missing model: start this orchestrator through Taxiway}"
 TAXIWAY_LITELLM_BASE_URL="${TAXIWAY_LITELLM_BASE_URL:-http://${TAXIWAY_LAB:-lab}.litellm.internal:4000}"
+
+if taxiway_is_plan; then
+    log "Configuring Claude Code tool search and MCP settings"
+    taxiway_plan_detail "tool search: ${TAXIWAY_SET_TOOL_SEARCH:-true}"
+    taxiway_plan_detail "Claude AI MCP servers: ${TAXIWAY_SET_CLAUDEAI_MCP_SERVERS:-false}"
+    log "Configuring Gas Town for the Taxiway LiteLLM gateway"
+    taxiway_plan_detail "model: $GASTOWN_MODEL"
+    if taxiway_can_inspect && [[ -f "$MARKER" ]] && [[ "$FORCE" != "true" ]]; then
+        log "Gas Town HQ already initialized at $HQ_DIR"
+    else
+        log "Initializing Gas Town HQ at $HQ_DIR when required"
+    fi
+    log "Checking Gas Town runtime health"
+    log "Starting Gas Town daemon if required"
+    log "Starting Gas Town services"
+    if [[ -n "${TAXIWAY_RIG_NAME:-}" ]]; then
+        log "Starting crew workspace for rig '$TAXIWAY_RIG_NAME'"
+    else
+        log "Starting crew workspace when a rig is configured"
+    fi
+    log "Enabling Gas Town integrations and shell support"
+    log "Running Gas Town startup repair checks"
+    log "Starting feed and dashboard sessions"
+    if taxiway_can_inspect && tmux has-session -t gastown 2>/dev/null; then
+        log "Stopping existing tmux session 'gastown'"
+    fi
+    log "Starting tmux session 'gastown'"
+    exit 0
+fi
 
 prepare_beads_dir() {
     mkdir -p "$HQ_DIR/.beads"
