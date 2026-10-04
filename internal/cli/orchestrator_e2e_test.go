@@ -269,7 +269,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		existedBefore, err := state.Driver.Exists(context.Background(), id)
 		require.NoError(t, err)
 		phaseStateBefore := captureE2EPhaseState(stateDir, id)
-		output := runE2EDryRunCommand(t, root, tb, state, "create", lab, "--type", orch)
+		output := runE2EDryRunCommand(t, root, tb, state, false, "create", lab, "--type", orch)
 		require.Contains(t, output, "Creating Docker lab runtime")
 		require.Contains(t, output, "No changes were made.")
 		runE2EAssert(t, "assert:phase-markers-preserved", func(t *testing.T) {
@@ -315,7 +315,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		})
 	})
 
-	runE2EScriptDryRunStep(t, "taxiway:bootstrap[--dry-run]", root, tb, state, stateDir, id, dryRunLabels.Bootstrap, "bootstrap", lab)
+	runE2EScriptDryRunStep(t, "taxiway:bootstrap[--dry-run]", root, tb, state, stateDir, id, false, dryRunLabels.Bootstrap, "bootstrap", lab)
 	runE2EStep(t, "taxiway:bootstrap", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "bootstrap", lab)
 		runE2EAssert(t, "assert:phase-bootstrapped", func(t *testing.T) {
@@ -323,7 +323,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		})
 	})
 
-	runE2EScriptDryRunStep(t, "taxiway:install[--dry-run]", root, tb, state, stateDir, id, dryRunLabels.Install, "install", lab)
+	runE2EScriptDryRunStep(t, "taxiway:install[--dry-run]", root, tb, state, stateDir, id, false, dryRunLabels.Install, "install", lab)
 	runE2EStep(t, "taxiway:install", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "install", lab, "--set", "model="+expectations.model, "--set", e2eHarnessPin(orch))
 		runE2EAssert(t, "assert:phase-installed", func(t *testing.T) {
@@ -334,7 +334,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		})
 	})
 
-	runE2EScriptDryRunStep(t, "taxiway:verify[--dry-run]", root, tb, state, stateDir, id, dryRunLabels.Verify, "verify", lab)
+	runE2EScriptDryRunStep(t, "taxiway:verify[--dry-run]", root, tb, state, stateDir, id, false, dryRunLabels.Verify, "verify", lab)
 	runE2EStep(t, "taxiway:verify", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "verify", lab)
 		runE2EAssert(t, "assert:phase-verified", func(t *testing.T) {
@@ -347,7 +347,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		ref := config.LabRef{Lab: lab, Orch: orch, Driver: state.Driver.Name()}
 		sidecar := e2eLabLiteLLMContainer(state, ref)
 		sidecarStateBefore := e2eDockerContainerState(t, sidecar)
-		output := runE2EDryRunCommand(t, root, tb, state, "gateway", lab)
+		output := runE2EDryRunCommand(t, root, tb, state, false, "gateway", lab)
 		require.Contains(t, output, "Configuring lab gateway environment")
 		require.Contains(t, output, "Reconciling LiteLLM sidecar")
 		runE2EAssert(t, "assert:phase-markers-preserved", func(t *testing.T) {
@@ -368,7 +368,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		})
 	})
 
-	runE2EScriptDryRunStep(t, "taxiway:workspace[--dry-run]", root, tb, state, stateDir, id, dryRunLabels.Workspace, "workspace", lab)
+	runE2EScriptDryRunStep(t, "taxiway:workspace[--dry-run]", root, tb, state, stateDir, id, false, dryRunLabels.Workspace, "workspace", lab)
 	runE2EStep(t, "taxiway:workspace", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "workspace", lab)
 		runE2EAssert(t, "assert:phase-workspace-created", func(t *testing.T) {
@@ -387,7 +387,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		})
 	})
 
-	runE2EScriptDryRunStep(t, "taxiway:auth[--dry-run]", root, tb, state, stateDir, id, dryRunLabels.Auth, "auth", lab)
+	runE2EScriptDryRunStep(t, "taxiway:auth[--dry-run]", root, tb, state, stateDir, id, false, dryRunLabels.Auth, "auth", lab)
 	runE2EStep(t, "taxiway:auth", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "auth", lab, "--set", "auth_mode=api-key")
 		runE2EAssert(t, "assert:phase-authenticated", func(t *testing.T) {
@@ -397,7 +397,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 
 	configureE2ECompletedClaudeOnboarding(t, state, id, orch)
 
-	runE2EScriptDryRunStep(t, "taxiway:start[--dry-run]", root, tb, state, stateDir, id, dryRunLabels.Start, "start", lab)
+	runE2EScriptDryRunStep(t, "taxiway:start[--dry-run]", root, tb, state, stateDir, id, false, dryRunLabels.Start, "start", lab)
 	runE2EStep(t, "taxiway:start", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "start", lab)
 		runE2EAssert(t, "assert:phase-started", func(t *testing.T) {
@@ -461,7 +461,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		ref := config.LabRef{Lab: lab, Orch: orch, Driver: state.Driver.Name()}
 		sidecar := e2eLabLiteLLMContainer(state, ref)
 		sidecarStateBefore := e2eDockerContainerState(t, sidecar)
-		output := runE2EDryRunCommand(t, root, tb, state, "down", lab)
+		output := runE2EDryRunCommand(t, root, tb, state, false, "down", lab)
 		require.Contains(t, output, "Stopping lab runtime")
 		require.Contains(t, output, "Stopping LiteLLM sidecar")
 		runE2EAssert(t, "assert:lab-runtime-preserved", func(t *testing.T) {
@@ -487,7 +487,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		ref := config.LabRef{Lab: lab, Orch: orch, Driver: state.Driver.Name()}
 		sidecar := e2eLabLiteLLMContainer(state, ref)
 		sidecarStateBefore := e2eDockerContainerState(t, sidecar)
-		runE2EDryRunCommand(t, root, tb, state, "up", lab, "--type", orch, "--skip-auth-check")
+		runE2EDryRunCommand(t, root, tb, state, false, "up", lab, "--type", orch, "--skip-auth-check")
 		runE2EAssert(t, "assert:lab-runtime-preserved", func(t *testing.T) {
 			runningAfter, err := state.Driver.Running(context.Background(), id)
 			require.NoError(t, err)
@@ -556,6 +556,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 			// preserves every file, then resume even if the assertion fails.
 			var stopped bytes.Buffer
 			var stoppedErr bytes.Buffer
+			var sessionsBefore bytes.Buffer
 			t.Cleanup(func() {
 				pids := strings.Fields(stopped.String())
 				if len(pids) == 0 {
@@ -563,18 +564,29 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 				}
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
+				// Descendants resume before their tmux server.
+				for left, right := 0, len(pids)-1; left < right; left, right = left+1, right-1 {
+					pids[left], pids[right] = pids[right], pids[left]
+				}
 				var resumeErr bytes.Buffer
 				result, err := state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: append([]string{"bash", "-c", `set -euo pipefail; for pid in "$@"; do if [[ -e /proc/$pid/stat ]]; then kill -CONT "$pid"; fi; done`, "resume-owned-agent"}, pids...), Stderr: &resumeErr})
 				require.NoError(t, err)
 				require.Zero(t, result.ExitCode, "resume this fixture's suspended processes: %s", resumeErr.String())
+				var sessionsAfter bytes.Buffer
+				result, err = state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: []string{"tmux", "list-sessions", "-F", "session|#{session_name}|#{session_id}"}, Stdout: &sessionsAfter})
+				require.NoError(t, err)
+				require.Zero(t, result.ExitCode)
+				require.Equal(t, sessionsBefore.String(), sessionsAfter.String(), "preview preserves native tmux sessions across verified quiescence")
 			})
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			result, err := state.Driver.Exec(ctx, id, driver.ExecRequest{
+			result, err := state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: []string{"tmux", "list-sessions", "-F", "session|#{session_name}|#{session_id}"}, Stdout: &sessionsBefore})
+			require.NoError(t, err)
+			require.Zero(t, result.ExitCode)
+			result, err = state.Driver.Exec(ctx, id, driver.ExecRequest{
 				Argv: []string{"bash", "-c", `set -euo pipefail
-signal="$3"
 freeze_tree() {
-  kill -"$signal" "$1"
+  kill -STOP "$1"
   printf '%s\n' "$1"
   local deadline=$((SECONDS + 5)) state
   while [[ -e /proc/$1/stat ]]; do
@@ -597,7 +609,17 @@ while [[ "$(tmux display-message -p -t "$1" '#{pane_current_command}')" != "$2" 
 done
 pid=$(tmux display-message -p -t "$1" '#{pane_pid}')
 [[ "$pid" =~ ^[0-9]+$ ]] && (( pid > 1 ))
-freeze_tree "$pid"`, "freeze-owned-agent", orch, map[string]string{"codex": "codex", "claude-code": "claude"}[orch], map[string]string{"codex": "STOP", "claude-code": "TTIN"}[orch]},
+server=$(tmux display-message -p -t "$1" '#{pid}')
+[[ "$server" =~ ^[0-9]+$ ]] && (( server > 1 ))
+python3 - "$pid" "$server" <<'PY'
+import os, pathlib, sys
+pane, server = sys.argv[1:]
+assert pathlib.Path('/proc', server).stat().st_uid == os.getuid(), 'server must belong to this fixture user'
+assert pathlib.Path('/proc', server, 'comm').read_text().strip().startswith('tmux'), 'owned parent must be tmux'
+assert pathlib.Path('/proc', pane, 'stat').read_text().rsplit(')', 1)[1].split()[1] == server, 'pane must be child of this owned server'
+PY
+# tmux resumes stopped pane leaders; freeze this owned server first.
+freeze_tree "$server"`, "freeze-owned-agent", orch, map[string]string{"codex": "codex", "claude-code": "claude"}[orch]},
 				Stdout: &stopped,
 				Stderr: &stoppedErr,
 			})
@@ -625,7 +647,7 @@ for path in (pathlib.Path.home() / '.claude/sessions').glob('*.json'):
 			require.Zero(t, result.ExitCode)
 			t.Log(metadata.String())
 		}
-		runE2EScriptDryRunStep(t, "taxiway:reset[--yes,--dry-run]", root, tb, state, stateDir, id, []string{"Stopping workspace services", "Clearing lifecycle phase markers"}, "reset", "--yes", lab)
+		runE2EScriptDryRunStep(t, "taxiway:reset[--yes,--dry-run]", root, tb, state, stateDir, id, orch == "codex" || orch == "claude-code", []string{"Stopping workspace services", "Clearing lifecycle phase markers"}, "reset", "--yes", lab)
 	})
 	runE2EStep(t, "taxiway:reset[--yes]", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "reset", "--yes", lab)
@@ -642,7 +664,7 @@ for path in (pathlib.Path.home() / '.claude/sessions').glob('*.json'):
 		ref := config.LabRef{Lab: lab, Orch: orch, Driver: state.Driver.Name()}
 		sidecar := e2eLabLiteLLMContainer(state, ref)
 		sidecarStateBefore := e2eDockerContainerState(t, sidecar)
-		output := runE2EDryRunCommand(t, root, tb, state, "rm", "--yes", lab)
+		output := runE2EDryRunCommand(t, root, tb, state, false, "rm", "--yes", lab)
 		require.Contains(t, output, "Deleting lab runtime and storage")
 		require.Contains(t, output, "Clearing lifecycle phase markers")
 		runE2EAssert(t, "assert:lab-runtime-preserved", func(t *testing.T) {
@@ -861,13 +883,13 @@ func cleanupE2EOrchestratorLab(t *testing.T, state *RootState, id, lab, orch str
 	})
 }
 
-func runE2EDryRunCommand(t *testing.T, root *cobra.Command, tb *dockerTestBuf, state *RootState, args ...string) string {
+func runE2EDryRunCommand(t *testing.T, root *cobra.Command, tb *dockerTestBuf, state *RootState, frozenTmux bool, args ...string) string {
 	t.Helper()
-	before := captureE2EDryRunRuntime(t, state)
+	before := captureE2EDryRunRuntime(t, state, frozenTmux)
 	dryRunArgs := append(append([]string(nil), args...), "--dry-run")
 	output := runE2ECommand(t, root, tb, dryRunArgs...)
 	runE2EAssert(t, "assert:runtime-and-files-preserved", func(t *testing.T) {
-		after := captureE2EDryRunRuntime(t, state)
+		after := captureE2EDryRunRuntime(t, state, frozenTmux)
 		var changed []string
 		for path, digest := range before {
 			if after[path] != digest {
@@ -885,7 +907,7 @@ func runE2EDryRunCommand(t *testing.T, root *cobra.Command, tb *dockerTestBuf, s
 	return output
 }
 
-func captureE2EDryRunRuntime(t *testing.T, state *RootState) map[string]string {
+func captureE2EDryRunRuntime(t *testing.T, state *RootState, frozenTmux bool) map[string]string {
 	t.Helper()
 	hash := sha256.New()
 	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
@@ -947,9 +969,9 @@ for path in "$HOME/.config/taxiway" "$HOME/.codex" "$HOME/.claude" /lab/work; do
     find "$path" \( -path /lab/work/gt/.dolt-data -o -path /lab/work/gt/daemon \) -prune -o -type f ! -path /lab/work/gt/.runtime/doctor-fix.log -exec sha256sum {} +
   fi
 done
-if command -v tmux >/dev/null 2>&1; then
+if [[ "$1" != frozen ]] && command -v tmux >/dev/null 2>&1; then
   tmux list-sessions -F 'session|#{session_name}|#{session_id}' 2>/dev/null || true
-fi`},
+fi`, "capture-preview", map[bool]string{true: "frozen", false: "active"}[frozenTmux]},
 			Stdout: &output,
 		})
 		require.NoError(t, err)
@@ -978,6 +1000,7 @@ func runE2EScriptDryRunStep(
 	tb *dockerTestBuf,
 	state *RootState,
 	stateDir, id string,
+	frozenTmux bool,
 	expected []string,
 	args ...string,
 ) {
@@ -985,7 +1008,7 @@ func runE2EScriptDryRunStep(
 	require.NotEmpty(t, args)
 	phaseStateBefore := captureE2EPhaseState(stateDir, id)
 	runE2EStep(t, stepName, func(t *testing.T) {
-		output := runE2EDryRunCommand(t, root, tb, state, args...)
+		output := runE2EDryRunCommand(t, root, tb, state, frozenTmux, args...)
 		for _, label := range expected {
 			require.Contains(t, output, label)
 		}
