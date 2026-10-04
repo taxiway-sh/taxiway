@@ -181,7 +181,7 @@ one second. Names must be unique for removal. If a name appears more than once, 
 the ID shown by `record list`:
 
 ```bash
-taxiway record rm mylab --id 20261004-120000-delivery-run
+taxiway record rm mylab --id '<ID-from-record-list>'
 ```
 
 Taxiway saves the index before deleting the cast. A failed index save preserves
