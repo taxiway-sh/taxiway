@@ -60,6 +60,75 @@ print(json.dumps({'model':model,'checked':checked}))
     return socket, json.loads(output)
 
 
+def deacon_patrol(lab):
+    # Return only behavioral evidence, never transcript text or tool payloads.
+    return json.loads(guest(lab, "python3 - <<'PY'\n" + r"""
+import json, pathlib
+root=pathlib.Path('/lab/work/gt')
+heartbeat=root/'deacon/heartbeat.json'
+hb=json.loads(heartbeat.read_text()) if heartbeat.exists() else {}
+completed=set(); check_count=0; reports=0; interrupted=False
+for path in (pathlib.Path.home()/'.claude/projects').rglob('*.jsonl'):
+    calls={}
+    for line in path.read_text(errors='replace').splitlines():
+        try: event=json.loads(line)
+        except ValueError: continue
+        if event.get('cwd') != str(root/'deacon'): continue
+        blocks=event.get('message',{}).get('content',[])
+        if not isinstance(blocks,list): continue
+        for block in blocks:
+            if not isinstance(block,dict): continue
+            if block.get('type')=='tool_use' and block.get('name')=='Bash':
+                calls[block['id']]=block.get('input',{}).get('command','')
+            elif block.get('type')=='tool_result':
+                command=calls.get(block.get('tool_use_id'),'')
+                output=str(block.get('content','')).lower()
+                if 'gt sling mol-deacon-patrol deacon' in command:
+                    interrupted |= bool(block.get('is_error')) or 'interrupt' in output
+                if block.get('is_error'): continue
+                for check in ('gt mail inbox','gt convoy','gt witness status',
+                              'gt refinery status','gt deacon cleanup-orphans',
+                              'gt dog','gt dispatch'):
+                    if check in command:
+                        completed.add(check)
+                        check_count+=1
+                if ('gt patrol report' in command and 'closed patrol ' in output
+                        and 'new patrol:' in output):
+                    reports+=1
+print(json.dumps({'cycle':hb.get('cycle',0),'timestamp':hb.get('timestamp'),
+                  'checks':sorted(completed),'check_count':check_count,
+                  'reports':reports,'interrupted':interrupted}))
+""" + "\nPY", timeout=90))
+
+
+def wait_deacon_patrol(lab, *, after=None, timeout=600):
+    before = after or {"cycle": 0, "reports": 0, "check_count": 0}
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        evidence = deacon_patrol(lab)
+        assert not evidence["interrupted"], "Deacon self-sling interrupted its caller"
+        if (evidence["cycle"] > max(1, before["cycle"])
+                and evidence["reports"] > before["reports"]
+                and evidence["check_count"] >= before["check_count"] + 3
+                and len(evidence["checks"]) >= 3):
+            return evidence
+        time.sleep(5)
+    raise AssertionError("Deacon did not complete a real patrol and advance its heartbeat")
+
+
+def wait_deacon_startup(lab, timeout=180):
+    # Startup ends once the new Deacon is doing patrol work. A complete cycle
+    # and continued progress after handoff are checked separately above.
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        evidence = deacon_patrol(lab)
+        assert not evidence["interrupted"], "Deacon self-sling interrupted its caller"
+        if evidence["cycle"] > 1 and len(evidence["checks"]) >= 3:
+            return evidence
+        time.sleep(5)
+    raise AssertionError("Fresh Deacon did not advance real patrol checks and its heartbeat")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--auth-lab", required=True)
@@ -76,6 +145,22 @@ def main():
         assert snapshot.get("rigs"), "Repository rig missing"
         assert guest(lab, 'find /lab/work/gt -path "*/crew/*/README*" -type f -print -quit').strip(), "Crew repository missing"
         print(f"PASS Gastown startup and workspace: {checked['checked']} live roles, model={checked['model']}", flush=True)
+
+        patrol = wait_deacon_patrol(lab)
+        print("PASS Deacon startup: successful patrol checks/report and advancing heartbeat", flush=True)
+        before_deacon = guest(lab, f"tmux -L {shlex.quote(socket)} display-message -p -t hq-deacon '#{{pane_pid}}'").strip()
+        handoff_deacon = 'cd /lab/work/gt/deacon && export PATH="$HOME/.local/bin:$PATH" GT_ROLE=deacon TMUX_PANE=\'#{pane_id}\'; gt handoff deacon --watch=false --yes --no-git-check >/tmp/taxiway-deacon-handoff-check.log 2>&1'
+        guest(lab, "tmux -L " + shlex.quote(socket) + " run-shell -b -t hq-deacon " + shlex.quote(handoff_deacon))
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline:
+            pane = guest(lab, f"tmux -L {shlex.quote(socket)} display-message -p -t hq-deacon '#{{pane_pid}}|#{{pane_dead}}|#{{pane_current_command}}'").decode().strip().split("|")
+            if len(pane) == 3 and pane[0].encode() != before_deacon and pane[1] == "0" and pane[2] in ("node", "claude"):
+                break
+            time.sleep(1)
+        else:
+            raise AssertionError("Deacon handoff did not replace the live Claude process")
+        wait_deacon_patrol(lab, after=patrol)
+        print("PASS Deacon handoff: replacement completes patrol and heartbeat advances", flush=True)
 
         # Real remote handoff through Gastown's tmux restart builder.
         before = guest(lab, f"tmux -L {shlex.quote(socket)} display-message -p -t hq-mayor '#{{pane_pid}}'").strip()
@@ -126,7 +211,15 @@ def main():
         assert "Bash" in tools, "No actual Bash tool invocation"
         assert guest(lab,"cat /lab/work/gt/live-proof.txt").strip()==b"GASTOWN_TOOL_OK", "Tool did not create proof file"
         print("PASS Gastown launcher inference: Opus principal, Sonnet subagent, actual tool/file effect",flush=True)
-    print("All Gastown live cases passed; temporary lab removed; reference lab preserved.",flush=True)
+    # A separate fresh installation catches startup failures hidden by an
+    # already-populated hook or a recovered Deacon from the first lab.
+    with temporary_lab("gastown", auth_lab=args.auth_lab, repo=args.repo,
+                       taxiway=args.taxiway, timeout=1200) as lab:
+        sessions(lab)
+        wait_deacon_startup(lab)
+        guest(lab, 'export PATH="$HOME/.local/bin:$PATH"; cd /lab/work/gt; gt down >/tmp/taxiway-down-check.log 2>&1', timeout=120)
+        print("PASS Deacon second fresh startup: real patrol checks and advancing heartbeat", flush=True)
+    print("All Gastown live cases passed; temporary labs removed; reference lab preserved.",flush=True)
 
 
 if __name__ == "__main__":

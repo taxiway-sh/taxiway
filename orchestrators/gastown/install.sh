@@ -2,7 +2,7 @@
 # Install the `gt` binary from https://github.com/gastownhall/gastown.
 #
 # Idempotent. Installs the Gas Town CLI to $HOME/.local/bin from upstream
-# release archives. Also installs runtime dependencies required by upstream
+# release archives, with a source backport for 1.2.1. Installs dependencies for
 # docs/build: Dolt, Beads (`bd`), sqlite3, and ICU headers.
 
 set -euo pipefail
@@ -216,8 +216,55 @@ resolve_beads_install_ref() {
   esac
 }
 
+install_patched_gastown_121() (
+  # v1.2.1 predates upstream PR #4050. Build that release with only its
+  # named-self-target correction until an upstream release contains the fix.
+  local source_commit="319d33a91b2deca59bba6dd26be6b9daf8eaacf6"
+  local source_sha="bc7f5a35fc0518d28ad29db901b60a8a35ccd565f511120c4f771b1247679417"
+  local build="taxiway-self-sling-4050"
+  if command -v gt >/dev/null 2>&1 && [[ "$(gt version --short)" = "1.2.1-${build}" ]]; then
+    log "gt already installed (1.2.1 with upstream self-sling fix)"
+    return 0
+  fi
+
+  local arch go_sha
+  arch="$(github_release_arch)"
+  case "$arch" in
+    amd64) go_sha="ceb5e041bbc3893846bd1614d76cb4681c91dadee579426cf21a63f2d7e03be6" ;;
+    arm64) go_sha="7d137f59f66bb93f40a6b2b11e713adc2a9d0c8d9ae581718e3fad19e5295dc7" ;;
+  esac
+  local builddir
+  builddir="$(mktemp -d)"
+  trap 'rm -rf "$builddir"' EXIT
+  log "Building Gas Town 1.2.1 with upstream self-sling fix (#4050)"
+  download "https://github.com/gastownhall/gastown/archive/${source_commit}.tar.gz" "$builddir/source.tar.gz"
+  printf '%s  %s\n' "$source_sha" "$builddir/source.tar.gz" | sha256sum --check --status
+  download "https://go.dev/dl/go1.25.8.linux-${arch}.tar.gz" "$builddir/go.tar.gz"
+  printf '%s  %s\n' "$go_sha" "$builddir/go.tar.gz" | sha256sum --check --status
+  mkdir "$builddir/source"
+  tar -C "$builddir/source" --strip-components=1 -xzf "$builddir/source.tar.gz"
+  tar -C "$builddir" -xzf "$builddir/go.tar.gz"
+  patch -d "$builddir/source" -p1 < "$(dirname "${BASH_SOURCE[0]}")/patches/self-sling-4050.patch"
+  cd "$builddir/source"
+  if ! CGO_ENABLED=0 GOTOOLCHAIN=local "$builddir/go/bin/go" build -buildvcs=false -trimpath \
+    -ldflags "-X github.com/steveyegge/gastown/internal/cmd.Version=1.2.1 -X github.com/steveyegge/gastown/internal/cmd.Build=${build} -X github.com/steveyegge/gastown/internal/cmd.Commit=${source_commit}" \
+    -o "$builddir/gt" ./cmd/gt > "$builddir/build.log" 2>&1; then
+    tail -n 20 "$builddir/build.log" >&2
+    return 1
+  fi
+  mkdir -p "$HOME/.local/bin"
+  install -m 0755 "$builddir/gt" "$HOME/.local/bin/gt"
+)
+
 install_gastown() {
   log "Installing Gas Town"
+  if [ "$GASTOWN_INSTALL_REF" = "latest" ]; then
+    GASTOWN_INSTALL_REF="$(resolve_latest_release_ref gastownhall gastown)"
+  fi
+  if [ "$GASTOWN_INSTALL_REF" = "v1.2.1" ]; then
+    install_patched_gastown_121
+    return
+  fi
   install_github_release_binary gastownhall gastown gastown "$GASTOWN_INSTALL_REF" gt
 }
 

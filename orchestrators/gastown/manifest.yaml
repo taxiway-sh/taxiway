@@ -5,10 +5,10 @@ agents:
   - claude-code
 settings:
   - name: version
-    description: Gastown version/tag to install from release archive
+    description: Gastown release version/tag to install
     default: latest
     examples:
-      - "1.1.0"
+      - "1.2.1"
       - latest
     phases:
       - install

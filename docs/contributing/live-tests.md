@@ -157,7 +157,12 @@ direnv exec . python3 tests/live/test_gastown.py --auth-lab test-claude
 The scenario creates a temporary Docker Gas Town lab with a small public
 repository (`octocat/Hello-World`, override with `--repo`). It verifies the rig
 and crew workspace, checks running Claude roles and their gateway/model/alias
-environment, then exercises the Mayor's real `gt handoff` restart. It stops
+environment, then verifies that Deacon completes a real patrol and advances
+its heartbeat. A real Deacon handoff must replace the Claude process and
+complete another patrol with new checks. A second fresh lab independently
+verifies autonomous patrol startup; self-sling interruptions fail the scenario
+even if the daemon later recovers. The suite also exercises the Mayor's real
+`gt handoff` restart. It stops
 background patrols before a bounded inference through the Gas Town launcher:
 an Opus principal invokes a Sonnet subagent and writes a proof file using Bash.
 Assertions inspect actual child responses, tool events and the resulting file.
