@@ -60,6 +60,13 @@ with tempfile.TemporaryDirectory(prefix="taxiway-helper-test-") as root:
 print("PASS: reference auth is propagated before the first orchestrator start")
 print("PASS: cleanup preserves the original error and reports owned-lab failures")
 
+with patch.dict(os.environ, environment), patch.object(live, 'command', return_value=b'') as commands:
+    with live.temporary_lab('claude-code', driver='lima', prepare_only=True):
+        pass
+    assert '--prepare-only' in commands.call_args_list[0].args[0]
+    assert not any(call.args[0][1] == 'run' for call in commands.call_args_list)
+print('PASS: prepared Lima targets do not start unauthenticated agent roles')
+
 # Rejected native auth must stop before provisioning, even with a credential file.
 with patch.dict(os.environ, environment), patch.object(live, "guest", return_value=b"auth\n"), patch.object(live, "lab_ref", return_value={"driver": "docker"}), patch.object(live, "command") as provision:
     try:

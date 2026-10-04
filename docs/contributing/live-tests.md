@@ -203,6 +203,45 @@ This is real account usage, including the short period of Gas Town startup
 and handoff before patrols are stopped. It does not validate a full polecat,
 refinery or merge-queue workload.
 
+## Real Lima lifecycle qualification
+
+Changes to Lima execution, mounts, recording or recovery need a real Lima
+scenario in addition to unit and Docker tests. Install Lima, permit its native
+virtualization prerequisites, and keep enough capacity for one 4-CPU/8-GiB VM.
+The first run downloads Ubuntu and installs guest dependencies; network access
+is required. Reuse the isolated worktree environment and rebuild its CLI:
+
+```bash
+go build -o taxiway ./cmd/taxiway
+direnv exec . python3 tests/live/test_recording_lifecycle.py --driver lima
+```
+
+This provider-free scenario prepares owned labs without starting agent roles or
+gateways. It verifies guest execution and recording-mount writability/host
+visibility, captures actual tmux output, stops a real recorder under a nondefault
+prefix, preserves the target session, and reconciles a recording after VM stop.
+Two further owned labs exercise cleanup after an intentional guest failure and
+a host command timeout. It checks that each temporary VM and lab state disappear
+and that unrelated Lima instances retain their prior status. It does not access
+reference credentials or prove model inference, delegation, or every Lima feature.
+
+Choose `--driver docker` to run the same assertions with Docker; there is no
+implicit driver. `--outcome success|failure|timeout` selects one path and
+`--setup-timeout 900` bounds each lab's provisioning (default 900 seconds).
+Guest commands and cleanup are also bounded. Reports include the selected
+driver, Git revision (`+dirty` for tracked changes), executed outcome and verified
+cleanup. Exit 0 means the selected behavior and expected failure/timeout cleanup
+passed; exit 1 means a phase failed; exit 2 means the driver prerequisite could
+not be inspected and the scenario was not executed. Captured guest output and
+credentials are withheld. On setup/cleanup failure, inspect only that context's
+lab state and the reported owned lab name; preserve partial state until targeted
+cleanup can succeed. Never globally stop Lima instances or prune Docker.
+
+Use authenticated existing feature suites and #116 reference preflight when a
+change concerns model calls. A Running VM or a smoke marker alone does not
+qualify affected product behavior; select/enrich the relevant assertions and
+record actual execution or its limitation. General creation stalls remain #99.
+
 ## Lima startup and readiness retry
 
 Build the worktree CLI and run the provider-free native scenario explicitly:
