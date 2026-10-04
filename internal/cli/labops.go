@@ -591,6 +591,11 @@ func labUp(ctx context.Context, state *RootState, ref config.LabRef, logW io.Wri
 			return err
 		}
 		if running {
+			if d.Name() == "lima" {
+				// Running is the hypervisor state, not proof of SSH/provisioning readiness.
+				// Revalidate partial startup before allowing the create phase to complete.
+				return d.Start(ctx, id)
+			}
 			fmt.Fprintf(logW, "Lab %q is already running\n", ref.Lab)
 			return nil
 		}
