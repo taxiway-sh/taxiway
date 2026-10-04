@@ -1733,7 +1733,7 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 					runE2ECommand(t, root, tb, "record", "rm", lab, "--name", name)
 				}
 				if stoppedLab {
-					runE2ECommand(t, root, tb, "up", lab, "--from", "start", "--force", "--skip-auth-check")
+					runE2ECommand(t, root, tb, "up", lab, "--skip-auth-check")
 					assertE2EShellCheck(t, root, tb, lab, orch)
 				}
 			})
