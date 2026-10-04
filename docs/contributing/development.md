@@ -152,7 +152,13 @@ Review the exact commit/diff with an agent other than the implementer. Resolve
 findings, verify corrections, and re-review materially changed code. Then
 prepare a PR describing final behavior, checks and limitations, with
 `Fixes #...` and appropriate existing labels from [Issues](issues.md). Preparing
-a PR does not authorize its publication or merge. User authorization is required
+a PR does not authorize its publication or merge. Pending approval blocks that
+action on that subject; it does not stop other already-authorized independent
+implementation, tests, reviews or status reports. Check assignments before
+moving to the next subject and respect capacity and dependencies. Do not end
+an active session solely to wait for publication approval. If no independent
+action remains, report the pending decisions and whether the client can remain
+active; an external runner is not supplied. User authorization is required
 for those actions; affected E2Es must be green on the candidate commit.
 
 If implementation exposes an unrelated bug or improvement, describe sanitized
@@ -247,6 +253,13 @@ Use the prior conversation or an uncommitted local handoff for decisions not
 represented there; never commit private run state, auth or logs. Treat missing
 or unverifiable evidence as unknown. Resumption resets due times after this
 reconciliation and must not launch duplicate agents or tests.
+
+Before ending, explicitly state that monitoring stops. List each subject’s
+remaining work and decisions, identify any still-running tests and their owners,
+and provide the resume command or native session-resume action. Do not promise
+automatic updates after the session ends. On resume, inspect live agents and
+processes as well as recorded work and current-head checks before restarting
+loops or assigning work; silence or a stale note does not prove a test stopped.
 
 The final report links issues/PRs, states delivered behavior, actual validation
 and remaining limits, and distinguishes code-ready, independently reviewed,

@@ -31,6 +31,14 @@ Use a dedicated worktree/implementer per subject and a different reviewer.
 Resolve review findings and verify corrections. If delegation is unavailable,
 report the missing review rather than review your own work as independent.
 Follow the documented tests, commits, PR and authorized merge/cleanup procedure.
+Pending publication/merge approval blocks only that action on that subject.
+Keep other already-authorized, independent implementation, tests, reviews and
+status checks moving within capacity. Reconcile assignments before starting
+another subject; do not duplicate agents/tests or cross an unapproved action.
+An approval wait alone is not a reason to end the session. If every remaining
+action is blocked, report the pending decisions and the client’s ability to
+stay active; do not invent a background runner or promise future turns.
+
 Preserve unrelated work and credentials. Necessary acceptance fixes stay in
 scope; unrelated discoveries become sanitized, deduplicated issue proposals.
 Ask whether to create them unless already authorized.
@@ -66,6 +74,14 @@ delegation limitations immediately. No loops survive session termination.
 - **Triage:** at startup/backlog request and each due time, refresh proposals
   against assignments, priority and capacity. Do not repeat unchanged
   recommendations unnecessarily or start unselected work.
+
+Before ending a session, explicitly say that monitoring stops, list each
+subject’s remaining work, pending decisions and any still-running tests with
+their owners, and give the resume action. Do not promise automatic updates after
+termination. On resume, read the canonical skill and reconcile worktrees,
+commits, current-head results, agents and live processes before restarting
+loops or assigning work. A stale handoff or absent message is not proof that a
+test stopped; preserve uncertain work until ownership/state is established.
 
 Pause stops scheduling and preserves work; stop monitoring ends loops. Cancel
 stops that subject's scheduling, coordinates in-flight tests and owned cleanup,
