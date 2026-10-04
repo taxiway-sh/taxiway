@@ -401,24 +401,27 @@ func TestLimaStartBoundsGuestPreparationWithinStartupTimeout(t *testing.T) {
 printf '%s\n' "$*" >> "$TAXIWAY_FAKE_LIMACTL_LOG"
 case "$1" in
   start) exit 0 ;;
-  shell) exec /bin/sleep 2 ;;
+  shell) exec /bin/sleep 3 ;;
 esac
 `)
-	t.Setenv("TAXIWAY_LIMA_START_TIMEOUT", "300ms")
+	t.Setenv("TAXIWAY_LIMA_START_TIMEOUT", "1s")
 	started := time.Now()
 	err := NewLimaDriver(t.TempDir()).Start(context.Background(), "taxiway-demo")
 	require.Len(t, readCommandLog(t, logPath), 2, "start succeeds before guest preparation blocks")
 	require.ErrorIs(t, err, context.DeadlineExceeded)
-	require.Less(t, time.Since(started), time.Second)
+	require.Less(t, time.Since(started), 2*time.Second)
 }
 
 func TestLimaStartStreamsProgressBeforeCompletion(t *testing.T) {
+	gate := filepath.Join(t.TempDir(), "complete-start")
 	installFakeLimactl(t, `#!/bin/sh
 if [ "$1" = start ]; then
   printf 'Waiting for the essential requirement: ssh\n' >&2
-  /bin/sleep 1
+  while [ ! -f "$TAXIWAY_TEST_PROGRESS_GATE" ]; do /bin/sleep 0.01; done
 fi
 `)
+	t.Setenv("TAXIWAY_TEST_PROGRESS_GATE", gate)
+	t.Cleanup(func() { _ = os.WriteFile(gate, nil, 0o600) })
 	r, w, err := os.Pipe()
 	require.NoError(t, err)
 	previous := os.Stderr
@@ -427,27 +430,49 @@ fi
 	progress := make(chan string, 1)
 	go func() { line, _ := bufio.NewReader(r).ReadString('\n'); progress <- line }()
 	done := make(chan error, 1)
-	go func() { done <- NewLimaDriver(t.TempDir()).Start(context.Background(), "taxiway-demo") }()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	t.Cleanup(cancel)
+	go func() { done <- NewLimaDriver(t.TempDir()).Start(ctx, "taxiway-demo") }()
 	select {
 	case line := <-progress:
 		require.Contains(t, line, "ssh")
-	case <-time.After(500 * time.Millisecond):
+	case <-time.After(3 * time.Second):
 		t.Error("startup progress must reach the user while Lima is still starting")
 	}
+	require.NoError(t, os.WriteFile(gate, nil, 0o600))
 	require.NoError(t, <-done)
 }
 
 func TestLimaGuestPreparationDoesNotWaitForInheritedOutputPipes(t *testing.T) {
+	ready := filepath.Join(t.TempDir(), "child-ready")
 	logPath := installFakeLimactl(t, `#!/bin/sh
 printf '%s\n' "$*" >> "$TAXIWAY_FAKE_LIMACTL_LOG"
-if [ "$1" = shell ]; then /bin/sleep 2 & wait; fi
+if [ "$1" = shell ]; then
+  /bin/sleep 4 &
+  printf '%s' "$!" > "$TAXIWAY_TEST_PREPARE_READY"
+  wait
+fi
 `)
-	t.Setenv("TAXIWAY_LIMA_START_TIMEOUT", "300ms")
+	t.Setenv("TAXIWAY_TEST_PREPARE_READY", ready)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(func() {
+		cancel()
+		if pid, err := os.ReadFile(ready); err == nil {
+			_ = exec.Command("/bin/kill", string(pid)).Run()
+		}
+	})
+	done := make(chan error, 1)
+	go func() { done <- NewLimaDriver(t.TempDir()).Start(ctx, "taxiway-demo") }()
+	require.Eventually(t, func() bool {
+		data, err := os.ReadFile(ready)
+		return err == nil && len(data) > 0
+	}, 5*time.Second, 10*time.Millisecond, "guest child has inherited the output pipe")
 	started := time.Now()
-	err := NewLimaDriver(t.TempDir()).Start(context.Background(), "taxiway-demo")
+	cancel()
+	err := <-done
 	require.Len(t, readCommandLog(t, logPath), 2)
-	require.ErrorIs(t, err, context.DeadlineExceeded)
-	require.Less(t, time.Since(started), 1800*time.Millisecond)
+	require.ErrorIs(t, err, context.Canceled)
+	require.Less(t, time.Since(started), 3*time.Second)
 }
 
 func TestLimaStartFailureRetainsStageWithBoundedOutput(t *testing.T) {
