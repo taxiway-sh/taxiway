@@ -208,6 +208,28 @@ func TestLabUp_AlreadyRunning(t *testing.T) {
 	require.True(t, running)
 }
 
+func TestCreateRetriesRunningLimaReadinessBeforeMarkingCreated(t *testing.T) {
+	root, state, stdout, stderr := buildTestRoot(t)
+	state.Driver = driver.NewLimaDriver(state.Flags.StateDir)
+	ref := config.LabRef{Lab: "demo", Orch: "claude-code", Driver: "lima"}
+	require.NoError(t, state.Driver.WriteLabRef(context.Background(), "taxiway-demo", ref))
+	bin := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(bin, "limactl"), []byte(`#!/bin/sh
+case "$1" in
+  list)
+    if [ "$2" = '--format={{.Name}}' ]; then printf 'taxiway-demo\n'; else printf 'taxiway-demo Running\n'; fi
+    ;;
+  start) exit 0 ;;
+  shell) printf 'guest SSH unavailable\n' >&2; exit 7 ;;
+esac
+`), 0o755))
+	t.Setenv("PATH", bin)
+	_, _, err := execRoot(t, root, stdout, stderr, "create", "demo")
+	require.ErrorContains(t, err, "guest SSH unavailable")
+	_, err = os.Stat(phases.Dir(state.Flags.StateDir, "taxiway-demo"))
+	require.True(t, os.IsNotExist(err), "a running but unready VM must not gain a create phase marker")
+}
+
 func TestStop(t *testing.T) {
 	root, state, stdout, stderr := buildTestRoot(t)
 	createCLITestLab(t, state, "gastown")

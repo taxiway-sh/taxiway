@@ -242,6 +242,27 @@ change concerns model calls. A Running VM or a smoke marker alone does not
 qualify affected product behavior; select/enrich the relevant assertions and
 record actual execution or its limitation. General creation stalls remain #99.
 
+## Lima startup and readiness retry
+
+Build the worktree CLI and run the provider-free native scenario explicitly:
+
+```bash
+go build -o taxiway ./cmd/taxiway
+direnv exec . python3 tests/live/test_lima_startup.py --driver lima
+```
+
+One temporary VM checks fresh guest readiness, a Running VM with unfinished boot
+scripts, successful readiness retry, and stop/start recovery. The scenario restores
+the native boot marker in `finally`, checks that failed readiness does not mark
+creation complete, and verifies owned cleanup and unrelated VM preservation.
+Setup is bounded to 300 seconds by default (`--setup-timeout`); guest commands,
+retries and cleanup have separate bounds. It uses the existing live helpers and
+does not access reference credentials or make model calls.
+
+Reports include the Git revision, completed behavior and cleanup. Captured output
+is withheld. A successful run qualifies these behaviors on that host; it does not
+establish the cause or absence of intermittent Lima startup stalls on other hosts.
+
 ## Add a scenario
 
 Place a script under `tests/live/` and import these helpers:

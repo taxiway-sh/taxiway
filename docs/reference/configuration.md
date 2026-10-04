@@ -74,10 +74,17 @@ TAXIWAY_LIMA_START_TIMEOUT=20m taxiway up mylab --driver lima
 ```
 
 The value must be a positive duration such as `90s` or `20m`. Taxiway passes it
-to Lima and bounds the startup process, honoring an earlier caller deadline or
-cancellation. On failure, the error includes Lima's output and the instance
-name. A timeout does not delete the VM; inspect it with `limactl list` before
-retrying or removing the lab.
+to Lima and bounds startup plus guest readiness/preparation, honoring an earlier
+caller deadline or cancellation. Native Lima progress appears while startup runs.
+On failure, the error retains a bounded output tail, the last reported readiness
+stage and the instance name. A timeout does not delete the VM; inspect that
+instance with the suggested `limactl list` command before retrying or removing it.
+
+`Running` alone does not prove the guest is ready. Retrying `taxiway create` checks
+SSH execution and Lima's native boot-completion marker before marking creation
+complete. If boot scripts are unfinished, the retry reports that stage and keeps
+the partial lab available for inspection or a later retry. Use
+`taxiway rm <lab> --yes` for targeted cleanup when it is no longer needed.
 
 ## Gateway
 
