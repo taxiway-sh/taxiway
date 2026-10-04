@@ -25,4 +25,10 @@ func TestEnsurePlayerWritesIndexHTML(t *testing.T) {
 	require.Contains(t, html, "cast_path_host")
 	require.Contains(t, html, "split(\"/\")")
 	require.Contains(t, html, `fit: "width"`)
+	require.NotContains(t, html, "https://")
+	for _, asset := range []string{"asciinema-player.min.js", "asciinema-player.css", "LICENSE"} {
+		data, err := os.ReadFile(filepath.Join(store.Dir(), "player", asset))
+		require.NoError(t, err)
+		require.NotEmpty(t, data)
+	}
 }

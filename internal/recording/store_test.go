@@ -2,6 +2,7 @@ package recording
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,7 +30,8 @@ func TestNewIDValidatesName(t *testing.T) {
 
 	id, err := NewID(time.Date(2026, 5, 20, 10, 0, 0, 0, time.UTC), "demo")
 	require.NoError(t, err)
-	require.Equal(t, "20260520-100000-demo", id)
+	require.True(t, strings.HasPrefix(id, "20260520-100000-demo-"))
+	require.NoError(t, ValidateName(id))
 }
 
 func TestStoreDir(t *testing.T) {
@@ -63,4 +65,17 @@ func TestIndexRemoveByNameRemovesFirstMatchingName(t *testing.T) {
 	require.Equal(t, "first", session.ID)
 	require.Len(t, idx.Sessions, 1)
 	require.Equal(t, "second", idx.Sessions[0].ID)
+}
+
+func TestNewIDDistinctStartsWithinOneSecond(t *testing.T) {
+	now := time.Date(2026, 10, 4, 11, 0, 0, 1, time.UTC)
+	first, err := NewID(now, "demo")
+	require.NoError(t, err)
+	second, err := NewID(now, "demo")
+	require.NoError(t, err)
+	third, err := NewID(now.Add(time.Millisecond), "demo")
+	require.NoError(t, err)
+	require.NotEqual(t, first, second)
+	require.NotEqual(t, first, third)
+	require.NoError(t, ValidateName(first))
 }
