@@ -39,6 +39,10 @@ The preset passes this root as a launcher argument so it survives `gt handoff`.
 On every launch, including handoff, the launcher reloads the managed Lab gateway
 configuration from `~/.config/taxiway/env`. Gateway credentials are not placed
 in command arguments, and missing gateway configuration stops the launch.
+The launcher also reloads the selected Claude authentication mode. In
+`auth_mode=api-key`, every role and handoff receives the gateway key as the
+native `ANTHROPIC_AUTH_TOKEN` credential. Subscription mode clears that managed
+override and uses the saved native OAuth login.
 This does not change Codex configuration or other Claude permission dialogs.
 
 ## Settings

@@ -50,6 +50,7 @@ claude_code_write_env() (
         printf '# Managed by Taxiway. Change with --set / --clear-set.\n'
         printf 'export ENABLE_TOOL_SEARCH=%q\n' "$1"
         printf 'export ENABLE_CLAUDEAI_MCP_SERVERS=%q\n' "$2"
+        printf 'export TAXIWAY_CLAUDE_AUTH_MODE=%q\n' "${TAXIWAY_SET_AUTH_MODE:-subscription}"
         for name in ANTHROPIC_DEFAULT_OPUS_MODEL ANTHROPIC_DEFAULT_SONNET_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL ANTHROPIC_DEFAULT_FABLE_MODEL; do
             if [[ -n "${!name:-}" ]]; then
                 printf 'export %s=%q\n' "$name" "${!name}"
@@ -104,6 +105,13 @@ claude_code_load_env() {
         unset TAXIWAY_PINNED_CLAUDE_CODE_VERSION DISABLE_AUTOUPDATER
         # shellcheck disable=SC1091
         source "$HOME/.config/taxiway/agents/claude-code.env"
+        # Native gateway credentials replace OAuth only in the selected API
+        # mode. A mode change must also clear a stale token inherited by tmux.
+        if [[ "${TAXIWAY_CLAUDE_AUTH_MODE:-subscription}" == api-key ]]; then
+            export ANTHROPIC_AUTH_TOKEN="${TAXIWAY_LITELLM_API_KEY:?Missing Taxiway gateway key}"
+        else
+            unset ANTHROPIC_AUTH_TOKEN
+        fi
         if [[ -n "${TAXIWAY_PINNED_CLAUDE_CODE_VERSION:-}" ]]; then
             source "$(dirname "${BASH_SOURCE[0]}")/../../infra/agents/npm-agent.sh"
             npm_agent_verify_version claude-code claude-code-version "$TAXIWAY_PINNED_CLAUDE_CODE_VERSION" "$(claude --version | awk 'NR == 1 { print $1 }')" "$(command -v claude)" || return 1

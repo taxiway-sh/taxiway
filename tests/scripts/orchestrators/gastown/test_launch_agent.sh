@@ -66,6 +66,17 @@ class TrustExecTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout, expected)
 
+    def test_handoff_reloads_native_gateway_auth_mode(self):
+        settings = self.user_home / ".config/taxiway/agents/claude-code.env"
+        settings.parent.mkdir(parents=True)
+        self.env["ANTHROPIC_AUTH_TOKEN"] = "stale-gateway-key"
+        program = 'import os; print(os.environ.get("ANTHROPIC_AUTH_TOKEN", "unset"))'
+        for mode, expected in [("api-key", "test-only-key"), ("subscription", "unset")]:
+            settings.write_text("export TAXIWAY_CLAUDE_AUTH_MODE=" + mode + "\n")
+            result = self.run_hook([sys.executable, "-c", program])
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, expected + "\n")
+
     def test_exec_trusts_actual_cwd_and_preserves_args_env_pid_and_exit(self):
         link = self.base / "workspace-link"
         link.symlink_to(self.workspace, target_is_directory=True)

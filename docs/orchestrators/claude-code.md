@@ -19,6 +19,12 @@ through LiteLLM. The lab only needs the LiteLLM gateway key as a secret; endpoin
 and model routing are orchestrator configuration. Run `taxiway observe up`
 separately when you also want Langfuse traces.
 
+With `--set auth_mode=api-key`, the launcher supplies the lab's gateway key as
+the native `ANTHROPIC_AUTH_TOKEN` credential. LiteLLM holds the provider
+credentials. Interactive first-run onboarding is still required. In
+`auth_mode=subscription`, Claude uses its native OAuth login; switching back
+clears the managed gateway token from the launcher environment.
+
 For direct OAuth login, run:
 
 ```bash
