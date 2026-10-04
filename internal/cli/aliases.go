@@ -528,10 +528,8 @@ func newResetCmd(state *RootState) *cobra.Command {
 			ctx := context.Background()
 			id := idName(a[0])
 			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
-			if !state.Flags.DryRun {
-				if err := phases.ClearAll(stateDir, id); err != nil {
-					return err
-				}
+			if !state.Flags.DryRun && !yes {
+				return fmt.Errorf("reset requires --yes: interactive confirmation is not supported")
 			}
 			ref, err := loadLabRef(ctx, state, id)
 			if err != nil {
@@ -546,11 +544,10 @@ func newResetCmd(state *RootState) *cobra.Command {
 				plan.Finish()
 				return nil
 			}
-			var env map[string]string
-			if yes {
-				env = map[string]string{"LAB_RESET_YES": "1"}
+			if err := execScriptWithRef(ctx, state, ref, config.ResetScript(state.RepoDir), map[string]string{"LAB_RESET_YES": "1"}); err != nil {
+				return err
 			}
-			return execScriptWithRef(ctx, state, ref, config.ResetScript(state.RepoDir), env)
+			return phases.ClearAll(stateDir, id)
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompt")

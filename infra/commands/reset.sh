@@ -26,10 +26,10 @@ fi
 echo "This will delete the contents of: $target"
 
 if [ "${LAB_RESET_YES:-}" != "1" ]; then
-  read -r -p "Proceed? [y/N] " reply
+  read -r -p "Proceed? [y/N] " reply || reply=""
   case "$reply" in
     y|Y|yes|YES) ;;
-    *) echo "Aborted."; exit 1;;
+    *) echo "Aborted."; exit 0;;
   esac
 fi
 
