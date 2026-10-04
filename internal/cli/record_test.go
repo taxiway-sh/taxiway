@@ -113,6 +113,7 @@ func TestRecordStartUsesDefaultShellTarget(t *testing.T) {
 	require.Contains(t, out, "walkthrough")
 	require.Contains(t, joinedCommands(commands), "tmux has-session -t sampleorch")
 	require.Contains(t, joinedCommands(commands), "asciinema rec")
+	require.NotContains(t, joinedCommands(commands), "=taxiway-record-")
 	require.Contains(t, joinedCommands(commands), "tmux attach-session -f read-only,ignore-size -t sampleorch")
 	require.Contains(t, joinedCommands(commands), "/lab/recordings/")
 	require.Contains(t, joinedCommands(commands), "test -d '/lab/recordings'")

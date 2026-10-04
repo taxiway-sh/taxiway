@@ -1382,7 +1382,7 @@ func startRecordingProcess(ctx context.Context, d driver.Driver, id string, targ
 	if target.RequiresTmux && target.SessionName != "" {
 		attachCommand = "tmux attach-session -f read-only,ignore-size -t " + target.SessionName
 	}
-	attachCommand = "tmux set-option -t " + shellQuote("="+recorderSession) + " @taxiway-recorder-client \"$(tty)\" && exec " + attachCommand
+	attachCommand = "tmux set-option -t " + shellQuote(recorderSession) + " @taxiway-recorder-client \"$(tty)\" && exec " + attachCommand
 	resizeTargetCmd := ""
 	if target.RequiresTmux && target.SessionName != "" {
 		resizeTargetCmd = fmt.Sprintf(
@@ -1448,7 +1448,7 @@ func stopRecordingProcess(ctx context.Context, d driver.Driver, id, recorderSess
 		}
 		if !detached {
 			var client bytes.Buffer
-			res, err := d.Exec(ctx, id, driver.ExecRequest{Argv: []string{"tmux", "show-option", "-qv", "-t", "=" + recorderSession, "@taxiway-recorder-client"}, Stdout: &client})
+			res, err := d.Exec(ctx, id, driver.ExecRequest{Argv: []string{"tmux", "show-option", "-qv", "-t", recorderSession, "@taxiway-recorder-client"}, Stdout: &client})
 			if err != nil {
 				return fmt.Errorf("find recorder client: %w", err)
 			}

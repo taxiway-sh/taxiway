@@ -1511,13 +1511,27 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 
 	runE2EStep(t, "record:recorder-client-live", func(t *testing.T) {
 		session := requireE2ERecordingSession(t, state, lab, recordName)
+		t.Cleanup(func() {
+			if !t.Failed() {
+				return
+			}
+			data, err := os.ReadFile(session.CastPathHost)
+			if err != nil {
+				t.Logf("recorder diagnostic: cast unreadable: %v", err)
+				return
+			}
+			if len(data) > 2048 {
+				data = data[:2048]
+			}
+			t.Logf("recorder diagnostic (bounded fixture cast): %s", data)
+		})
 		require.Eventually(t, func() bool {
 			res, err := state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "has-session", "-t", "=" + session.RecorderSession}})
 			if err != nil || res.ExitCode != 0 {
 				return false
 			}
 			var tty, clients bytes.Buffer
-			res, err = state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "show-option", "-qv", "-t", "=" + session.RecorderSession, "@taxiway-recorder-client"}, Stdout: &tty})
+			res, err = state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "show-option", "-qv", "-t", session.RecorderSession, "@taxiway-recorder-client"}, Stdout: &tty})
 			if err != nil || res.ExitCode != 0 || strings.TrimSpace(tty.String()) == "" {
 				return false
 			}
