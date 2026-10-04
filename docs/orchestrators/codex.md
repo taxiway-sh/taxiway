@@ -33,10 +33,11 @@ receive `TAXIWAY_LITELLM_API_KEY` and talk to LiteLLM.
 
 ## Settings
 
-The adapter exposes this setting through `--set`:
+The adapter exposes these settings through `--set`:
 
 | Setting | Description | Default |
 |---|---|---|
+| `codex-version` | Codex CLI release: `latest` or an exact release | `latest` |
 | `model` | Codex model name passed through LiteLLM | `gpt-6.1-sol` |
 
 The model name should match a Codex model name declared in LiteLLM, such as
@@ -49,6 +50,32 @@ taxiway start mylab --clear-set model
 
 Settings persist with the lab; `--clear-set` restores the default.
 `taxiway start` restarts the Codex session with the updated settings.
+
+### Agent Version
+
+`codex-version` selects the Codex CLI release installed in the lab. It is
+independent of `model`, which selects the LLM.
+
+| Value | Behavior |
+|---|---|
+| omitted or `latest` | Install the latest release in a fresh lab; keep whatever release is already installed afterwards. Not an immutable pin. |
+| exact release, e.g. `0.160.0` | Install exactly this release of `@openai/codex`, upgrading or downgrading an existing installation. Codex runs with `check_for_update_on_startup = false` so it does not offer to replace itself. |
+
+```bash
+taxiway up mylab --type codex --set codex-version=0.160.0
+taxiway install mylab --set codex-version=<other-release>
+taxiway install mylab --clear-set codex-version
+```
+
+The pin persists with the lab, so stop/start, phase resumes, and reinstalls use
+the same release. Changing it reinstalls the agent without touching the
+workspace or credentials. Clearing it returns to `latest` and keeps the
+installed release.
+
+Only `latest` and exact releases are accepted; ranges and other npm tags are
+rejected. An unknown release fails the install phase without falling back to
+another release. The verify phase prints `codex --version`; for an unpinned lab,
+use that release to pin the same one in another lab.
 
 ## Agent CLI
 
@@ -64,3 +91,9 @@ OAuth credentials are available, without making an API call.
 ```bash
 taxiway describe codex
 ```
+
+`taxiway list <lab>` shows the requested harness version and the last observed
+installed release and executable path. Installation and `taxiway verify <lab>`
+refresh that observation in the lab's `agent-versions.json` state; the requested
+version remains in its saved settings. Verification fails if the executable on
+the launch PATH differs from an exact pin.

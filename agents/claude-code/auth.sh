@@ -32,6 +32,15 @@ fi
 CLAUDE="$(command -v claude || true)"
 [ -n "$CLAUDE" ] || fail "claude not found - run: taxiway install <lab>"
 
+# shellcheck source=env.sh
+source "$(dirname "${BASH_SOURCE[0]}")/env.sh"
+claude_code_write_update_policy
+if claude_code_version_pinned "${TAXIWAY_SET_CLAUDE_CODE_VERSION:-}"; then
+    export DISABLE_AUTOUPDATER=1
+    source "$(dirname "${BASH_SOURCE[0]}")/../../infra/agents/npm-agent.sh"
+    npm_agent_verify_version claude-code claude-code-version "$TAXIWAY_SET_CLAUDE_CODE_VERSION" "$("$CLAUDE" --version | awk 'NR == 1 { print $1 }')" "$CLAUDE"
+fi
+
 case "${TAXIWAY_AUTH_MODE:-subscription}" in
   api-key)
     if [ -n "${TAXIWAY_LITELLM_API_KEY:-}" ]; then

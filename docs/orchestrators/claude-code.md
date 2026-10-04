@@ -36,6 +36,7 @@ The adapter exposes these settings through `--set`:
 
 | Setting | Description | Default |
 |---|---|---|
+| `claude-code-version` | Claude Code CLI release: `latest` or an exact release | `latest` |
 | `model` | Claude Code model name passed through LiteLLM | `claude-opus-5-5` |
 | `tool-search` | Load MCP tool definitions on demand: `true`, `false`, `auto`, or `auto:N` | `true` |
 | `claudeai-mcp-servers` | Import Claude.ai connectors: `true` or `false` | `false` |
@@ -53,6 +54,35 @@ taxiway start mylab --clear-set claudeai-mcp-servers
 Settings persist with the lab; `--clear-set` restores the default.
 `taxiway start` restarts the Claude Code session with the updated settings.
 
+### Agent Version
+
+`claude-code-version` selects the Claude Code CLI release installed in the lab. It is
+independent of `model`, which selects the LLM.
+
+| Value | Behavior |
+|---|---|
+| omitted or `latest` | Install the latest release in a fresh lab; keep whatever release is already installed afterwards. Not an immutable pin. |
+| exact release, e.g. `2.1.288` | Install exactly this release of `@anthropic-ai/claude-code`, upgrading or downgrading an existing installation. Claude Code launches, including authentication, run with `DISABLE_AUTOUPDATER=1` so the release cannot change itself. |
+
+```bash
+taxiway up mylab --type claude-code --set claude-code-version=2.1.288
+taxiway install mylab --set claude-code-version=<other-release>
+taxiway install mylab --clear-set claude-code-version
+```
+
+The pin persists with the lab, so stop/start, phase resumes, and reinstalls use
+the same release. Changing it reinstalls the agent without touching the
+workspace or credentials. Clearing it returns to `latest` and keeps the
+installed release.
+
+Only `latest` and exact releases are accepted; ranges and other npm tags are
+rejected. An unknown release fails the install phase without falling back to
+another release. The verify phase prints `claude --version`; for an unpinned lab,
+use that release to pin the same one in another lab.
+
+The gateway model catalog requires Claude Code 2.1.284 or newer (see
+[Gateway](../how-to/gateway.md)); start fails with an older pin.
+
 ## Agent CLI
 
 The adapter uses the `claude-code` agent, which installs the npm package
@@ -64,3 +94,9 @@ auth configuration readability without making an API call.
 ```bash
 taxiway describe claude-code
 ```
+
+`taxiway list <lab>` shows the requested harness version and the last observed
+installed release and executable path. Installation and `taxiway verify <lab>`
+refresh that observation in the lab's `agent-versions.json` state; the requested
+version remains in its saved settings. Verification fails if the executable on
+the launch PATH differs from an exact pin.

@@ -1,9 +1,46 @@
 #!/usr/bin/env bash
 # The orchestrator resolves its settings; this helper only stores and reloads
 # the resulting environment for Claude Code launches and handoffs.
+
+# claude_code_version_pinned <claude-code-version>
+# A pinned Claude Code must not replace itself with another release.
+claude_code_version_pinned() {
+    [[ -n "${1:-}" && "$1" != "latest" ]]
+}
+
+# The common environment is already sourced by guest login shells. Keep the
+# agent's update policy in its own managed block, preserving gateway settings.
+claude_code_write_update_policy() {
+    local pinned=false
+    if claude_code_version_pinned "${TAXIWAY_SET_CLAUDE_CODE_VERSION:-}"; then
+        pinned=true
+    fi
+    python3 - "$pinned" <<'POLICY_PY'
+import os, pathlib, re, sys, tempfile
+path = pathlib.Path.home() / '.config/taxiway/env'
+path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+os.chmod(path.parent, 0o700)
+start = '# >>> taxiway agent-version scope=claude-code'
+end = '# <<< taxiway agent-version scope=claude-code'
+existing = path.read_text() if path.exists() else ''
+existing = re.sub(r'(?m)^' + re.escape(start) + r'\n.*?^' + re.escape(end) + r'\n?', '', existing, flags=re.S).rstrip('\n')
+block = start + '\nDISABLE_AUTOUPDATER=1\n' + end if sys.argv[1] == 'true' else ''
+content = '\n\n'.join(part for part in (existing, block) if part) + '\n'
+fd, name = tempfile.mkstemp(prefix='.version-policy-', dir=path.parent)
+try:
+    with os.fdopen(fd, 'w') as output:
+        output.write(content)
+    os.chmod(name, 0o600)
+    os.replace(name, path)
+finally:
+    if os.path.exists(name): os.unlink(name)
+POLICY_PY
+}
+
 claude_code_write_env() (
     set -euo pipefail
     umask 077
+    claude_code_write_update_policy
     settings_dir="$HOME/.config/taxiway/agents"
     mkdir -p "$settings_dir"
     chmod 700 "$settings_dir"
@@ -18,6 +55,10 @@ claude_code_write_env() (
                 printf 'export %s=%q\n' "$name" "${!name}"
             fi
         done
+        if claude_code_version_pinned "${TAXIWAY_SET_CLAUDE_CODE_VERSION:-}"; then
+            printf 'export TAXIWAY_PINNED_CLAUDE_CODE_VERSION=%q\n' "$TAXIWAY_SET_CLAUDE_CODE_VERSION"
+            printf 'export DISABLE_AUTOUPDATER=1\n'
+        fi
     } > "$settings_tmp"
     mv -f "$settings_tmp" "$settings_dir/claude-code.env"
     if [[ -n "${TAXIWAY_CLAUDE_AVAILABLE_MODELS:-}" ]]; then
@@ -60,7 +101,12 @@ PY
 
 claude_code_load_env() {
     if [[ -f "$HOME/.config/taxiway/agents/claude-code.env" ]]; then
+        unset TAXIWAY_PINNED_CLAUDE_CODE_VERSION DISABLE_AUTOUPDATER
         # shellcheck disable=SC1091
         source "$HOME/.config/taxiway/agents/claude-code.env"
+        if [[ -n "${TAXIWAY_PINNED_CLAUDE_CODE_VERSION:-}" ]]; then
+            source "$(dirname "${BASH_SOURCE[0]}")/../../infra/agents/npm-agent.sh"
+            npm_agent_verify_version claude-code claude-code-version "$TAXIWAY_PINNED_CLAUDE_CODE_VERSION" "$(claude --version | awk 'NR == 1 { print $1 }')" "$(command -v claude)" || return 1
+        fi
     fi
 }

@@ -7,6 +7,7 @@
 
 set -euo pipefail
 
+
 # shellcheck source=../../infra/trace/events.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../../infra/trace/events.sh" 2>/dev/null || true
 # shellcheck source=../../infra/commands/steps.sh
@@ -19,6 +20,8 @@ if [ -f "${HOME}/.config/taxiway/env" ]; then
     set +a
 fi
 
+# shellcheck source=../../agents/codex/env.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../agents/codex/env.sh"
 log()  { printf '\n\033[1;34m[codex-start]\033[0m %s\n' "$*"; }
 pass() { printf '  \033[1;32mOK\033[0m   %s\n' "$*"; }
 
@@ -46,6 +49,12 @@ if taxiway_is_plan; then
 fi
 
 lab_emit_event phase start
+
+if [[ -n "${TAXIWAY_SET_CODEX_VERSION:-}" && "$TAXIWAY_SET_CODEX_VERSION" != latest ]]; then
+    source "$(dirname "${BASH_SOURCE[0]}")/../../infra/agents/npm-agent.sh"
+    npm_agent_verify_version codex codex-version "$TAXIWAY_SET_CODEX_VERSION" "$(codex --version | awk 'NR == 1 { print $NF }')" "$(command -v codex)"
+fi
+
 
 # Use TAXIWAY_WORKSPACE_DIR as the working directory if set and exists.
 # Without a cloned repo, start in /lab/work rather than $HOME so the session
@@ -78,15 +87,17 @@ tmp_config="$(mktemp)"
 {
     printf 'model_provider = "taxiway-litellm"\n'
     printf 'model = "%s"\n' "$CODEX_MODEL"
+    codex_update_policy_config "${TAXIWAY_SET_CODEX_VERSION:-latest}"
     printf '\n'
 } > "$tmp_config"
 if [ -f "$CODEX_CONFIG" ]; then
     awk '
         /^\[model_providers\.taxiway-litellm\]$/ { skip=1; next }
-        /^\[/ { skip=0 }
+        /^\[/ { skip=0; top=1 }
         skip { next }
         /^model_provider = / { next }
         /^model = / { next }
+        !top && /^check_for_update_on_startup = / { next }
         { print }
     ' "$CODEX_CONFIG" >> "$tmp_config"
 fi

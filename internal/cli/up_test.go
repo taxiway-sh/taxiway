@@ -2281,3 +2281,40 @@ func TestBuildBaseEnv_CrewName_FailFast(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "injected: cannot resolve username")
 }
+
+func TestVersionChangeFailureInvalidatesCachedInstallForResume(t *testing.T) {
+	root, state, mock, out, errOut := buildUpTestRoot(t)
+	ref := config.LabRef{Lab: "gastown", Orch: "gastown", Driver: "mock", Settings: map[string]string{"claude-code-version": "1.0.0"}}
+	require.NoError(t, mock.Create(context.Background(), idName(ref.Lab), driver.CreateOptions{}))
+	require.NoError(t, mock.WriteLabRef(context.Background(), idName(ref.Lab), ref))
+	for _, phase := range phases.Order {
+		require.NoError(t, phases.Mark(state.Flags.StateDir, idName(ref.Lab), phase))
+	}
+	mock.FailExec["install.sh"] = errors.New("release unavailable")
+	_, _, err := execUpRoot(t, root, out, errOut, "up", ref.Lab, "--set", "claude-code-version=2.0.0", "--prepare-only")
+	require.ErrorContains(t, err, "release unavailable")
+	require.False(t, phases.Done(state.Flags.StateDir, idName(ref.Lab), phases.PhaseInstall))
+	require.True(t, phases.Done(state.Flags.StateDir, idName(ref.Lab), phases.PhaseWorkspace), "workspace must be retained")
+	delete(mock.FailExec, "install.sh")
+	mock.ExecLog = nil
+	_, _, err = execUpRoot(t, root, out, errOut, "up", ref.Lab, "--prepare-only")
+	require.NoError(t, err)
+	require.Contains(t, mock.ExecLog, "install.sh")
+}
+
+func TestVersionChangeUsesPersistedLabDriver(t *testing.T) {
+	_, state, _, _, _ := buildUpTestRoot(t)
+	bin := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(bin, "docker"), []byte("#!/bin/sh\nexit 0\n"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(bin, "limactl"), []byte("#!/bin/sh\nexit 1\n"), 0755))
+	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
+	state.Driver = driver.NewLimaDriver(state.Flags.StateDir)
+	ref := config.LabRef{Lab: "pinned", Orch: "codex", Driver: "docker", Settings: map[string]string{"codex-version": "0.159.0"}}
+	require.NoError(t, config.WriteLabRef(state.Flags.StateDir, idName(ref.Lab), ref))
+	_, err := applySettingsFromFlags(context.Background(), state, idName(ref.Lab), &ref, []string{"codex-version=0.160.0"}, nil)
+	require.NoError(t, err)
+	saved, ok, err := config.ReadLabRef(state.Flags.StateDir, idName(ref.Lab))
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, "0.160.0", saved.Settings["codex-version"])
+}

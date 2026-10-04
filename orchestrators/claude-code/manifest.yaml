@@ -4,6 +4,15 @@ docs_url: https://docs.anthropic.com/en/docs/claude-code
 agents:
   - claude-code
 settings:
+  - name: claude-code-version
+    description: Claude Code CLI release installed in the Lab; latest keeps the installed release, an exact release is installed and protected from self-updates.
+    default: latest
+    examples:
+      - "2.1.288"
+      - latest
+    phases:
+      - install
+      - start
   - name: model
     description: Full Claude Code model name passed with --model and resolved by LiteLLM.
     default: claude-opus-5-5

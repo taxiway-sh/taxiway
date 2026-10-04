@@ -58,6 +58,9 @@ func printList(ctx context.Context, state *RootState, w io.Writer, onlyLabs ...s
 		return nil
 	}
 	printLabListTable(w, rows)
+	if len(onlyLabs) > 0 {
+		return printAgentVersions(w, stateDir, onlyLabs[0])
+	}
 	return nil
 }
 
@@ -464,6 +467,8 @@ func execScriptToWithRefMode(ctx context.Context, state *RootState, ref config.L
 		}
 	}
 	defer closer()
+	versions := &versionSink{}
+	evSink = event.NewMultiSink(evSink, versions)
 
 	// Translate host path to lab path (e.g. <repo>/infra/commands/bootstrap.sh → /lab/infra/commands/bootstrap.sh).
 	labScript, err := hostScriptToLab(state.RepoDir, scriptPath)
@@ -521,6 +526,9 @@ func execScriptToWithRefMode(ctx context.Context, state *RootState, ref config.L
 	}
 	if res.ExitCode != 0 {
 		return fmt.Errorf("script exited with code %d", res.ExitCode)
+	}
+	if !state.Flags.DryRun {
+		return versions.persist(stateDir, id)
 	}
 	return nil
 }
