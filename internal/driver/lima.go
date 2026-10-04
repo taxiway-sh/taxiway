@@ -43,11 +43,7 @@ func (l *LimaDriver) Exists(_ context.Context, id string) (bool, error) {
 }
 
 func (l *LimaDriver) Running(ctx context.Context, id string) (bool, error) {
-	exists, err := l.Exists(ctx, id)
-	if !exists || err != nil {
-		return false, err
-	}
-	out, err := exec.Command("limactl", "list", "--format={{.Name}} {{.Status}}").Output()
+	out, err := exec.CommandContext(ctx, "limactl", "list", "--format={{.Name}} {{.Status}}").Output()
 	if err != nil {
 		return false, err
 	}

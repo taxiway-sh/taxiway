@@ -442,3 +442,13 @@ func findRepoRoot(t *testing.T) string {
 		dir = parent
 	}
 }
+
+func TestLimaRunningPropagatesInspectionFailure(t *testing.T) {
+	installFakeLimactl(t, `#!/bin/sh
+ echo 'limactl list unavailable' >&2
+ exit 1
+ `)
+	running, err := NewLimaDriver(t.TempDir()).Running(context.Background(), "taxiway-demo")
+	require.Error(t, err)
+	require.False(t, running)
+}

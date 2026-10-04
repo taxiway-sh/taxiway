@@ -57,6 +57,14 @@ Or stop a recording by name:
 taxiway record stop mylab --name delivery-run
 ```
 
+If the recorder session has disappeared or the lab is stopped, `record stop`
+reconciles the index and preserves the cast file. `record rm --force` can also
+recover these entries, but removes the cast. Inspection or transport failures
+leave the entry active so they can be retried safely.
+
+Recording entries are saved before the recorder starts. If a start fails, use
+`record stop` to recover the entry before starting another recording.
+
 Stopped recordings can be listed, replayed in the browser player, analyzed, or
 removed.
 
