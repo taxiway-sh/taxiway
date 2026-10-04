@@ -108,18 +108,12 @@ func (l *LimaDriver) Create(ctx context.Context, id string, opts CreateOptions) 
 	if err := l.startInstance(ctx, id, "--name="+id, yamlPath); err != nil {
 		return err
 	}
-	if err := l.prepareInternalDirs(ctx, id); err != nil {
-		return err
-	}
 	_ = config.EnsureCreatedAt(l.stateDir, id)
 	return nil
 }
 
 func (l *LimaDriver) Start(ctx context.Context, id string) error {
-	if err := l.startInstance(ctx, id, id); err != nil {
-		return err
-	}
-	return l.prepareInternalDirs(ctx, id)
+	return l.startInstance(ctx, id, id)
 }
 
 // startInstance applies the same startup policy on every host, for both new
@@ -139,14 +133,47 @@ func (l *LimaDriver) startInstance(ctx context.Context, id string, args ...strin
 	cmd := exec.CommandContext(ctx, "limactl", append([]string{"start", "--timeout=" + timeout.String()}, args...)...)
 	// Do not wait forever for output pipes inherited by Lima subprocesses.
 	cmd.WaitDelay = time.Second
-	out, err := cmd.CombinedOutput()
+	output := limaStartupOutput{stage: "not reported"}
+	stream := io.MultiWriter(os.Stderr, &output)
+	cmd.Stdout, cmd.Stderr = stream, stream
+	err := cmd.Run()
 	if err == nil {
-		return nil
+		return l.prepareInternalDirs(ctx, id)
 	}
 	if ctx.Err() != nil {
 		err = ctx.Err()
 	}
-	return fmt.Errorf("lima: start %s (timeout %s): %w\n%s\nInspect the instance with: limactl list", id, timeout, err, strings.TrimSpace(string(out)))
+	return fmt.Errorf("lima: start %s (timeout %s, last readiness stage: %s): %w\n%s\nInspect the instance with: limactl list %s", id, timeout, output.stage, err, strings.TrimSpace(string(output.tail)), id)
+}
+
+// Retain bounded failure context while forwarding native progress immediately.
+type limaStartupOutput struct {
+	tail  []byte
+	stage string
+	line  []byte
+}
+
+func (o *limaStartupOutput) Write(p []byte) (int, error) {
+	const limit = 16 * 1024
+	if len(p) >= limit {
+		o.tail = append(o.tail[:0], p[len(p)-limit:]...)
+	} else {
+		o.tail = append(o.tail, p...)
+		if len(o.tail) > limit {
+			o.tail = o.tail[len(o.tail)-limit:]
+		}
+	}
+	for _, b := range p {
+		if b == '\n' {
+			if strings.Contains(string(o.line), "Waiting for") {
+				o.stage = string(o.line)
+			}
+			o.line = o.line[:0]
+		} else if len(o.line) < 512 {
+			o.line = append(o.line, b)
+		}
+	}
+	return len(p), nil
 }
 
 func (l *LimaDriver) Stop(_ context.Context, id string) error {
@@ -349,8 +376,12 @@ func (l *LimaDriver) Exec(ctx context.Context, id string, req ExecRequest) (Exec
 
 func (l *LimaDriver) prepareInternalDirs(ctx context.Context, id string) error {
 	cmd := exec.CommandContext(ctx, "limactl", "shell", "--workdir=/", id, "--", "sh", "-c",
-		`sudo mkdir -p /lab/work && sudo chown "$(id -u):$(id -g)" /lab/work`)
+		`test -s /run/lima-boot-done || { printf 'Lima boot scripts have not finished\n' >&2; exit 1; }; sudo mkdir -p /lab/work && sudo chown "$(id -u):$(id -g)" /lab/work`)
+	cmd.WaitDelay = time.Second
 	if out, err := cmd.CombinedOutput(); err != nil {
+		if ctx.Err() != nil {
+			err = ctx.Err()
+		}
 		return fmt.Errorf("lima: prepare internal dirs for %s: %w\n%s", id, err, out)
 	}
 	return nil
