@@ -1492,10 +1492,25 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 		})
 	})
 
+	runE2EStep(t, "record:nondefault-prefix", func(t *testing.T) {
+		res, err := state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "set-option", "-g", "prefix", "C-a"}})
+		require.NoError(t, err)
+		require.Zero(t, res.ExitCode)
+	})
+	t.Cleanup(func() {
+		_, _ = state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "set-option", "-g", "prefix", "C-b"}})
+	})
 	runE2EStep(t, "taxiway:record[stop]", func(t *testing.T) {
 		out := runE2ECommand(t, root, tb, "record", "stop", lab)
 		runE2EAssert(t, "assert:recording-stopped", func(t *testing.T) {
 			require.Contains(t, out, "Recording stopped: "+recordName)
+			session := requireE2ERecordingSession(t, state, lab, recordName)
+			res, err := state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "has-session", "-t", "=" + session.RecorderSession}})
+			require.NoError(t, err)
+			require.NotZero(t, res.ExitCode)
+			res, err = state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "has-session", "-t", "=" + orch}})
+			require.NoError(t, err)
+			require.Zero(t, res.ExitCode)
 			require.Contains(t, out, ".cast")
 		})
 	})
@@ -1516,6 +1531,57 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 		})
 	})
 
+	runE2EStep(t, "record:ambiguous-name-and-id", func(t *testing.T) {
+		time.Sleep(1100 * time.Millisecond) // IDs include seconds; create a distinct second run.
+		first := requireE2ERecordingSession(t, state, lab, recordName)
+		runE2ECommand(t, root, tb, "record", "start", lab, "--name", recordName)
+		runE2ECommand(t, root, tb, "record", "stop", lab, "--name", recordName)
+		store := recording.NewStore(config.StateDir(state.Flags.StateDir, state.RepoDir), lab)
+		idx, err := store.Load()
+		require.NoError(t, err)
+		require.Len(t, idx.Sessions, 2)
+		latest := idx.Sessions[1]
+		require.NotEqual(t, first.ID, latest.ID)
+		_, _, err = execDockerRoot(t, root, tb, "record", "rm", lab, "--name", recordName)
+		require.ErrorContains(t, err, "ambiguous")
+		require.FileExists(t, first.CastPathHost)
+		require.FileExists(t, latest.CastPathHost)
+		out := runE2ECommand(t, root, tb, "record", "list", lab)
+		require.Contains(t, out, latest.ID)
+		runE2ECommand(t, root, tb, "record", "rm", lab, "--id", latest.ID)
+		require.NoFileExists(t, latest.CastPathHost)
+		require.FileExists(t, first.CastPathHost)
+	})
+	runE2EStep(t, "record:global-list-corrupt-lab", func(t *testing.T) {
+		bad := recording.NewStore(config.StateDir(state.Flags.StateDir, state.RepoDir), "e2e-corrupt-index")
+		require.NoError(t, bad.Save(recording.Index{}))
+		defer os.RemoveAll(filepath.Dir(bad.Dir()))
+		require.NoError(t, os.WriteFile(filepath.Join(bad.Dir(), "recordings.json"), []byte("invalid"), 0600))
+		out, warning, err := execDockerRoot(t, root, tb, "record", "list")
+		require.NoError(t, err)
+		require.Contains(t, out, recordName)
+		require.Contains(t, warning, "e2e-corrupt-index")
+	})
+	runE2EStep(t, "record:offline-player", func(t *testing.T) {
+		runE2ECommand(t, root, tb, "record", "player", lab, "--write-only")
+		store := recording.NewStore(config.StateDir(state.Flags.StateDir, state.RepoDir), lab)
+		server := httptest.NewServer(http.FileServer(http.Dir(store.Dir())))
+		defer server.Close()
+		client := &http.Client{Timeout: 5 * time.Second}
+		for _, file := range []string{"index.html", "player/asciinema-player.min.js", "player/asciinema-player.css", "player/LICENSE", filepath.Base(castPath)} {
+			response, err := client.Get(server.URL + "/" + file)
+			require.NoError(t, err)
+			data, err := io.ReadAll(response.Body)
+			response.Body.Close()
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, response.StatusCode)
+			require.NotEmpty(t, data)
+			if file == "index.html" {
+				require.NotContains(t, string(data), "https://")
+				require.Contains(t, string(data), "player/asciinema-player.min.js")
+			}
+		}
+	})
 	runE2EStep(t, "taxiway:record[rm,--name=e2e-status]", func(t *testing.T) {
 		out := runE2ECommand(t, root, tb, "record", "rm", lab, "--name", recordName)
 		recordingPresent = false
