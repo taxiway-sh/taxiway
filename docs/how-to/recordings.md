@@ -176,7 +176,8 @@ Remove a stopped recording and its cast file:
 taxiway record rm mylab delivery-run
 ```
 
-Names must be unique for removal. If a name appears more than once, select
+Each start gets a unique ID, including repeated starts with the same name in
+one second. Names must be unique for removal. If a name appears more than once, select
 the ID shown by `record list`:
 
 ```bash

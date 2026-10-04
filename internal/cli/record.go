@@ -289,6 +289,10 @@ Supported runners:
 }
 
 func runRecordStart(cmd *cobra.Command, state *RootState, lab, name string) error {
+	return runRecordStartAt(cmd, state, lab, name, time.Now().UTC())
+}
+
+func runRecordStartAt(cmd *cobra.Command, state *RootState, lab, name string, now time.Time) error {
 	ctx := context.Background()
 	driverID := idName(lab)
 	ref, err := loadLabRef(ctx, state, driverID)
@@ -300,7 +304,6 @@ func runRecordStart(cmd *cobra.Command, state *RootState, lab, name string) erro
 		return err
 	}
 
-	now := time.Now().UTC()
 	if name == "" {
 		name = recording.DefaultName(now)
 	}

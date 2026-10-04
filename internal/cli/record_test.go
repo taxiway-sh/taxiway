@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
@@ -275,7 +276,7 @@ func TestRecordStopWithoutNameStopsLatestActiveRecording(t *testing.T) {
 	out, _, err = execRoot(t, root, stdout, stderr, "record", "list", "demo")
 	require.NoError(t, err)
 	require.Contains(t, out, "stopped")
-	require.Contains(t, out, "-walkthrough.cast")
+	require.Contains(t, out, "-walkthrough-")
 	require.Contains(t, out, ".cast")
 	require.NotContains(t, out, filepath.Join(state.Flags.StateDir, "demo", "recordings"))
 }
@@ -638,4 +639,34 @@ func recordingLifecycleResponder() func(string, driver.ExecRequest) driver.MockE
 		}
 		return driver.MockExecResponse{}
 	}
+}
+
+func TestRecordRestartSameSecondPreservesDistinctCasts(t *testing.T) {
+	root, state, mock, _, _ := buildRecordTestRoot(t)
+	createRecordLab(t, state, mock, "demo", "sampleorch")
+	now := time.Date(2026, 10, 4, 11, 0, 0, 0, time.UTC)
+	mock.ExecResponder = recordingLifecycleResponder()
+	require.NoError(t, runRecordStartAt(root, state, "demo", "repeat", now))
+	store := recording.NewStore(state.Flags.StateDir, "demo")
+	idx, err := store.Load()
+	require.NoError(t, err)
+	first := idx.Sessions[0]
+	require.NoError(t, os.WriteFile(first.CastPathHost, []byte("first run evidence"), 0600))
+	require.NoError(t, runRecordStop(root, state, "demo", "repeat"))
+	mock.ExecResponder = recordingLifecycleResponder()
+	require.NoError(t, runRecordStartAt(root, state, "demo", "repeat", now))
+	idx, err = store.Load()
+	require.NoError(t, err)
+	require.Len(t, idx.Sessions, 2)
+	second := idx.Sessions[1]
+	require.NotEqual(t, first.ID, second.ID)
+	require.NotEqual(t, first.CastPathHost, second.CastPathHost)
+	require.Equal(t, first.StartedAt, second.StartedAt)
+	require.NoError(t, os.WriteFile(second.CastPathHost, []byte("second run evidence"), 0600))
+	firstData, err := os.ReadFile(first.CastPathHost)
+	require.NoError(t, err)
+	require.Equal(t, "first run evidence", string(firstData))
+	secondData, err := os.ReadFile(second.CastPathHost)
+	require.NoError(t, err)
+	require.Equal(t, "second run evidence", string(secondData))
 }

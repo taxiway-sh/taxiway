@@ -1532,14 +1532,18 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 	})
 
 	runE2EStep(t, "record:ambiguous-name-and-id", func(t *testing.T) {
-		time.Sleep(1100 * time.Millisecond) // IDs include seconds; create a distinct second run.
 		first := requireE2ERecordingSession(t, state, lab, recordName)
+		firstData, err := os.ReadFile(first.CastPathHost)
+		require.NoError(t, err)
 		runE2ECommand(t, root, tb, "record", "start", lab, "--name", recordName)
 		runE2ECommand(t, root, tb, "record", "stop", lab, "--name", recordName)
 		store := recording.NewStore(config.StateDir(state.Flags.StateDir, state.RepoDir), lab)
 		idx, err := store.Load()
 		require.NoError(t, err)
 		require.Len(t, idx.Sessions, 2)
+		preserved, err := os.ReadFile(first.CastPathHost)
+		require.NoError(t, err)
+		require.Equal(t, firstData, preserved)
 		latest := idx.Sessions[1]
 		require.NotEqual(t, first.ID, latest.ID)
 		_, _, err = execDockerRoot(t, root, tb, "record", "rm", lab, "--name", recordName)
