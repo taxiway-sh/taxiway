@@ -1490,7 +1490,8 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 	t.Helper()
 	const recordName = "e2e-status"
 
-	var castPath string
+	var castPath, recorderTTY string
+	const captureMarker = "TAXIWAY_RECORDING_E2E_MARKER"
 	recordingPresent := false
 	t.Cleanup(func() {
 		if !recordingPresent {
@@ -1508,6 +1509,32 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 		})
 	})
 
+	runE2EStep(t, "record:recorder-client-live", func(t *testing.T) {
+		session := requireE2ERecordingSession(t, state, lab, recordName)
+		require.Eventually(t, func() bool {
+			res, err := state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "has-session", "-t", "=" + session.RecorderSession}})
+			if err != nil || res.ExitCode != 0 {
+				return false
+			}
+			var tty, clients bytes.Buffer
+			res, err = state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "show-option", "-qv", "-t", "=" + session.RecorderSession, "@taxiway-recorder-client"}, Stdout: &tty})
+			if err != nil || res.ExitCode != 0 || strings.TrimSpace(tty.String()) == "" {
+				return false
+			}
+			res, err = state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "list-clients", "-F", "#{client_tty}"}, Stdout: &clients})
+			if err != nil || res.ExitCode != 0 {
+				return false
+			}
+			recorderTTY = strings.TrimSpace(tty.String())
+			for _, client := range strings.Split(strings.TrimSpace(clients.String()), "\n") {
+				if client == recorderTTY {
+					return true
+				}
+			}
+			return false
+		}, 10*time.Second, 100*time.Millisecond, "recorder must remain alive with its own attached client before stop")
+	})
+
 	statusInput := e2eExpectations(t, orch).recordInput
 	runE2EStep(t, fmt.Sprintf("taxiway:shell[--input=%s]", statusInput), func(t *testing.T) {
 		out := runE2ECommand(t, root, tb, "shell", lab, "--input", statusInput)
@@ -1516,8 +1543,42 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 		})
 	})
 
+	runE2EStep(t, "record:capture-real-client-output", func(t *testing.T) {
+		res, err := state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "display-message", "-c", recorderTTY, "-d", "2000", captureMarker}})
+		require.NoError(t, err)
+		require.Zero(t, res.ExitCode)
+		session := requireE2ERecordingSession(t, state, lab, recordName)
+		require.Eventually(t, func() bool {
+			data, err := os.ReadFile(session.CastPathHost)
+			if err != nil {
+				return false
+			}
+			var output strings.Builder
+			for _, line := range bytes.Split(bytes.TrimSpace(data), []byte("\n"))[1:] {
+				var event []json.RawMessage
+				if json.Unmarshal(line, &event) != nil || len(event) != 3 {
+					continue
+				}
+				var kind, text string
+				if json.Unmarshal(event[1], &kind) == nil && kind == "o" && json.Unmarshal(event[2], &text) == nil {
+					output.WriteString(text)
+				}
+			}
+			return strings.Contains(output.String(), captureMarker)
+		}, 10*time.Second, 100*time.Millisecond, "cast must contain output shown to the live recorder client")
+	})
+
 	runE2EStep(t, "record:nondefault-prefix", func(t *testing.T) {
 		res, err := state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "set-option", "-g", "prefix", "C-a"}})
+		require.NoError(t, err)
+		require.Zero(t, res.ExitCode)
+		var prefix bytes.Buffer
+		res, err = state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "show-option", "-gv", "prefix"}, Stdout: &prefix})
+		require.NoError(t, err)
+		require.Zero(t, res.ExitCode)
+		require.Equal(t, "C-a", strings.TrimSpace(prefix.String()))
+		session := requireE2ERecordingSession(t, state, lab, recordName)
+		res, err = state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "has-session", "-t", "=" + session.RecorderSession}})
 		require.NoError(t, err)
 		require.Zero(t, res.ExitCode)
 	})
