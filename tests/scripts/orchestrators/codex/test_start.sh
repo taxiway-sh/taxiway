@@ -40,6 +40,10 @@ chmod +x "$fake_bin/mkdir"
 cat > "$fake_bin/codex" <<'EOF'
 #!/usr/bin/env python3
 import json, os, sys
+if sys.argv[1:] == ["debug", "models", "--bundled"]:
+    print(json.dumps({"models": [{"slug": "test-selected-codex-model", "context_window": 12345,
+        "upgrade": {"id": "unselected-model"}, "supported_reasoning_levels": [{"effort": "high"}]}]}))
+    sys.exit(0)
 with open(os.environ["TEST_RESULT"], "a") as out:
     out.write(json.dumps(sys.argv[1:]) + "\n")
 # Exercise the fresh-start fallback as well as resume.
@@ -75,6 +79,10 @@ assert config["model_provider"] == "taxiway-litellm"
 assert config["approval_policy"] == "never"
 assert config["sandbox_mode"] == "danger-full-access"
 assert config["model"] == "test-selected-codex-model"
+catalog = json.load(open(config["model_catalog_json"]))
+assert catalog["models"][0]["upgrade"] is None
+assert catalog["models"][0]["context_window"] == 12345
+assert catalog["models"][0]["supported_reasoning_levels"] == [{"effort": "high"}]
 assert config["model_providers"]["taxiway-litellm"]["requires_openai_auth"] is False
 PY
 
