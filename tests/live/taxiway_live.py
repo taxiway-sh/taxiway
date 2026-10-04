@@ -85,7 +85,7 @@ else:
     text = (result.stdout + result.stderr).decode(errors='replace').lower()
     if result.returncode == 0 and 'live_auth_ok' in text:
         print('ok')
-    elif any(message in text for message in ('not logged in', 'please run /login', 'please run claude auth login', 'oauth token has expired', 'invalid oauth token', 'authentication_error', 'token has been revoked', 'invalid bearer token', 'failed to refresh token')):
+    elif any(message in text for message in ('not logged in', 'please run /login', 'please run claude auth login', 'oauth token has expired', 'invalid oauth token', 'authentication_error', 'token has been revoked', 'invalid bearer token')):
         print('auth')
     elif any(message in text for message in ('connection refused', 'timed out', 'timeout', 'enotfound', 'econnreset', 'network')):
         print('network')

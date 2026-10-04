@@ -99,6 +99,8 @@ sys.exit(int(os.environ['FIXTURE_EXIT']))
         live.require_claude_auth('reference')
         for response, category in [('OAuth token has expired fixture-secret', 'native login'),
                                     ('Network connection timed out fixture-secret', '(network)'),
+                                    ('Failed to refresh token: Network connection timed out fixture-secret', '(network)'),
+                                    ('Failed to refresh token: HTTP 503 Service unavailable fixture-secret', '(provider)'),
                                     ('Model not available fixture-secret', '(model)'),
                                     ('Service overloaded fixture-secret', '(provider)')]:
             exitcode = 1
