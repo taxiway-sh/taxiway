@@ -2115,6 +2115,7 @@ func TestUp_RepoSwitchRefused(t *testing.T) {
 
 func TestUp_ExistingLabDryRunLeavesRefUnchanged(t *testing.T) {
 	root, state, _, stdout, stderr := buildWorkspaceTestRoot(t)
+	installFakeDockerForStoppedLab(t)
 	id := idName("claude-code")
 	require.NoError(t, state.Driver.Create(testCtx(t), id, driver.CreateOptions{}))
 	require.NoError(t, state.Driver.WriteLabRef(testCtx(t), id, config.LabRef{

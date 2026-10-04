@@ -23,9 +23,11 @@ func TestNormaliseDockerState(t *testing.T) {
 		{"running", "running"},
 		{"exited", "stopped"},
 		{"created", "stopped"}, // container stuck at docker run (never started)
-		{"paused", "paused"},
-		{"dead", "dead"},
-		{"", ""},
+		{"paused", "stopped"},
+		{"dead", "stopped"},
+		{"restarting", "stopped"},
+		{"removing", "stopped"},
+		{"", "stopped"},
 	}
 	for _, tc := range cases {
 		got := normaliseDockerState(tc.in)
@@ -37,6 +39,7 @@ func TestNormaliseDockerState(t *testing.T) {
 // have a completed created_at sidecar (i.e. Create finished successfully)
 // and that entries without the sidecar are silently skipped.
 func TestDockerList_SidecarGating(t *testing.T) {
+	installFakeDocker(t, "#!/bin/sh\necho 'Error: No such object: taxiway-complete' >&2\nexit 1\n")
 	t.Setenv("TAXIWAY_CONTEXT", "")
 	t.Setenv("TAXIWAY_CONTEXT_ID", "")
 

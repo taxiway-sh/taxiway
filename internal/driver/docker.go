@@ -68,10 +68,13 @@ func dockerCmd(ctx context.Context, args ...string) ([]byte, error) {
 }
 
 // Exists reports whether a container named id exists (regardless of state).
-func (d *DockerDriver) Exists(_ context.Context, id string) (bool, error) {
-	cmd := exec.Command("docker", "inspect", "--format={{.Name}}", id) //nolint:gosec
-	if err := cmd.Run(); err != nil {
-		return false, nil // non-zero exit = container not found
+func (d *DockerDriver) Exists(ctx context.Context, id string) (bool, error) {
+	_, err := dockerCmd(ctx, "inspect", "--format={{.Name}}", id)
+	if err != nil {
+		if dockerNotFound(err, id) {
+			return false, nil
+		}
+		return false, inspectionError("docker inspect "+id, err)
 	}
 	return true, nil
 }
@@ -80,16 +83,37 @@ func (d *DockerDriver) Exists(_ context.Context, id string) (bool, error) {
 func (d *DockerDriver) Running(ctx context.Context, id string) (bool, error) {
 	out, err := dockerCmd(ctx, "inspect", "--format={{.State.Running}}", id)
 	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
-			message := strings.TrimSpace(string(exitErr.Stderr))
-			if strings.EqualFold(message, "Error: No such object: "+id) || strings.EqualFold(message, "Error: No such container: "+id) {
-				return false, nil
-			}
+		if dockerNotFound(err, id) {
+			return false, nil
 		}
-		return false, fmt.Errorf("inspect running lab %s: %w", id, err)
+		return false, inspectionError("inspect running lab "+id, err)
 	}
 	return strings.TrimSpace(string(out)) == "true", nil
+}
+
+func dockerNotFound(err error, id string) bool {
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
+		return false
+	}
+	message := strings.TrimSpace(string(exitErr.Stderr))
+	return strings.EqualFold(message, "Error: No such object: "+id) || strings.EqualFold(message, "Error: No such container: "+id)
+}
+
+func inspectionError(operation string, err error) error {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		return toolOutputError(operation, err, exitErr.Stderr)
+	}
+	return fmt.Errorf("%s: %w", operation, err)
+}
+
+func toolOutputError(operation string, err error, output []byte) error {
+	const limit = 16 * 1024
+	if len(output) > limit {
+		output = output[len(output)-limit:]
+	}
+	return fmt.Errorf("%s: %w\n%s", operation, err, strings.TrimSpace(string(output)))
 }
 
 // labVolumeName returns the canonical Docker named-volume name for a lab's /lab.
@@ -287,25 +311,30 @@ func (d *DockerDriver) Delete(_ context.Context, id string) error {
 //	"exited"   → "stopped"  (container ran and exited)
 //	"created"  → "stopped"  (container was created but never started;
 //	                         semantically equivalent to stopped for callers)
-//	"paused"   → "paused"   (passed through; rare in practice)
-//	anything else → passed through unchanged
+//
+// All other present-container states map to stopped: paused, restarting,
+// removing and dead containers cannot currently execute lab commands.
+// Absence is determined by inspect's explicit not-found diagnostic.
 func normaliseDockerState(raw string) string {
 	switch raw {
-	case "exited", "created":
-		return "stopped"
+	case "running":
+		return "running"
 	default:
-		return raw
+		return "stopped"
 	}
 }
 
 // Status returns the current status of a container.
-func (d *DockerDriver) Status(_ context.Context, id string) (Status, error) {
-	out, err := exec.Command("docker", "inspect", //nolint:gosec
+func (d *DockerDriver) Status(ctx context.Context, id string) (Status, error) {
+	out, err := exec.CommandContext(ctx, "docker", "inspect", //nolint:gosec
 		"--format", "{{.State.Status}}",
 		id,
 	).Output()
 	if err != nil {
-		return Status{Name: id, State: "absent", Driver: "docker"}, nil
+		if dockerNotFound(err, id) {
+			return Status{Name: id, State: "absent", Driver: "docker"}, nil
+		}
+		return Status{}, inspectionError("docker inspect "+id, err)
 	}
 
 	state := normaliseDockerState(strings.TrimSpace(string(out)))
@@ -326,7 +355,7 @@ func (d *DockerDriver) Status(_ context.Context, id string) (Status, error) {
 // failed, docker cp failed, …) will appear in the list with state
 // "stopped"/"absent". The user can then run `taxiway rm` to clean up — Delete
 // tolerates absent containers and volumes.
-func (d *DockerDriver) List(_ context.Context) ([]Status, error) {
+func (d *DockerDriver) List(ctx context.Context) ([]Status, error) {
 	labsDir := d.stateDir
 	entries, err := os.ReadDir(labsDir)
 	if os.IsNotExist(err) {
@@ -348,13 +377,11 @@ func (d *DockerDriver) List(_ context.Context) ([]Status, error) {
 		if err != nil {
 			continue // incomplete Create — skip silently
 		}
-		id := config.RuntimeIDOf(lab)                                                          // driver id used for docker inspect
-		raw, _ := exec.Command("docker", "inspect", "--format={{.State.Status}}", id).Output() //nolint:gosec
-		state := normaliseDockerState(strings.TrimSpace(string(raw)))
-		if state == "" {
-			state = "absent"
+		id := config.RuntimeIDOf(lab)
+		st, err := d.Status(ctx, id)
+		if err != nil {
+			return nil, err
 		}
-		st := Status{Name: id, State: state, Driver: "docker"}
 		st.Created, _ = time.Parse(time.RFC3339, strings.TrimSpace(string(createdRaw)))
 		out = append(out, st)
 	}
