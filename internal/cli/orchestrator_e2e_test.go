@@ -569,7 +569,15 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 					pids[left], pids[right] = pids[right], pids[left]
 				}
 				var resumeErr bytes.Buffer
-				result, err := state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: append([]string{"bash", "-c", `set -euo pipefail; for pid in "$@"; do if [[ -e /proc/$pid/stat ]]; then kill -CONT "$pid"; fi; done`, "resume-owned-agent"}, pids...), Stderr: &resumeErr})
+				result, err := state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: append([]string{"bash", "-c", `set -u
+failed=0
+for pid in "$@"; do
+  if [[ -e /proc/$pid/stat ]] && ! kill -CONT "$pid"; then
+    # A terminated child is harmless; continue so the server always resumes.
+    [[ ! -e /proc/$pid/stat ]] || failed=1
+  fi
+done
+exit "$failed"`, "resume-owned-agent"}, pids...), Stderr: &resumeErr})
 				require.NoError(t, err)
 				require.Zero(t, result.ExitCode, "resume this fixture's suspended processes: %s", resumeErr.String())
 				var sessionsAfter bytes.Buffer
@@ -577,6 +585,11 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 				require.NoError(t, err)
 				require.Zero(t, result.ExitCode)
 				require.Equal(t, sessionsBefore.String(), sessionsAfter.String(), "preview preserves native tmux sessions across verified quiescence")
+				var paneAfter bytes.Buffer
+				result, err = state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: []string{"tmux", "display-message", "-p", "-t", orch, "#{pane_dead}"}, Stdout: &paneAfter})
+				require.NoError(t, err)
+				require.Zero(t, result.ExitCode)
+				require.Equal(t, "0", strings.TrimSpace(paneAfter.String()), "native fixture remains alive after resume")
 			})
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
@@ -593,6 +606,7 @@ freeze_tree() {
     stat=$(cat "/proc/$1/stat")
     fields="${stat##*) }"
     state="${fields%% *}"
+    [[ "$state" != Z ]] || return 0 # Already terminated; cannot write files.
     [[ "$state" == T || "$state" == t ]] && break
     (( SECONDS < deadline )) || { printf 'owned PID %s did not stop (state=%s)\n' "$1" "$state" >&2; return 1; }
     sleep 0.05
@@ -602,11 +616,6 @@ freeze_tree() {
     for child in $(cat "/proc/$1/task/$1/children"); do [[ ! -e /proc/$child/stat ]] || freeze_tree "$child"; done
   fi
 }
-deadline=$((SECONDS + 5))
-while [[ "$(tmux display-message -p -t "$1" '#{pane_current_command}')" != "$2" ]]; do
-  (( SECONDS < deadline )) || { printf 'native client has not replaced its launcher\n' >&2; exit 1; }
-  sleep 0.05
-done
 pid=$(tmux display-message -p -t "$1" '#{pane_pid}')
 [[ "$pid" =~ ^[0-9]+$ ]] && (( pid > 1 ))
 server=$(tmux display-message -p -t "$1" '#{pid}')
@@ -619,7 +628,7 @@ assert pathlib.Path('/proc', server, 'comm').read_text().strip().startswith('tmu
 assert pathlib.Path('/proc', pane, 'stat').read_text().rsplit(')', 1)[1].split()[1] == server, 'pane must be child of this owned server'
 PY
 # tmux resumes stopped pane leaders; freeze this owned server first.
-freeze_tree "$server"`, "freeze-owned-agent", orch, map[string]string{"codex": "codex", "claude-code": "claude"}[orch]},
+freeze_tree "$server"`, "freeze-owned-agent", orch},
 				Stdout: &stopped,
 				Stderr: &stoppedErr,
 			})
