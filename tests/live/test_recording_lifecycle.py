@@ -65,7 +65,9 @@ def cast_output(path):
 
 
 def record(lab, taxiway):
+    print("STEP recording target-session", flush=True)
     guest(lab, "tmux new-session -d -s claude-code 'bash --noprofile --norc'; tmux set-option -g prefix C-a")
+    print("STEP recording start", flush=True)
     command([taxiway, "record", "start", lab, "--name", "live-lifecycle"], timeout=60)
     recording = session(lab)
     recorder = shlex.quote("=" + recording["recorder_session"])
@@ -75,16 +77,21 @@ def record(lab, taxiway):
         tty = guest(lab, f"tmux show-option -qv -t {recorder} @taxiway-recorder-client", timeout=10).strip()
         clients = guest(lab, "tmux list-clients -F '#{client_tty}'", timeout=10).splitlines()
         return bool(tty) and tty in clients
+    print("STEP recording live-client", flush=True)
     wait_for(attached)
     guest(lab, "tmux send-keys -t '=claude-code' 'printf LIVE_RECORDING_PROOF' Enter", timeout=10)
+    print("STEP recording capture", flush=True)
     wait_for(lambda: "LIVE_RECORDING_PROOF" in cast_output(cast))
+    print("STEP recording stop", flush=True)
     command([taxiway, "record", "stop", lab], timeout=60)
     require(session(lab)["state"] == "stopped", "Recording index was not stopped")
     guest(lab, f"if tmux has-session -t {recorder}; then exit 1; fi; tmux has-session -t '=claude-code'", timeout=10)
     require("LIVE_RECORDING_PROOF" in cast_output(cast), "Stopped cast lost captured output")
+    print("STEP recording remove", flush=True)
     command([taxiway, "record", "rm", lab, "--id", recording["id"]], timeout=60)
     require(not cast.exists(), "Recording removal left its cast")
 
+    print("STEP recording stopped-lab-recovery", flush=True)
     command([taxiway, "record", "start", lab, "--name", "stopped-recovery"], timeout=60)
     recovering = session(lab)
     recovering_cast = Path(recovering["cast_path_host"])
@@ -95,6 +102,43 @@ def record(lab, taxiway):
     require(recovering_cast.exists(), "Stopped-lab recovery removed its cast")
     command([taxiway, "record", "rm", lab, "--id", recovering["id"]], timeout=30)
     require(not recovering_cast.exists(), "Stopped-lab recording removal left its cast")
+
+
+def recording_diagnostics(lab):
+    """Only fixture protocol/state metadata; never cast text or environment values."""
+    data = {"index_present": False}
+    path = Path(os.environ["TAXIWAY_LAB_STATE_DIR"]) / lab / "recordings/recordings.json"
+    if path.exists():
+        entries = json.loads(path.read_text()).get("sessions", [])
+        data["index_present"] = True
+        data["entries"] = len(entries)
+        if entries:
+            entry = entries[-1]
+            data["recording_state"] = entry.get("state")
+            cast = Path(entry["cast_path_host"])
+            data["cast_exists"] = cast.exists()
+            if cast.exists():
+                data["cast_bytes"] = cast.stat().st_size
+                lines = cast.read_text().splitlines()
+                if lines:
+                    header = json.loads(lines[0])
+                    data["cast_version"] = header.get("version")
+    try:
+        data["guest"] = json.loads(guest(lab, '''python3 - <<'PY'
+import json, subprocess
+def call(argv):
+    result = subprocess.run(argv, capture_output=True, timeout=5)
+    return result.returncode, result.stdout
+code, output = call(['tmux', 'list-sessions', '-F', '#{session_name}'])
+sessions = output.decode().splitlines() if code == 0 else []
+code, output = call(['tmux', 'list-clients', '-F', '#{client_tty}'])
+print(json.dumps({'tmux_target': 'claude-code' in sessions,
+                  'recorder_count': sum(name.startswith('taxiway-record-') for name in sessions),
+                  'client_count': len(output.splitlines()) if code == 0 else 0}))
+PY''', timeout=15))
+    except (RuntimeError, OSError, subprocess.TimeoutExpired):
+        data["guest"] = "diagnostic-unavailable"
+    print("DIAGNOSTIC " + json.dumps(data), flush=True)
 
 
 def instances(driver):
@@ -145,7 +189,11 @@ def main():
                     ready(lab)
                     phase = outcome
                     if outcome == "success":
-                        record(lab, args.taxiway)
+                        try:
+                            record(lab, args.taxiway)
+                        except (RuntimeError, OSError, subprocess.TimeoutExpired):
+                            recording_diagnostics(lab)
+                            raise
                     elif outcome == "failure":
                         guest(lab, "exit 7", timeout=10)
                     else:
@@ -170,8 +218,10 @@ def main():
                 if args.driver == "lima":
                     require(current[name] == status, "Unrelated Lima guest status changed")
             print(f"PASS {prefix} outcome={outcome} guest-readiness=verified cleanup=verified", flush=True)
-    except (RuntimeError, OSError, subprocess.TimeoutExpired):
-        print(f"FAIL {prefix} phase={phase}; captured output withheld; inspect scoped lab state for partial setup", file=sys.stderr)
+    except (RuntimeError, OSError, subprocess.TimeoutExpired) as error:
+        # Helper RuntimeErrors are sanitized; never print OS paths or captured output.
+        reason = str(error) if isinstance(error, RuntimeError) else type(error).__name__
+        print(f"FAIL {prefix} phase={phase} reason={reason}; captured output withheld; inspect scoped lab state for partial setup", file=sys.stderr)
         raise
 
 
