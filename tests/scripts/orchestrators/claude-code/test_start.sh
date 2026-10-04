@@ -37,7 +37,7 @@ sys.exit(subprocess.call(["bash", "-c", sys.argv[-1]], env=env))
                 "claude": '''#!/usr/bin/env python3
 import json, os, sys
 with open(os.environ["TEST_RESULT"], "w") as out:
-    json.dump([os.environ.get("ENABLE_TOOL_SEARCH"), os.environ.get("ENABLE_CLAUDEAI_MCP_SERVERS"), sys.argv[1:]], out)
+    json.dump([os.environ.get("ENABLE_TOOL_SEARCH"), os.environ.get("ENABLE_CLAUDEAI_MCP_SERVERS"), os.environ.get("ANTHROPIC_AUTH_TOKEN"), sys.argv[1:]], out)
 ''',
             }
             for name, content in programs.items():
@@ -48,21 +48,24 @@ with open(os.environ["TEST_RESULT"], "w") as out:
             model = 'model with "quotes" and spaces'
             env = dict(os.environ, HOME=str(user_home), PATH=str(fake_bin)+os.pathsep+os.environ["PATH"],
                        TAXIWAY_WORKSPACE_DIR=str(base), TAXIWAY_SET_MODEL=model,
-                       TAXIWAY_LITELLM_API_KEY="test-only-key", TEST_RESULT=str(result_path))
+                       TAXIWAY_LITELLM_API_KEY="test-only-key", ANTHROPIC_AUTH_TOKEN="stale-gateway-key", TEST_RESULT=str(result_path))
             for values, expected in [
                 ({}, ["true", "false"]),
                 ({"TAXIWAY_SET_TOOL_SEARCH": "false", "TAXIWAY_SET_CLAUDEAI_MCP_SERVERS": "false"}, ["false", "false"]),
                 ({"TAXIWAY_SET_TOOL_SEARCH": "auto:5", "TAXIWAY_SET_CLAUDEAI_MCP_SERVERS": "true"}, ["auto:5", "true"]),
                 ({"TAXIWAY_SET_TOOL_SEARCH": "literal 'quotes' $(false)"}, ["literal 'quotes' $(false)", "false"]),
-                ({}, ["true", "false"]),  # --clear-set removes both persisted overrides.
+                ({"TAXIWAY_SET_AUTH_MODE": "api-key"}, ["true", "false"]),
+                ({"TAXIWAY_SET_AUTH_MODE": "subscription"}, ["true", "false"]),
+                ({}, ["true", "false"]),  # --clear-set removes persisted overrides.
             ]:
+                env.pop("TAXIWAY_SET_AUTH_MODE", None)
                 env.pop("TAXIWAY_SET_TOOL_SEARCH", None)
                 env.pop("TAXIWAY_SET_CLAUDEAI_MCP_SERVERS", None)
                 env.update(values)
                 result = subprocess.run(["bash", str(ROOT / "orchestrators/claude-code/start.sh")],
                                         env=env, capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(json.loads(result_path.read_text()), expected + [["--dangerously-skip-permissions", "--settings", '{"skipDangerousModePermissionPrompt":true}', "--model", model]])
+                self.assertEqual(json.loads(result_path.read_text()), expected + ["test-only-key" if values.get("TAXIWAY_SET_AUTH_MODE") == "api-key" else None] + [["--dangerously-skip-permissions", "--settings", '{"skipDangerousModePermissionPrompt":true}', "--model", model]])
                 self.assertEqual(settings.stat().st_mode & 0o777, 0o600)
 
     def test_write_failure_stops_start(self):

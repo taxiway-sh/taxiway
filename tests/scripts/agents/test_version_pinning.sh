@@ -206,7 +206,12 @@ codex_bin="$tmp_dir/codex-start-bin"
 mkdir -p "$codex_home" "$codex_bin"
 printf '#!/usr/bin/env bash\n[[ "${1:-}" == has-session ]] && exit 1\nexit 0\n' > "$codex_bin/tmux"
 printf '#!/usr/bin/env bash\n[[ "$*" == "-p /lab/work" ]] && exit 0\nexec /bin/mkdir "$@"\n' > "$codex_bin/mkdir"
-printf '#!/usr/bin/env bash\n[[ "${1:-}" == --version ]] && echo "codex-cli ${FAKE_CODEX_VERSION:-1.0.0}"\nexit 0\n' > "$codex_bin/codex"
+cat > "$codex_bin/codex" <<'EOF'
+#!/usr/bin/env bash
+[[ "${1:-}" == --version ]] && echo "codex-cli ${FAKE_CODEX_VERSION:-1.0.0}"
+[[ "$*" == "debug models --bundled" ]] && printf '{"models":[{"slug":"test-model","upgrade":null}]}\n'
+exit 0
+EOF
 chmod +x "$codex_bin/"*
 codex_start() {
     PATH="$codex_bin:$PATH" HOME="$codex_home" TAXIWAY_LITELLM_API_KEY=test-key TAXIWAY_SET_MODEL=test-model \

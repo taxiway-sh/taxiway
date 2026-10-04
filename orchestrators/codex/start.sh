@@ -92,6 +92,7 @@ tmp_config="$(mktemp)"
     printf 'model_provider = "taxiway-litellm"\n'
     printf 'model = "%s"\n' "$CODEX_MODEL"
     codex_update_policy_config "${TAXIWAY_SET_CODEX_VERSION:-latest}"
+    codex_gateway_model_catalog
     printf '\n'
 } > "$tmp_config"
 if [ -f "$CODEX_CONFIG" ]; then
@@ -101,6 +102,7 @@ if [ -f "$CODEX_CONFIG" ]; then
         skip { next }
         /^model_provider = / { next }
         /^model = / { next }
+        !top && /^model_catalog_json = / { next }
         !top && /^check_for_update_on_startup = / { next }
         /^approval_policy = / { next }
         /^sandbox_mode = / { next }

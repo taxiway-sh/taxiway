@@ -51,6 +51,14 @@ taxiway start mylab --clear-set model
 Settings persist with the lab; `--clear-set` restores the default.
 `taxiway start` restarts the Codex session with the updated settings.
 
+At startup, the adapter obtains the installed CLI's bundled model catalog with
+`codex debug models --bundled` and configures `model_catalog_json`. It preserves
+the native model capabilities and removes catalog upgrade suggestions so an
+interactive migration prompt cannot replace the model selected through
+Taxiway. Changing the model remains an explicit `--set model=...` operation.
+This requires the native catalog command and configuration supported by Codex
+`0.160.0`; an unsupported CLI fails startup instead of creating guessed metadata.
+
 ### Agent Version
 
 `codex-version` selects the Codex CLI release installed in the lab. It is
