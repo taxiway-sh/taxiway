@@ -528,8 +528,8 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 	})
 
 	runE2EStep(t, "reset:preview-with-quiescent-agent", func(t *testing.T) {
-		if orch == "codex" {
-			// A freshly restarted Codex writes config and transient files asynchronously.
+		if orch == "codex" || orch == "claude-code" {
+			// A freshly restarted native client writes session files asynchronously.
 			// Freeze only this fixture's pane process tree while checking that preview
 			// preserves every file, then resume even if the assertion fails.
 			var stopped bytes.Buffer
@@ -554,9 +554,9 @@ freeze_tree() {
   local child
   for child in $(cat "/proc/$1/task/$1/children"); do freeze_tree "$child"; done
 }
-pid=$(tmux display-message -p -t codex '#{pane_pid}')
+pid=$(tmux display-message -p -t "$1" '#{pane_pid}')
 [[ "$pid" =~ ^[0-9]+$ ]] && (( pid > 1 ))
-freeze_tree "$pid"`},
+freeze_tree "$pid"`, "freeze-owned-agent", orch},
 				Stdout: &stopped,
 			})
 			require.NoError(t, err)
@@ -1253,11 +1253,20 @@ def native_agent_running():
             pass
     return None
 def submit(request_nonce):
+    input_deadline = time.monotonic() + 5
     run('set-buffer', '-b', request_nonce, 'Reply only with the SHA256 hex digest of this nonce: ' + request_nonce)
     try:
         run('paste-buffer', '-p', '-b', request_nonce, '-t', session)
     finally:
         run('delete-buffer', '-b', request_nonce)
+    # Native TUIs handle bracketed paste asynchronously. Wait for the actual
+    # input to appear and for any handoff request to finish before pressing Enter.
+    while True:
+        capture = run('capture-pane', '-p', '-J', '-S', '-100', '-t', session)
+        if request_nonce in capture and 'esc to interrupt' not in capture.lower():
+            break
+        assert time.monotonic() < input_deadline, 'native client did not receive pasted request while idle'
+        time.sleep(.1)
     run('send-keys', '-t', session, 'Enter')
 while True:
     pane = run('display-message', '-p', '-t', session, '#{pane_dead}|#{pane_current_command}')
@@ -1269,7 +1278,7 @@ while True:
     if any(dialog in capture.lower() for dialog in blocked):
         print(capture[-2400:], file=sys.stderr)
         raise RuntimeError('interactive startup dialog requires manual acceptance')
-    if native_agent_running() and ('›' in capture or '❯' in capture):
+    if native_agent_running() and ('›' in capture or '❯' in capture) and 'esc to interrupt' not in capture.lower():
         break
     assert time.monotonic() < deadline, 'interactive agent failed to start'
     time.sleep(.2)
