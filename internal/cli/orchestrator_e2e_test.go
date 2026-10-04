@@ -533,6 +533,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 			// Freeze only this fixture's pane process tree while checking that preview
 			// preserves every file, then resume even if the assertion fails.
 			var stopped bytes.Buffer
+			var stoppedErr bytes.Buffer
 			t.Cleanup(func() {
 				pids := strings.Fields(stopped.String())
 				if len(pids) == 0 {
@@ -540,9 +541,10 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 				}
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
-				result, err := state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: append([]string{"kill", "-CONT"}, pids...)})
+				var resumeErr bytes.Buffer
+				result, err := state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: append([]string{"bash", "-c", `set -euo pipefail; for pid in "$@"; do if [[ -e /proc/$pid/stat ]]; then kill -CONT "$pid"; fi; done`, "resume-owned-agent"}, pids...), Stderr: &resumeErr})
 				require.NoError(t, err)
-				require.Zero(t, result.ExitCode, "resume this fixture's suspended processes")
+				require.Zero(t, result.ExitCode, "resume this fixture's suspended processes: %s", resumeErr.String())
 			})
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
@@ -551,17 +553,52 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 freeze_tree() {
   kill -STOP "$1"
   printf '%s\n' "$1"
+  local deadline=$((SECONDS + 5)) state
+  while [[ -e /proc/$1/stat ]]; do
+    state=$(awk '{print $3}' "/proc/$1/stat")
+    [[ "$state" == T || "$state" == t ]] && break
+    (( SECONDS < deadline )) || { printf 'owned PID %s did not stop (state=%s)\n' "$1" "$state" >&2; return 1; }
+    sleep 0.05
+  done
   local child
-  for child in $(cat "/proc/$1/task/$1/children"); do freeze_tree "$child"; done
+  if [[ -e /proc/$1/task/$1/children ]]; then
+    for child in $(cat "/proc/$1/task/$1/children"); do [[ ! -e /proc/$child/stat ]] || freeze_tree "$child"; done
+  fi
 }
+deadline=$((SECONDS + 5))
+while [[ "$(tmux display-message -p -t "$1" '#{pane_current_command}')" != "$2" ]]; do
+  (( SECONDS < deadline )) || { printf 'native client has not replaced its launcher\n' >&2; exit 1; }
+  sleep 0.05
+done
 pid=$(tmux display-message -p -t "$1" '#{pane_pid}')
 [[ "$pid" =~ ^[0-9]+$ ]] && (( pid > 1 ))
-freeze_tree "$pid"`, "freeze-owned-agent", orch},
+freeze_tree "$pid"`, "freeze-owned-agent", orch, map[string]string{"codex": "codex", "claude-code": "claude"}[orch]},
 				Stdout: &stopped,
+				Stderr: &stoppedErr,
+			})
+			require.NoError(t, err)
+			require.Zero(t, result.ExitCode, "freeze owned pane: %s", stoppedErr.String())
+			require.NotEmpty(t, strings.Fields(stopped.String()))
+			var metadata bytes.Buffer
+			result, err = state.Driver.Exec(ctx, id, driver.ExecRequest{
+				Argv: []string{"python3", "-c", `import pathlib, sys
+for pid in ' '.join(sys.argv[1:]).split():
+    path = pathlib.Path('/proc') / pid / 'stat'
+    if path.exists():
+        fields = path.read_text().rsplit(')', 1)[1].split()
+        print('suspended PID=%s PPID=%s state=%s' % (pid, fields[1], fields[0]))
+    else:
+        print('suspended PID=%s missing' % pid)
+for path in (pathlib.Path.home() / '.claude/sessions').glob('*.json'):
+    pid = path.stem
+    stat = pathlib.Path('/proc') / pid / 'stat'
+    fields = stat.read_text().rsplit(')', 1)[1].split() if stat.exists() else []
+    print('session PID=%s state=%s' % (pid, fields[0] if fields else 'missing'))
+`, strings.TrimSpace(stopped.String())}, Stdout: &metadata,
 			})
 			require.NoError(t, err)
 			require.Zero(t, result.ExitCode)
-			require.NotEmpty(t, strings.Fields(stopped.String()))
+			t.Log(metadata.String())
 		}
 		runE2EScriptDryRunStep(t, "taxiway:reset[--yes,--dry-run]", root, tb, state, stateDir, id, []string{"Stopping workspace services", "Clearing lifecycle phase markers"}, "reset", "--yes", lab)
 	})
@@ -1253,20 +1290,25 @@ def native_agent_running():
             pass
     return None
 def submit(request_nonce):
-    input_deadline = time.monotonic() + 5
+    if sys.argv[1]:
+        # Gastown v1.2.1 documents gt nudge as its native messaging API.
+        # Its wait-idle mode handles post-handoff readiness and tmux delivery.
+        subprocess.check_output([str(pathlib.Path.home() / '.local/bin/gt'), 'nudge', session,
+                                 '--mode=wait-idle', '--message', 'Reply only with the SHA256 hex digest of this nonce: ' + request_nonce],
+                                cwd='/lab/work/gt', text=True, timeout=35)
+        return
+    if session != 'codex':
+        # Match Gastown v1.2.1's native SendKeys protocol: literal input and
+        # its documented 100ms debounce prevent a missed Enter after handoff.
+        run('send-keys', '-t', session, '-l', 'Reply only with the SHA256 hex digest of this nonce: ' + request_nonce)
+        time.sleep(.1)
+        run('send-keys', '-t', session, 'Enter')
+        return
     run('set-buffer', '-b', request_nonce, 'Reply only with the SHA256 hex digest of this nonce: ' + request_nonce)
     try:
         run('paste-buffer', '-p', '-b', request_nonce, '-t', session)
     finally:
         run('delete-buffer', '-b', request_nonce)
-    # Native TUIs handle bracketed paste asynchronously. Wait for the actual
-    # input to appear and for any handoff request to finish before pressing Enter.
-    while True:
-        capture = run('capture-pane', '-p', '-J', '-S', '-100', '-t', session)
-        if request_nonce in capture and 'esc to interrupt' not in capture.lower():
-            break
-        assert time.monotonic() < input_deadline, 'native client did not receive pasted request while idle'
-        time.sleep(.1)
     run('send-keys', '-t', session, 'Enter')
 while True:
     pane = run('display-message', '-p', '-t', session, '#{pane_dead}|#{pane_current_command}')
