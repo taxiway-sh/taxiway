@@ -523,7 +523,44 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		assertE2EFixtureWorkspace(t, state, id, orch)
 	})
 
-	runE2EScriptDryRunStep(t, "taxiway:reset[--yes,--dry-run]", root, tb, state, stateDir, id, []string{"Stopping workspace services", "Clearing lifecycle phase markers"}, "reset", "--yes", lab)
+	runE2EStep(t, "reset:preview-with-quiescent-agent", func(t *testing.T) {
+		if orch == "codex" {
+			// A freshly restarted Codex writes config and transient files asynchronously.
+			// Freeze only this fixture's pane process tree while checking that preview
+			// preserves every file, then resume even if the assertion fails.
+			var stopped bytes.Buffer
+			t.Cleanup(func() {
+				pids := strings.Fields(stopped.String())
+				if len(pids) == 0 {
+					return
+				}
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				result, err := state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: append([]string{"kill", "-CONT"}, pids...)})
+				require.NoError(t, err)
+				require.Zero(t, result.ExitCode, "resume this fixture's suspended processes")
+			})
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			result, err := state.Driver.Exec(ctx, id, driver.ExecRequest{
+				Argv: []string{"bash", "-c", `set -euo pipefail
+freeze_tree() {
+  kill -STOP "$1"
+  printf '%s\n' "$1"
+  local child
+  for child in $(cat "/proc/$1/task/$1/children"); do freeze_tree "$child"; done
+}
+pid=$(tmux display-message -p -t codex '#{pane_pid}')
+[[ "$pid" =~ ^[0-9]+$ ]] && (( pid > 1 ))
+freeze_tree "$pid"`},
+				Stdout: &stopped,
+			})
+			require.NoError(t, err)
+			require.Zero(t, result.ExitCode)
+			require.NotEmpty(t, strings.Fields(stopped.String()))
+		}
+		runE2EScriptDryRunStep(t, "taxiway:reset[--yes,--dry-run]", root, tb, state, stateDir, id, []string{"Stopping workspace services", "Clearing lifecycle phase markers"}, "reset", "--yes", lab)
+	})
 	runE2EStep(t, "taxiway:reset[--yes]", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "reset", "--yes", lab)
 		_, err := os.Stat(phases.Dir(stateDir, id))
