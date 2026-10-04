@@ -22,6 +22,10 @@ Kubernetes and heavyweight infrastructure are out of scope.
 ## Working Rules
 
 - Prefer the existing code and documentation structure over new process.
+- Use a dedicated worktree and implementation agent per subject, and a different
+  agent for independent review. Follow the [contribution workflow](docs/contributing/development.md#contribution-workflow).
+- Taxiway is in beta: do not add historical compatibility or migration code/tests
+  unless requested. Keep current lifecycle, idempotency and recovery coverage.
 - Test product behavior directly; do not add a separate test layer for test assertions.
 - When a feature changes provisioned or runtime behavior, enrich the relevant
   existing E2E scenarios with assertions of that behavior. Run them and verify
@@ -37,6 +41,8 @@ Kubernetes and heavyweight infrastructure are out of scope.
   - `fix:` for bug fixes;
   - `cleanup:` for simplification or removal work;
   - `docs:`, `test:`, `refactor:`, and `chore:` where appropriate.
+- Split commits by intention; PRs describe behavior, validation and limitations,
+  link resolved issues with `Fixes #...`, and use existing appropriate labels.
 - Before claiming work is complete, run the narrowest meaningful checks and
   report what passed or could not be run.
 - For authenticated feature tests, reuse `tests/live/taxiway_live.py` and read
@@ -49,6 +55,12 @@ Kubernetes and heavyweight infrastructure are out of scope.
 - Every `gh` command for this repository must include
   `--repo taxiway-sh/taxiway`.
 - Do not merge, publish, or force-push unless the user explicitly asks for it.
+- Never push directly to `main`. All changes, including documentation and
+  agent instructions, must go through a feature branch and pull request.
+- After an authorized PR merge, clean up its Taxiway instance, labs, worktree,
+  and feature branch without further confirmation. Update `main` and active
+  branches while preserving ongoing work and other instances; follow
+  [post-merge cleanup](docs/contributing/development.md#post-merge-cleanup).
 
 ## Security
 
