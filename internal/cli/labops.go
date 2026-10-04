@@ -219,7 +219,7 @@ func collectLabStatusRows(ctx context.Context, state *RootState, stateDir string
 		}
 		st, err := labStatus(ctx, stateDir, d, l.id, l.ref)
 		if err != nil {
-			st = driver.Status{Name: l.id, State: "unknown", Driver: l.ref.Driver}
+			return nil, fmt.Errorf("inspect lab %s: %w", l.ref.Lab, err)
 		}
 		rows = append(rows, statusRowFromStatus(st, l.ref, phaseLabel(stateDir, l.id)))
 	}
