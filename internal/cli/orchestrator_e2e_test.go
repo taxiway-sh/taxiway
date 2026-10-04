@@ -523,7 +523,44 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		assertE2EFixtureWorkspace(t, state, id, orch)
 	})
 
-	runE2EScriptDryRunStep(t, "taxiway:reset[--yes,--dry-run]", root, tb, state, stateDir, id, []string{"Stopping workspace services", "Clearing lifecycle phase markers"}, "reset", "--yes", lab)
+	runE2EStep(t, "reset:preview-with-quiescent-agent", func(t *testing.T) {
+		if orch == "codex" {
+			// A freshly restarted Codex writes config and transient files asynchronously.
+			// Freeze only this fixture's pane process tree while checking that preview
+			// preserves every file, then resume even if the assertion fails.
+			var stopped bytes.Buffer
+			t.Cleanup(func() {
+				pids := strings.Fields(stopped.String())
+				if len(pids) == 0 {
+					return
+				}
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				result, err := state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: append([]string{"kill", "-CONT"}, pids...)})
+				require.NoError(t, err)
+				require.Zero(t, result.ExitCode, "resume this fixture's suspended processes")
+			})
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			result, err := state.Driver.Exec(ctx, id, driver.ExecRequest{
+				Argv: []string{"bash", "-c", `set -euo pipefail
+freeze_tree() {
+  kill -STOP "$1"
+  printf '%s\n' "$1"
+  local child
+  for child in $(cat "/proc/$1/task/$1/children"); do freeze_tree "$child"; done
+}
+pid=$(tmux display-message -p -t codex '#{pane_pid}')
+[[ "$pid" =~ ^[0-9]+$ ]] && (( pid > 1 ))
+freeze_tree "$pid"`},
+				Stdout: &stopped,
+			})
+			require.NoError(t, err)
+			require.Zero(t, result.ExitCode)
+			require.NotEmpty(t, strings.Fields(stopped.String()))
+		}
+		runE2EScriptDryRunStep(t, "taxiway:reset[--yes,--dry-run]", root, tb, state, stateDir, id, []string{"Stopping workspace services", "Clearing lifecycle phase markers"}, "reset", "--yes", lab)
+	})
 	runE2EStep(t, "taxiway:reset[--yes]", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "reset", "--yes", lab)
 		_, err := os.Stat(phases.Dir(stateDir, id))
@@ -1490,7 +1527,8 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 	t.Helper()
 	const recordName = "e2e-status"
 
-	var castPath string
+	var castPath, recorderTTY string
+	const captureMarker = "TAXIWAY_RECORDING_E2E_MARKER"
 	recordingPresent := false
 	t.Cleanup(func() {
 		if !recordingPresent {
@@ -1508,6 +1546,46 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 		})
 	})
 
+	runE2EStep(t, "record:recorder-client-live", func(t *testing.T) {
+		session := requireE2ERecordingSession(t, state, lab, recordName)
+		t.Cleanup(func() {
+			if !t.Failed() {
+				return
+			}
+			data, err := os.ReadFile(session.CastPathHost)
+			if err != nil {
+				t.Logf("recorder diagnostic: cast unreadable: %v", err)
+				return
+			}
+			if len(data) > 2048 {
+				data = data[:2048]
+			}
+			t.Logf("recorder diagnostic (bounded fixture cast): %s", data)
+		})
+		require.Eventually(t, func() bool {
+			res, err := state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "has-session", "-t", "=" + session.RecorderSession}})
+			if err != nil || res.ExitCode != 0 {
+				return false
+			}
+			var tty, clients bytes.Buffer
+			res, err = state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "show-option", "-qv", "-t", session.RecorderSession, "@taxiway-recorder-client"}, Stdout: &tty})
+			if err != nil || res.ExitCode != 0 || strings.TrimSpace(tty.String()) == "" {
+				return false
+			}
+			res, err = state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "list-clients", "-F", "#{client_tty}"}, Stdout: &clients})
+			if err != nil || res.ExitCode != 0 {
+				return false
+			}
+			recorderTTY = strings.TrimSpace(tty.String())
+			for _, client := range strings.Split(strings.TrimSpace(clients.String()), "\n") {
+				if client == recorderTTY {
+					return true
+				}
+			}
+			return false
+		}, 10*time.Second, 100*time.Millisecond, "recorder must remain alive with its own attached client before stop")
+	})
+
 	statusInput := e2eExpectations(t, orch).recordInput
 	runE2EStep(t, fmt.Sprintf("taxiway:shell[--input=%s]", statusInput), func(t *testing.T) {
 		out := runE2ECommand(t, root, tb, "shell", lab, "--input", statusInput)
@@ -1516,10 +1594,59 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 		})
 	})
 
+	runE2EStep(t, "record:capture-real-client-output", func(t *testing.T) {
+		res, err := state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "display-message", "-c", recorderTTY, "-d", "2000", captureMarker}})
+		require.NoError(t, err)
+		require.Zero(t, res.ExitCode)
+		session := requireE2ERecordingSession(t, state, lab, recordName)
+		require.Eventually(t, func() bool {
+			data, err := os.ReadFile(session.CastPathHost)
+			if err != nil {
+				return false
+			}
+			var output strings.Builder
+			for _, line := range bytes.Split(bytes.TrimSpace(data), []byte("\n"))[1:] {
+				var event []json.RawMessage
+				if json.Unmarshal(line, &event) != nil || len(event) != 3 {
+					continue
+				}
+				var kind, text string
+				if json.Unmarshal(event[1], &kind) == nil && kind == "o" && json.Unmarshal(event[2], &text) == nil {
+					output.WriteString(text)
+				}
+			}
+			return strings.Contains(output.String(), captureMarker)
+		}, 10*time.Second, 100*time.Millisecond, "cast must contain output shown to the live recorder client")
+	})
+
+	runE2EStep(t, "record:nondefault-prefix", func(t *testing.T) {
+		res, err := state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "set-option", "-g", "prefix", "C-a"}})
+		require.NoError(t, err)
+		require.Zero(t, res.ExitCode)
+		var prefix bytes.Buffer
+		res, err = state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "show-option", "-gv", "prefix"}, Stdout: &prefix})
+		require.NoError(t, err)
+		require.Zero(t, res.ExitCode)
+		require.Equal(t, "C-a", strings.TrimSpace(prefix.String()))
+		session := requireE2ERecordingSession(t, state, lab, recordName)
+		res, err = state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "has-session", "-t", "=" + session.RecorderSession}})
+		require.NoError(t, err)
+		require.Zero(t, res.ExitCode)
+	})
+	t.Cleanup(func() {
+		_, _ = state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "set-option", "-g", "prefix", "C-b"}})
+	})
 	runE2EStep(t, "taxiway:record[stop]", func(t *testing.T) {
 		out := runE2ECommand(t, root, tb, "record", "stop", lab)
 		runE2EAssert(t, "assert:recording-stopped", func(t *testing.T) {
 			require.Contains(t, out, "Recording stopped: "+recordName)
+			session := requireE2ERecordingSession(t, state, lab, recordName)
+			res, err := state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "has-session", "-t", "=" + session.RecorderSession}})
+			require.NoError(t, err)
+			require.NotZero(t, res.ExitCode)
+			res, err = state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "has-session", "-t", "=" + orch}})
+			require.NoError(t, err)
+			require.Zero(t, res.ExitCode)
 			require.Contains(t, out, ".cast")
 		})
 	})
@@ -1540,6 +1667,61 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 		})
 	})
 
+	runE2EStep(t, "record:ambiguous-name-and-id", func(t *testing.T) {
+		first := requireE2ERecordingSession(t, state, lab, recordName)
+		firstData, err := os.ReadFile(first.CastPathHost)
+		require.NoError(t, err)
+		runE2ECommand(t, root, tb, "record", "start", lab, "--name", recordName)
+		runE2ECommand(t, root, tb, "record", "stop", lab, "--name", recordName)
+		store := recording.NewStore(config.StateDir(state.Flags.StateDir, state.RepoDir), lab)
+		idx, err := store.Load()
+		require.NoError(t, err)
+		require.Len(t, idx.Sessions, 2)
+		preserved, err := os.ReadFile(first.CastPathHost)
+		require.NoError(t, err)
+		require.Equal(t, firstData, preserved)
+		latest := idx.Sessions[1]
+		require.NotEqual(t, first.ID, latest.ID)
+		_, _, err = execDockerRoot(t, root, tb, "record", "rm", lab, "--name", recordName)
+		require.ErrorContains(t, err, "ambiguous")
+		require.FileExists(t, first.CastPathHost)
+		require.FileExists(t, latest.CastPathHost)
+		out := runE2ECommand(t, root, tb, "record", "list", lab)
+		require.Contains(t, out, latest.ID)
+		runE2ECommand(t, root, tb, "record", "rm", lab, "--id", latest.ID)
+		require.NoFileExists(t, latest.CastPathHost)
+		require.FileExists(t, first.CastPathHost)
+	})
+	runE2EStep(t, "record:global-list-corrupt-lab", func(t *testing.T) {
+		bad := recording.NewStore(config.StateDir(state.Flags.StateDir, state.RepoDir), "e2e-corrupt-index")
+		require.NoError(t, bad.Save(recording.Index{}))
+		defer os.RemoveAll(filepath.Dir(bad.Dir()))
+		require.NoError(t, os.WriteFile(filepath.Join(bad.Dir(), "recordings.json"), []byte("invalid"), 0600))
+		out, warning, err := execDockerRoot(t, root, tb, "record", "list")
+		require.NoError(t, err)
+		require.Contains(t, out, recordName)
+		require.Contains(t, warning, "e2e-corrupt-index")
+	})
+	runE2EStep(t, "record:offline-player", func(t *testing.T) {
+		runE2ECommand(t, root, tb, "record", "player", lab, "--write-only")
+		store := recording.NewStore(config.StateDir(state.Flags.StateDir, state.RepoDir), lab)
+		server := httptest.NewServer(http.FileServer(http.Dir(store.Dir())))
+		defer server.Close()
+		client := &http.Client{Timeout: 5 * time.Second}
+		for _, file := range []string{"index.html", "player/asciinema-player.min.js", "player/asciinema-player.css", "player/LICENSE", filepath.Base(castPath)} {
+			response, err := client.Get(server.URL + "/" + file)
+			require.NoError(t, err)
+			data, err := io.ReadAll(response.Body)
+			response.Body.Close()
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, response.StatusCode)
+			require.NotEmpty(t, data)
+			if file == "index.html" {
+				require.NotContains(t, string(data), "https://")
+				require.Contains(t, string(data), "player/asciinema-player.min.js")
+			}
+		}
+	})
 	runE2EStep(t, "taxiway:record[rm,--name=e2e-status]", func(t *testing.T) {
 		out := runE2ECommand(t, root, tb, "record", "rm", lab, "--name", recordName)
 		recordingPresent = false
@@ -1588,7 +1770,7 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 					runE2ECommand(t, root, tb, "record", "rm", lab, "--name", name)
 				}
 				if stoppedLab {
-					runE2ECommand(t, root, tb, "up", lab, "--from", "start", "--force", "--skip-auth-check")
+					runE2ECommand(t, root, tb, "up", lab, "--skip-auth-check")
 					assertE2EShellCheck(t, root, tb, lab, orch)
 				}
 			})

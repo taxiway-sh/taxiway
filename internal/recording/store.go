@@ -1,6 +1,7 @@
 package recording
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -74,7 +75,7 @@ func NewID(t time.Time, name string) (string, error) {
 	if err := ValidateName(name); err != nil {
 		return "", err
 	}
-	return t.UTC().Format("20060102-150405") + "-" + name, nil
+	return t.UTC().Format("20060102-150405") + "-" + name + "-" + rand.Text(), nil
 }
 
 func (s Store) Load() (Index, error) {

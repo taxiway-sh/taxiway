@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
@@ -112,6 +113,7 @@ func TestRecordStartUsesDefaultShellTarget(t *testing.T) {
 	require.Contains(t, out, "walkthrough")
 	require.Contains(t, joinedCommands(commands), "tmux has-session -t sampleorch")
 	require.Contains(t, joinedCommands(commands), "asciinema rec")
+	require.NotContains(t, joinedCommands(commands), "=taxiway-record-")
 	require.Contains(t, joinedCommands(commands), "tmux attach-session -f read-only,ignore-size -t sampleorch")
 	require.Contains(t, joinedCommands(commands), "/lab/recordings/")
 	require.Contains(t, joinedCommands(commands), "test -d '/lab/recordings'")
@@ -256,27 +258,26 @@ func TestRecordListAllAlignsLongLabNames(t *testing.T) {
 func TestRecordStopWithoutNameStopsLatestActiveRecording(t *testing.T) {
 	root, state, mock, stdout, stderr := buildRecordTestRoot(t)
 	createRecordLab(t, state, mock, "demo", "sampleorch")
-	mock.ExecResponder = func(_ string, _ driver.ExecRequest) driver.MockExecResponse {
-		return driver.MockExecResponse{ExitCode: 0}
-	}
+	mock.ExecResponder = recordingLifecycleResponder()
 	_, _, err := execRoot(t, root, stdout, stderr, "record", "start", "demo", "--name", "walkthrough")
 	require.NoError(t, err)
 
 	var stopCommands [][]string
+	respond := recordingLifecycleResponder()
 	mock.ExecResponder = func(_ string, req driver.ExecRequest) driver.MockExecResponse {
 		stopCommands = append(stopCommands, slices.Clone(req.Argv))
-		return driver.MockExecResponse{ExitCode: 0}
+		return respond("", req)
 	}
 	out, _, err := execRoot(t, root, stdout, stderr, "record", "stop", "demo")
 	require.NoError(t, err)
 	require.Contains(t, out, "Recording stopped")
-	require.Contains(t, joinedCommands(stopCommands), "tmux send-keys")
-	require.Contains(t, joinedCommands(stopCommands), "C-b d")
+	require.Contains(t, joinedCommands(stopCommands), "tmux detach-client")
+	require.NotContains(t, joinedCommands(stopCommands), "C-b d")
 
 	out, _, err = execRoot(t, root, stdout, stderr, "record", "list", "demo")
 	require.NoError(t, err)
 	require.Contains(t, out, "stopped")
-	require.Contains(t, out, "-walkthrough.cast")
+	require.Contains(t, out, "-walkthrough-")
 	require.Contains(t, out, ".cast")
 	require.NotContains(t, out, filepath.Join(state.Flags.StateDir, "demo", "recordings"))
 }
@@ -284,9 +285,7 @@ func TestRecordStopWithoutNameStopsLatestActiveRecording(t *testing.T) {
 func TestRecordRmDeletesStoppedRecordingAndCast(t *testing.T) {
 	root, state, mock, stdout, stderr := buildRecordTestRoot(t)
 	createRecordLab(t, state, mock, "demo", "sampleorch")
-	mock.ExecResponder = func(_ string, _ driver.ExecRequest) driver.MockExecResponse {
-		return driver.MockExecResponse{ExitCode: 0}
-	}
+	mock.ExecResponder = recordingLifecycleResponder()
 	_, _, err := execRoot(t, root, stdout, stderr, "record", "start", "demo", "--name", "walkthrough")
 	require.NoError(t, err)
 	_, _, err = execRoot(t, root, stdout, stderr, "record", "stop", "demo", "--name", "walkthrough")
@@ -328,9 +327,7 @@ func TestRecordRmRefusesActiveRecording(t *testing.T) {
 func TestRecordRmForceStopsActiveRecordingThenDeletesIt(t *testing.T) {
 	root, state, mock, stdout, stderr := buildRecordTestRoot(t)
 	createRecordLab(t, state, mock, "demo", "sampleorch")
-	mock.ExecResponder = func(_ string, _ driver.ExecRequest) driver.MockExecResponse {
-		return driver.MockExecResponse{ExitCode: 0}
-	}
+	mock.ExecResponder = recordingLifecycleResponder()
 	_, _, err := execRoot(t, root, stdout, stderr, "record", "start", "demo", "--name", "walkthrough")
 	require.NoError(t, err)
 
@@ -343,15 +340,16 @@ func TestRecordRmForceStopsActiveRecordingThenDeletesIt(t *testing.T) {
 	require.NoError(t, os.WriteFile(castPath, []byte("cast"), 0o644))
 
 	var removeCommands [][]string
+	respond := recordingLifecycleResponder()
 	mock.ExecResponder = func(_ string, req driver.ExecRequest) driver.MockExecResponse {
 		removeCommands = append(removeCommands, slices.Clone(req.Argv))
-		return driver.MockExecResponse{ExitCode: 0}
+		return respond("", req)
 	}
 	out, _, err := execRoot(t, root, stdout, stderr, "record", "rm", "demo", "--name", "walkthrough", "--force")
 	require.NoError(t, err)
 	require.Contains(t, out, "Recording removed: walkthrough")
-	require.Contains(t, joinedCommands(removeCommands), "tmux send-keys")
-	require.Contains(t, joinedCommands(removeCommands), "C-b d")
+	require.Contains(t, joinedCommands(removeCommands), "tmux detach-client")
+	require.NotContains(t, joinedCommands(removeCommands), "C-b d")
 	require.NoFileExists(t, castPath)
 
 	idx, err = store.Load()
@@ -546,4 +544,130 @@ func TestRecordStartPreflightFailureLeavesNoActiveEntry(t *testing.T) {
 	idx, err := recording.NewStore(config.StateDir(state.Flags.StateDir, state.RepoDir), "demo").Load()
 	require.NoError(t, err)
 	require.Empty(t, idx.Sessions)
+}
+
+func TestRecordStopDoesNotMarkLiveRecorderStopped(t *testing.T) {
+	root, state, mock, out, errs := buildRecordTestRoot(t)
+	createRecordLab(t, state, mock, "demo", "sampleorch")
+	mock.ExecResponder = func(_ string, _ driver.ExecRequest) driver.MockExecResponse { return driver.MockExecResponse{} }
+	_, _, err := execRoot(t, root, out, errs, "record", "start", "demo", "--name", "live")
+	require.NoError(t, err)
+	mock.ExecResponder = func(_ string, req driver.ExecRequest) driver.MockExecResponse {
+		if strings.Contains(strings.Join(req.Argv, " "), "show-option") {
+			return driver.MockExecResponse{Stdout: "/dev/pts/42"}
+		}
+		return driver.MockExecResponse{}
+	}
+	_, _, err = execRoot(t, root, out, errs, "record", "stop", "demo")
+	require.Error(t, err)
+	idx, err := recording.NewStore(state.Flags.StateDir, "demo").Load()
+	require.NoError(t, err)
+	require.Equal(t, recording.StateRecording, idx.Sessions[0].State)
+	require.Nil(t, idx.Sessions[0].StoppedAt)
+}
+func TestRecordRmAmbiguousNamePreservesCasts(t *testing.T) {
+	root, state, _, out, errs := buildRecordTestRoot(t)
+	store := recording.NewStore(state.Flags.StateDir, "demo")
+	idx := recording.Index{Sessions: []recording.Session{{ID: "one", Name: "same", State: recording.StateStopped}, {ID: "two", Name: "same", State: recording.StateStopped}}}
+	require.NoError(t, store.Save(idx))
+	_, _, err := execRoot(t, root, out, errs, "record", "rm", "demo", "--name", "same")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--id")
+	got, err := store.Load()
+	require.NoError(t, err)
+	require.Len(t, got.Sessions, 2)
+	_, _, err = execRoot(t, root, out, errs, "record", "rm", "demo", "--name", "", "--id", "two")
+	require.NoError(t, err)
+	got, err = store.Load()
+	require.NoError(t, err)
+	require.Len(t, got.Sessions, 1)
+	require.Equal(t, "one", got.Sessions[0].ID)
+}
+func TestRecordRmSaveFailurePreservesCast(t *testing.T) {
+	root, state, _, out, errs := buildRecordTestRoot(t)
+	store := recording.NewStore(state.Flags.StateDir, "demo")
+	cast := filepath.Join(store.Dir(), "safe.cast")
+	require.NoError(t, store.Save(recording.Index{Sessions: []recording.Session{{ID: "one", Name: "safe", State: recording.StateStopped, CastPathHost: cast}}}))
+	require.NoError(t, os.WriteFile(cast, []byte("evidence"), 0600))
+	require.NoError(t, os.Mkdir(filepath.Join(store.Dir(), "recordings.json.tmp"), 0700))
+	_, _, err := execRoot(t, root, out, errs, "record", "rm", "demo", "--name", "safe")
+	require.Error(t, err)
+	require.FileExists(t, cast)
+	idx, err := store.Load()
+	require.NoError(t, err)
+	require.Len(t, idx.Sessions, 1)
+}
+func TestRecordRmCastDeleteFailureWarnsAfterSave(t *testing.T) {
+	root, state, _, out, errs := buildRecordTestRoot(t)
+	store := recording.NewStore(state.Flags.StateDir, "demo")
+	cast := filepath.Join(store.Dir(), "nonempty.cast")
+	require.NoError(t, store.Save(recording.Index{Sessions: []recording.Session{{ID: "one", Name: "safe", State: recording.StateStopped, CastPathHost: cast}}}))
+	require.NoError(t, os.Mkdir(cast, 0700))
+	require.NoError(t, os.WriteFile(filepath.Join(cast, "child"), []byte("evidence"), 0600))
+	_, warning, err := execRoot(t, root, out, errs, "record", "rm", "demo", "--name", "safe")
+	require.NoError(t, err)
+	require.Contains(t, warning, "Warning:")
+	idx, err := store.Load()
+	require.NoError(t, err)
+	require.Empty(t, idx.Sessions)
+	require.DirExists(t, cast)
+}
+func TestRecordListAllContinuesPastCorruptLab(t *testing.T) {
+	root, state, _, out, errs := buildRecordTestRoot(t)
+	bad := recording.NewStore(state.Flags.StateDir, "aaa-corrupt")
+	require.NoError(t, bad.Save(recording.Index{}))
+	require.NoError(t, os.WriteFile(filepath.Join(bad.Dir(), "recordings.json"), []byte("invalid"), 0600))
+	good := recording.NewStore(state.Flags.StateDir, "healthy")
+	require.NoError(t, good.Save(recording.Index{Sessions: []recording.Session{{ID: "one", Name: "evidence", Lab: "healthy"}}}))
+	result, warning, err := execRoot(t, root, out, errs, "record", "list")
+	require.NoError(t, err)
+	require.Contains(t, result, "evidence")
+	require.Contains(t, warning, "aaa-corrupt")
+}
+
+func recordingLifecycleResponder() func(string, driver.ExecRequest) driver.MockExecResponse {
+	detached := false
+	return func(_ string, req driver.ExecRequest) driver.MockExecResponse {
+		command := strings.Join(req.Argv, " ")
+		if strings.Contains(command, "show-option") {
+			return driver.MockExecResponse{Stdout: "/dev/pts/42"}
+		}
+		if strings.Contains(command, "detach-client") {
+			detached = true
+		}
+		if strings.Contains(command, "has-session") && detached {
+			return driver.MockExecResponse{ExitCode: 1, Stderr: "can't find session: recorder"}
+		}
+		return driver.MockExecResponse{}
+	}
+}
+
+func TestRecordRestartSameSecondPreservesDistinctCasts(t *testing.T) {
+	root, state, mock, _, _ := buildRecordTestRoot(t)
+	createRecordLab(t, state, mock, "demo", "sampleorch")
+	now := time.Date(2026, 10, 4, 11, 0, 0, 0, time.UTC)
+	mock.ExecResponder = recordingLifecycleResponder()
+	require.NoError(t, runRecordStartAt(root, state, "demo", "repeat", now))
+	store := recording.NewStore(state.Flags.StateDir, "demo")
+	idx, err := store.Load()
+	require.NoError(t, err)
+	first := idx.Sessions[0]
+	require.NoError(t, os.WriteFile(first.CastPathHost, []byte("first run evidence"), 0600))
+	require.NoError(t, runRecordStop(root, state, "demo", "repeat"))
+	mock.ExecResponder = recordingLifecycleResponder()
+	require.NoError(t, runRecordStartAt(root, state, "demo", "repeat", now))
+	idx, err = store.Load()
+	require.NoError(t, err)
+	require.Len(t, idx.Sessions, 2)
+	second := idx.Sessions[1]
+	require.NotEqual(t, first.ID, second.ID)
+	require.NotEqual(t, first.CastPathHost, second.CastPathHost)
+	require.Equal(t, first.StartedAt, second.StartedAt)
+	require.NoError(t, os.WriteFile(second.CastPathHost, []byte("second run evidence"), 0600))
+	firstData, err := os.ReadFile(first.CastPathHost)
+	require.NoError(t, err)
+	require.Equal(t, "first run evidence", string(firstData))
+	secondData, err := os.ReadFile(second.CastPathHost)
+	require.NoError(t, err)
+	require.Equal(t, "second run evidence", string(secondData))
 }
