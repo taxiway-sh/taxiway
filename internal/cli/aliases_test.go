@@ -348,10 +348,30 @@ func TestFlatVerbs_Reset_ClearsPhases(t *testing.T) {
 	require.NoError(t, phases.Mark(stateDir, id, phases.PhaseBootstrap))
 	require.True(t, phases.Done(stateDir, id, phases.PhaseBootstrap))
 
-	_, _, err := execAlias(t, root, stdout, stderr, "reset", "gastown")
+	_, _, err := execAlias(t, root, stdout, stderr, "reset", "--yes", "gastown")
 	require.NoError(t, err)
 
 	require.False(t, phases.Done(stateDir, id, phases.PhaseBootstrap), "bootstrap marker should be cleared")
+}
+
+func TestFlatVerbs_ResetWithoutYesPreservesPhases(t *testing.T) {
+	root, state, mock, stdout, stderr := buildAliasTestRoot(t)
+	id := createAliasLab(t, state, "gastown")
+	require.NoError(t, phases.Mark(state.Flags.StateDir, id, phases.PhaseBootstrap))
+	_, _, err := execAlias(t, root, stdout, stderr, "reset", "gastown")
+	require.ErrorContains(t, err, "--yes")
+	require.True(t, phases.Done(state.Flags.StateDir, id, phases.PhaseBootstrap))
+	require.Empty(t, mock.ExecLog)
+}
+
+func TestFlatVerbs_ResetFailurePreservesPhases(t *testing.T) {
+	root, state, mock, stdout, stderr := buildAliasTestRoot(t)
+	id := createAliasLab(t, state, "gastown")
+	require.NoError(t, phases.Mark(state.Flags.StateDir, id, phases.PhaseBootstrap))
+	mock.FailExec["reset.sh"] = fmt.Errorf("reset failed")
+	_, _, err := execAlias(t, root, stdout, stderr, "reset", "--yes", "gastown")
+	require.Error(t, err)
+	require.True(t, phases.Done(state.Flags.StateDir, id, phases.PhaseBootstrap))
 }
 
 func TestFlatVerbs_ResetYes_PassesNonInteractiveEnv(t *testing.T) {

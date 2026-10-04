@@ -40,7 +40,7 @@ Run `taxiway help` or `taxiway help <command>` for the live CLI reference.
 | `taxiway doctor <lab>` | Diagnose the lab environment |
 | `taxiway down <lab>` | Stop a lab and preserve its state |
 | `taxiway rm <lab>` | Delete a lab |
-| `taxiway reset <lab> [--yes]` | Reset a lab and clear phase markers |
+| `taxiway reset <lab> --yes` | Reset a lab and clear phase markers after success |
 
 ## Runtime
 

@@ -1658,7 +1658,7 @@ func TestEnvReset_ClearsPhases(t *testing.T) {
 	require.NoError(t, state.Driver.WriteLabRef(testCtx(t), id, config.LabRef{Lab: "gastown", Orch: "gastown", Driver: "mock"}))
 	require.NoError(t, phases.Mark(stateDir, id, phases.PhaseBootstrap))
 
-	_, _, err := execUpRoot(t, root, stdout, stderr, "reset", "gastown")
+	_, _, err := execUpRoot(t, root, stdout, stderr, "reset", "--yes", "gastown")
 	require.NoError(t, err)
 
 	// Phase markers should be cleared
