@@ -65,6 +65,11 @@ command. Network/timeouts, unavailable models, setup and other provider failures
 do not request login. Diagnose them separately; unknown errors are not treated
 as proof of rejected authentication.
 
+The reference must also have completed interactive onboarding; the helper checks
+that before provisioning. Native login alone may not complete it. Open `claude`
+interactively in the reference, finish its first-run prompts, then exit. This is
+a setup step, not another authentication request.
+
 If auth expires during a suite, the failing action is not replayed automatically.
 The next propagation runs another bounded preflight; after confirmed rejection,
 reconnect once and explicitly rerun the failed scenario. There are no infinite

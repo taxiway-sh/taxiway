@@ -78,7 +78,7 @@ for key in list(env):
     if key.startswith('ANTHROPIC_') or key in ('CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_USE_FOUNDRY'):
         env.pop(key, None)
 try:
-    result = subprocess.run(['claude', '-p', 'Reply exactly LIVE_AUTH_OK.', '--model', 'claude-haiku-4-5-20251001', '--tools', '', '--strict-mcp-config', '--mcp-config', '{}', '--no-session-persistence', '--max-turns', '1', '--max-budget-usd', '0.10'], env=env, capture_output=True, timeout=90)
+    result = subprocess.run(['claude', '-p', 'Reply exactly LIVE_AUTH_OK.', '--model', 'claude-haiku-4-5-20251001', '--tools', '', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--no-session-persistence', '--max-turns', '1', '--max-budget-usd', '0.10'], env=env, capture_output=True, timeout=90)
 except subprocess.TimeoutExpired:
     print('network')
 else:
@@ -89,6 +89,8 @@ else:
         print('auth')
     elif any(message in text for message in ('connection refused', 'timed out', 'timeout', 'enotfound', 'econnreset', 'network')):
         print('network')
+    elif any(message in text for message in ('invalid configuration', 'invalid mcp configuration', 'unknown option', 'configuration error')):
+        print('setup')
     elif any(message in text for message in ('model', 'permission', 'forbidden', 'not allowed')):
         print('model')
     else:
@@ -215,6 +217,7 @@ def temporary_lab(orch, *, auth_lab=None, driver="docker", settings=None,
     if auth_lab:
         # A real native request (including native refresh) must pass before provisioning.
         require_claude_auth(auth_lab)
+        _claude_onboarding(auth_lab)
     if driver not in ("docker", "lima"):
         raise RuntimeError("Unsupported lab driver")
     name = "live-test-" + uuid.uuid4().hex[:12]
