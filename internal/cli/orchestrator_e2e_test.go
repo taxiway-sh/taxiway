@@ -1067,6 +1067,15 @@ func assertE2EStartedAgents(t *testing.T, state *RootState, id, orch, stage stri
 			})
 		}
 	})
+	if orch == "codex" {
+		var stderr bytes.Buffer
+		res, err := state.Driver.Exec(context.Background(), id, driver.ExecRequest{
+			Argv:   []string{"python3", "-c", `import pathlib, tomllib; c=tomllib.loads((pathlib.Path.home()/".codex/config.toml").read_text()); assert c["approval_policy"] == "never"; assert c["sandbox_mode"] == "danger-full-access"`},
+			Stderr: &stderr,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 0, res.ExitCode, "Codex autonomous contract at %s: %s", stage, stderr.String())
+	}
 	runE2EStep(t, "agents:workspace-trust@"+stage, func(t *testing.T) {
 		runE2EAssert(t, "assert:lab-work-trusted", func(t *testing.T) {
 			assertE2EAgentsWorkspaceTrusted(t, state, id, orch, LabWorkRoot)
@@ -1123,6 +1132,9 @@ while True:
         break
     assert time.monotonic() < deadline, 'pane did not start Claude'
     time.sleep(0.2)
+args = (pathlib.Path('/proc') / pane[0] / 'cmdline').read_bytes().split(b'\0')
+assert b'--dangerously-skip-permissions' in args, 'Claude lost autonomous permission contract'
+assert b'{"skipDangerousModePermissionPrompt":true}' in args, 'Claude must skip the bypass startup warning'
 env = dict(entry.split(b'=', 1) for entry in (pathlib.Path('/proc') / pane[0] / 'environ').read_bytes().split(b'\0') if b'=' in entry)
 assert env.get(b'ENABLE_TOOL_SEARCH') == b'true', 'Claude lost tool search default'
 assert env.get(b'ENABLE_CLAUDEAI_MCP_SERVERS') == b'false', 'Claude must disable connector import by default'

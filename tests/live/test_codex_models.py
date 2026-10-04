@@ -8,7 +8,7 @@ import subprocess
 import sys
 import time
 
-from taxiway_live import command, guest, run_in_lab, runtime_id, validate_context
+from taxiway_live import command, guest, run_in_lab, runtime_id, temporary_lab, validate_context
 
 
 def metrics(lab, since):
@@ -33,7 +33,7 @@ from pathlib import Path
 import json, sys
 children = []
 for path in (Path.home()/".codex/sessions").rglob("*.jsonl"):
-    meta, model = {}, None
+    meta, model, context = {}, None, {}
     for line in path.read_text().splitlines():
         try:
             entry = json.loads(line)
@@ -42,8 +42,12 @@ for path in (Path.home()/".codex/sessions").rglob("*.jsonl"):
         if entry.get("type") == "session_meta":
             meta = entry["payload"]
         elif entry.get("type") == "turn_context":
-            model = entry.get("payload", {}).get("model")
+            context = entry.get("payload", {})
+            model = context.get("model")
+
     if meta.get("parent_thread_id") == sys.argv[1]:
+        assert context.get("approval_policy") == "never", "child lost approval bypass"
+        assert context.get("sandbox_policy", {}).get("type") == "danger-full-access", "child retained sandbox"
         children.append({"model": model, "provider": meta.get("model_provider")})
 print(json.dumps(children))
 PY'''
@@ -54,7 +58,7 @@ def check(lab, label, model, prompt, expected, *, expected_children=None):
     agents = expected_children is not None
     since = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")
     argv = ["codex", "exec", "--skip-git-repo-check", "--json",
-            "-s", "read-only", "-m", model, "-c", 'model_reasoning_effort="low"',
+            "-m", model, "-c", 'model_reasoning_effort="low"',
             "-c", "features.multi_agent_v2=true" if agents else "agents.enabled=false", prompt]
     output = run_in_lab(lab, argv, agent="codex")
     events = [json.loads(line) for line in output.splitlines() if line.startswith(b"{")]
@@ -87,23 +91,29 @@ def main():
     validate_context()
     main_model = guest(args.lab, "python3 -c 'import pathlib,tomllib; "
                        "print(tomllib.loads((pathlib.Path.home()/\".codex/config.toml\").read_text())[\"model\"])'").decode().strip()
-    check(args.lab, "principal", main_model,
-          "Reply exactly TAXIWAY_MODEL_OK. Do not use any tools.", {main_model})
-    check(args.lab, "alternate principal", "gpt-6-luna",
-          "Reply exactly TAXIWAY_MODEL_OK. Do not use any tools.", {"gpt-6-luna"})
-    check(args.lab, "inherited subagent", main_model,
-          "Spawn exactly one subagent with fresh context. Do not specify its model or reasoning: "
-          "it must inherit yours. Ask it to reply exactly TAXIWAY_MODEL_OK without tools. "
-          "Wait for its completion and then reply exactly TAXIWAY_MODEL_OK. "
-          "Do not use shell, browser, file, or MCP tools.", {main_model}, expected_children={main_model})
-    check(args.lab, "two different subagent models", main_model,
-          "Spawn exactly two subagents with fresh context, one using gpt-6-luna "
-          "and one using gpt-6-sol, both with low reasoning effort. Explicitly choose "
-          "fork_turns none or fork_context false when spawning. Each must reply exactly "
-          "TAXIWAY_MODEL_OK without tools. Wait for both to finish, then reply exactly "
-          "TAXIWAY_MODEL_OK. Do not use shell, browser, file, or MCP tools.",
-          {main_model, "gpt-6-luna", "gpt-6-sol"}, expected_children={"gpt-6-luna", "gpt-6-sol"})
-    print("All 4 live Codex cases passed. Reference lab preserved.")
+    with temporary_lab("codex", settings={"model": main_model}) as target:
+        check(target, "principal", main_model,
+              "Reply exactly TAXIWAY_MODEL_OK. Do not use any tools.", {main_model})
+        check(target, "alternate principal", "gpt-6-luna",
+              "Reply exactly TAXIWAY_MODEL_OK. Do not use any tools.", {"gpt-6-luna"})
+        check(target, "inherited subagent", main_model,
+              "Spawn exactly one subagent with fresh context. Do not specify its model or reasoning: "
+              "it must inherit yours. Ask it to reply exactly TAXIWAY_MODEL_OK without tools. "
+              "Wait for its completion and then reply exactly TAXIWAY_MODEL_OK. "
+              "Do not use shell, browser, file, or MCP tools.", {main_model}, expected_children={main_model})
+        check(target, "two different subagent models", main_model,
+              "Spawn exactly two subagents with fresh context, one using gpt-6-luna "
+              "and one using gpt-6-sol, both with low reasoning effort. Explicitly choose "
+              "fork_turns none or fork_context false when spawning. Each must reply exactly "
+              "TAXIWAY_MODEL_OK without tools. Wait for both to finish, then reply exactly "
+              "TAXIWAY_MODEL_OK. Do not use shell, browser, file, or MCP tools.",
+              {main_model, "gpt-6-luna", "gpt-6-sol"}, expected_children={"gpt-6-luna", "gpt-6-sol"})
+        command(["./taxiway", "start", target])
+        prompt = "Spawn exactly one subagent with fresh context inheriting your model. Ask it to use shell to write print(42) followed by a newline to /lab/work/autonomous-proof.py, run python3 -m py_compile on it, and run curl --max-time 20 -fsSI https://example.com > /lab/work/network-proof. Wait for completion, then use shell to cat the proof file and reply TAXIWAY_MODEL_OK."
+        check(target, "autonomous restarted lab and delegated tools", main_model, prompt, {main_model}, expected_children={main_model})
+        assert guest(target, "cat /lab/work/autonomous-proof.py").strip() == b"print(42)", "Actual child edit missing"
+        assert guest(target, "test -s /lab/work/network-proof && find /lab/work/__pycache__ -name 'autonomous-proof*' -print -quit").strip(), "Network/build effects missing"
+    print("All live Codex cases passed. Reference lab preserved.")
 
 
 if __name__ == "__main__":

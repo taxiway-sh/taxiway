@@ -4,4 +4,7 @@ set -euo pipefail
 # shellcheck source=../../agents/claude-code/env.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../../agents/claude-code/env.sh"
 claude_code_load_env
-exec "$@"
+# This adapter requires autonomous execution, including reconstructed handoffs.
+# shellcheck source=../../agents/claude-code/permissions.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../agents/claude-code/permissions.sh"
+claude_code_exec_autonomous "$@"

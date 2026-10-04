@@ -44,6 +44,14 @@ class TrustExecTests(unittest.TestCase):
         return subprocess.run(["bash", LAUNCHER, str(self.hq), *args], cwd=cwd or self.workspace,
                               env=env or self.env, capture_output=True, text=True)
 
+    def test_handoff_enforces_bypass_for_claude_without_profile_arguments(self):
+        binary = self.base / "claude"
+        binary.write_text('#!/usr/bin/env python3\nimport json, sys; print(json.dumps(sys.argv[1:]))\n')
+        binary.chmod(0o755)
+        result = self.run_hook([str(binary), "--resume", "session-id"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), ["--dangerously-skip-permissions", "--settings", '{"skipDangerousModePermissionPrompt":true}', "--resume", "session-id"])
+
     def test_handoff_reloads_settings_and_clears_stale_environment(self):
         settings = self.user_home / ".config/taxiway/agents/claude-code.env"
         settings.parent.mkdir(parents=True)

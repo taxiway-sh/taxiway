@@ -115,6 +115,7 @@ assert_contains "$output" "Starting Claude Code interactive authentication if cr
 output="$(run_plan "$ROOT_DIR/orchestrators/codex/start.sh" env TAXIWAY_LAB=demo TAXIWAY_LITELLM_API_KEY=test TAXIWAY_SET_MODEL=test-model)"
 assert_contains "$output" "Configuring Codex for the Taxiway LiteLLM gateway"
 assert_contains "$output" "Starting tmux session 'codex'"
+assert_contains "$output" "codex resume --last --dangerously-bypass-approvals-and-sandbox || codex --dangerously-bypass-approvals-and-sandbox"
 
 output="$(run_plan "$ROOT_DIR/orchestrators/claude-code/start.sh" env TAXIWAY_LAB=demo TAXIWAY_LITELLM_API_KEY=test TAXIWAY_SET_MODEL=test-model)"
 assert_contains "$output" "Configuring Claude Code for the Taxiway LiteLLM gateway"

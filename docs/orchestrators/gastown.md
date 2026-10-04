@@ -122,3 +122,11 @@ post-sanitization collision.
 ```bash
 taxiway describe gastown
 ```
+
+## Autonomous permissions
+
+Gas Town requires YOLO/bypass for every automated role. Taxiway preserves
+`--dangerously-skip-permissions` during daemon launches and handoffs;
+this adapter does not offer a restrictive permission mode.
+
+See [guest capabilities](../contributing/live-tests.md#guest-capabilities).

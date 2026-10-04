@@ -62,7 +62,7 @@ with open(os.environ["TEST_RESULT"], "w") as out:
                 result = subprocess.run(["bash", str(ROOT / "orchestrators/claude-code/start.sh")],
                                         env=env, capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(json.loads(result_path.read_text()), expected + [["--model", model]])
+                self.assertEqual(json.loads(result_path.read_text()), expected + [["--dangerously-skip-permissions", "--settings", '{"skipDangerousModePermissionPrompt":true}', "--model", model]])
                 self.assertEqual(settings.stat().st_mode & 0o777, 0o600)
 
     def test_write_failure_stops_start(self):

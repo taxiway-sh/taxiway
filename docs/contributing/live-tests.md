@@ -230,3 +230,37 @@ When removal of the reference lab is requested after validation:
 ```bash
 direnv exec . ./taxiway rm test-claude --yes
 ```
+
+## Guest capabilities
+
+Taxiway orchestrators default to Full Access/YOLO inside their guests. Codex
+writes `approval_policy = "never"` and `sandbox_mode = "danger-full-access"`
+to its guest configuration, so fresh sessions, resume and delegated agents have
+both approval bypass and an unrestricted client sandbox. Fresh/resumed interactive
+launches also pass `--dangerously-bypass-approvals-and-sandbox` to override
+saved session restrictions. Standalone Claude Code
+launches with `--dangerously-skip-permissions`. Its launcher also supplies
+`skipDangerousModePermissionPrompt` to suppress the separate initial bypass
+warning. Gas Town requires that same bypass contract for every role; the
+launcher restores it even when a daemon or handoff reconstructs arguments.
+Subagents inherit their principal's permission mode.
+
+The orchestrator owns this default and invokes an agent-specific translator.
+There is no public permission selector in this initial implementation. Future
+restricted modes may be supported by compatible standalone adapters; Gas Town
+must retain bypass for its automated execution contract. Automatic Review is
+not an unattended execution guarantee.
+
+Permission defaults do not authenticate clients or complete first-run
+onboarding. Tests still verify those independent prerequisites. Live scenarios
+exercise actual file edits, command/build execution and HTTPS access, including
+delegated actions, without supplying their own permission overrides.
+
+The Docker/Lima guest is the isolation boundary. `/lab/work` stays in the guest;
+`/lab/infra`, `/lab/agents` and the selected orchestrator are read-only host
+mounts. `/lab/git` and `/lab/recordings` are writable host directories. Neither
+driver mounts the entire host home. Docker does not mount the Docker socket or
+request privileged mode. Agents can use passwordless sudo inside the guest.
+Network access and provisioned credentials can reach external services, and
+agents can modify the writable host artifact directories. Full Access does
+not remove those capabilities or isolate their external effects.
