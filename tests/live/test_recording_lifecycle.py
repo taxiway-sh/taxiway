@@ -71,10 +71,11 @@ def record(lab, taxiway):
     command([taxiway, "record", "start", lab, "--name", "live-lifecycle"], timeout=60)
     recording = session(lab)
     recorder = shlex.quote("=" + recording["recorder_session"])
+    recorder_option_target = shlex.quote(recording["recorder_session"])
     cast = Path(recording["cast_path_host"])
     # Require the real recording client before sending fixture output.
     def attached():
-        tty = guest(lab, f"tmux show-option -qv -t {recorder} @taxiway-recorder-client", timeout=10).strip()
+        tty = guest(lab, f"tmux show-option -qv -t {recorder_option_target} @taxiway-recorder-client", timeout=10).strip()
         clients = guest(lab, "tmux list-clients -F '#{client_tty}'", timeout=10).splitlines()
         return bool(tty) and tty in clients
     print("STEP recording live-client", flush=True)
