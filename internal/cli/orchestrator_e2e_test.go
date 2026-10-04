@@ -144,7 +144,7 @@ func testE2EOrchestratorPrepareRun(t *testing.T, orch string) {
 	})
 
 	runE2EStep(t, fmt.Sprintf("taxiway:prepare[--type=%s]", orch), func(t *testing.T) {
-		runE2ECommand(t, root, tb, "prepare", lab, "--type", orch, "--set", e2eHarnessPin(orch))
+		runE2ECommand(t, root, tb, "prepare", lab, "--type", orch, "--set", "auth_mode=api-key", "--set", e2eHarnessPin(orch))
 		configureE2EFixtureWorkspace(t, state, id)
 		runE2EAssert(t, "assert:phase-verified", func(t *testing.T) {
 			assertE2EPhase(t, stateDir, id, phases.PhaseVerify)
@@ -153,6 +153,8 @@ func testE2EOrchestratorPrepareRun(t *testing.T, orch string) {
 			assertE2EList(t, root, tb, lab, orch, "degraded", "verified")
 		})
 	})
+
+	configureE2ECompletedClaudeOnboarding(t, state, id, orch)
 
 	runE2EStep(t, "taxiway:run[--skip-auth-check]", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "run", lab, "--skip-auth-check")
@@ -370,6 +372,8 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 			assertE2EPhase(t, stateDir, id, phases.PhaseAuth)
 		})
 	})
+
+	configureE2ECompletedClaudeOnboarding(t, state, id, orch)
 
 	runE2EScriptDryRunStep(t, "taxiway:start[--dry-run]", root, tb, state, stateDir, id, dryRunLabels.Start, "start", lab)
 	runE2EStep(t, "taxiway:start", func(t *testing.T) {
@@ -630,7 +634,7 @@ func testE2EOrchestratorUp(t *testing.T, orch string) {
 	})
 
 	runE2EStep(t, fmt.Sprintf("taxiway:up[--type=%s,--repo=<fixture>,--skip-auth-check]", orch), func(t *testing.T) {
-		runE2ECommand(t, root, tb, "up", lab, "--type", orch, "--repo", e2eFixtureRepoURL, "--skip-auth-check", "--set", "model="+expectations.model, "--set", e2eHarnessPin(orch))
+		runE2ECommand(t, root, tb, "up", lab, "--type", orch, "--repo", e2eFixtureRepoURL, "--skip-auth-check", "--set", "auth_mode=api-key", "--set", "model="+expectations.model, "--set", e2eHarnessPin(orch))
 		runE2EAssert(t, "assert:phase-started", func(t *testing.T) {
 			assertE2EPhase(t, stateDir, id, phases.PhaseStart)
 		})
@@ -653,6 +657,32 @@ func testE2EOrchestratorUp(t *testing.T, orch string) {
 			assertE2EObservabilityTraceIngested(t, state, lab, orch)
 		})
 	})
+
+	if orch == "claude-code" {
+		runE2EStep(t, "agents:first-run-dialog-rejects-readiness", func(t *testing.T) {
+			assertE2EInteractiveResponse(t, state, id, "", orch, true)
+		})
+	}
+	if orch != "codex" {
+		runE2EStep(t, "agents:pause-before-completed-onboarding-fixture", func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+			script := "tmux kill-session -t claude-code"
+			if orch == "gastown" {
+				// Native reversible pause preserves workspaces. Force only stops
+				// owned guest processes, avoiding keystrokes into first-run dialogs.
+				script = "cd /lab/work/gt && gt down --quiet --force"
+			}
+			var stderr bytes.Buffer
+			res, err := state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: []string{"bash", "-lc", script}, Stderr: &stderr})
+			require.NoError(t, err)
+			require.Zero(t, res.ExitCode, redactE2EDiagnosticSecrets(stderr.String()))
+		})
+		configureE2ECompletedClaudeOnboarding(t, state, id, orch)
+		runE2EStep(t, "taxiway:start[completed-native-onboarding-fixture]", func(t *testing.T) {
+			runE2ECommand(t, root, tb, "start", lab)
+		})
+	}
 
 	runE2EStep(t, "taxiway:shell[--check]", func(t *testing.T) {
 		assertE2EShellCheck(t, root, tb, lab, orch)
@@ -1150,6 +1180,162 @@ func assertE2EStartedAgents(t *testing.T, state *RootState, id, orch, stage stri
 			expectations.assertSessions(t, state, id)
 		})
 	}
+	if orch != "gastown" {
+		runE2EStep(t, "agents:interactive-readiness@"+stage, func(t *testing.T) {
+			assertE2EInteractiveResponse(t, state, id, "", orch)
+		})
+	}
+}
+
+// Only these public flags came from a manually completed native first run.
+// No account, OAuth, gateway, preferences or workspace trust is copied.
+func configureE2ECompletedClaudeOnboarding(t *testing.T, state *RootState, id, orch string) {
+	t.Helper()
+	if orch == "codex" {
+		return
+	}
+	runE2EStep(t, "agents:completed-native-onboarding-fixture", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		repo := findRepoRoot(t)
+		cmd := exec.CommandContext(ctx, "python3", "-c", `import json, pathlib, sys
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]) / 'tests/live'))
+from taxiway_live import _write_claude_onboarding
+state = json.loads((pathlib.Path(sys.argv[1]) / 'tests/fixtures/claude-onboarding.json').read_text())
+assert state.get('hasCompletedOnboarding') is True
+assert set(state) <= {'hasCompletedOnboarding', 'lastOnboardingVersion'}
+_write_claude_onboarding(sys.argv[2], state)
+		`, repo, strings.TrimPrefix(labNameFromID(id), "e2e-"+os.Getenv("TAXIWAY_CONTEXT_ID")+"-"))
+		output, err := cmd.CombinedOutput()
+		require.NoError(t, err, "completed onboarding fixture: %s", redactE2EDiagnosticSecrets(string(output)))
+	})
+}
+
+// The expected digest is absent from the prompt, so terminal echo cannot pass.
+// Only the controlled upstream computes it after receiving the real CLI request.
+func assertE2EInteractiveResponse(t *testing.T, state *RootState, id, socket, session string, expectBlocked ...bool) {
+	t.Helper()
+	nonce := fmt.Sprintf("taxiway-readiness-%x", time.Now().UnixNano())
+	expected := fmt.Sprintf("%x", sha256.Sum256([]byte(nonce)))
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Second)
+	defer cancel()
+	var stdout, stderr bytes.Buffer
+	res, err := state.Driver.Exec(ctx, id, driver.ExecRequest{
+		Argv: []string{"python3", "-c", `import hashlib, pathlib, subprocess, sys, time, urllib.request
+tmux = ['tmux'] + (['-L', sys.argv[1]] if sys.argv[1] else [])
+session, nonce, expected = sys.argv[2:]
+deadline = time.monotonic() + 80
+def run(*args):
+    return subprocess.check_output(tmux + list(args), text=True, timeout=5).strip()
+def native_agent_running():
+    root = int(run('display-message', '-p', '-t', session, '#{pane_pid}'))
+    parents = {}
+    for path in pathlib.Path('/proc').glob('[0-9]*/stat'):
+        try:
+            parents[int(path.parent.name)] = int(path.read_text().rsplit(')', 1)[1].split()[1])
+        except (OSError, ValueError, IndexError):
+            pass
+    owned = {root}
+    depths = {root: 0}
+    while True:
+        children = {pid for pid, parent in parents.items() if parent in owned} - owned
+        if not children:
+            break
+        depths.update({pid: depths[parents[pid]] + 1 for pid in children})
+        owned.update(children)
+    agent = 'codex' if session == 'codex' else 'claude'
+    for pid in sorted(owned, key=lambda pid: depths[pid], reverse=True):
+        try:
+            args = (pathlib.Path('/proc') / str(pid) / 'cmdline').read_bytes().split(b'\0')[:2]
+            if any(agent in pathlib.Path(arg.decode()).name for arg in args if arg):
+                return pid
+        except (OSError, UnicodeError):
+            pass
+    return None
+def submit(request_nonce):
+    run('set-buffer', '-b', request_nonce, 'Reply only with the SHA256 hex digest of this nonce: ' + request_nonce)
+    try:
+        run('paste-buffer', '-p', '-b', request_nonce, '-t', session)
+    finally:
+        run('delete-buffer', '-b', request_nonce)
+    run('send-keys', '-t', session, 'Enter')
+while True:
+    pane = run('display-message', '-p', '-t', session, '#{pane_dead}|#{pane_current_command}')
+    assert pane.split('|')[0] == '0', 'interactive agent exited before request'
+    capture = run('capture-pane', '-p', '-J', '-S', '-100', '-t', session)
+    blocked = ('try new model', 'use existing model', 'choose the text style',
+               'choose a theme', 'select login method', 'select the login method',
+               'do you trust the files', 'trust this folder')
+    if any(dialog in capture.lower() for dialog in blocked):
+        print(capture[-2400:], file=sys.stderr)
+        raise RuntimeError('interactive startup dialog requires manual acceptance')
+    if native_agent_running() and ('›' in capture or '❯' in capture):
+        break
+    assert time.monotonic() < deadline, 'interactive agent failed to start'
+    time.sleep(.2)
+submit(nonce)
+while time.monotonic() < deadline:
+    pane = run('display-message', '-p', '-t', session, '#{pane_dead}')
+    assert pane == '0', 'interactive agent exited while handling request'
+    capture = run('capture-pane', '-p', '-J', '-S', '-100', '-t', session)
+    if expected in capture and 'esc to interrupt' not in capture.lower():
+        print('completed interactive response from controlled upstream')
+        break
+    time.sleep(.5)
+else:
+    # Fixture-only captures: bounded, no environment or credential files.
+    print(capture[-2400:], file=sys.stderr)
+    raise RuntimeError('no completed interactive response; inspect startup/dialog or gateway errors')
+if session == 'codex':
+    # A live pane and gateway are insufficient: the controlled upstream rejects
+    # this unique native request, so neither echo nor an earlier answer can pass.
+    pid = native_agent_running()
+    assert pid, 'native agent disappeared before blocked-request check'
+    proc = pathlib.Path('/proc') / str(pid)
+    env = dict(entry.split(b'=', 1) for entry in (proc / 'environ').read_bytes().split(b'\0') if b'=' in entry)
+    base = env[b'TAXIWAY_LITELLM_BASE_URL'].decode().rstrip('/')
+    assert urllib.request.urlopen(base + '/health/liveliness', timeout=5).status == 200, 'gateway must remain healthy'
+    blocked_nonce = nonce + '-blocked'
+    blocked_expected = hashlib.sha256(blocked_nonce.encode()).hexdigest()
+    submit(blocked_nonce)
+    # The native client retries rejected streams up to five times. Let it
+    # finish that bounded cycle before entering a subsequent prompt.
+    blocked_deadline = time.monotonic() + 60
+    while time.monotonic() < blocked_deadline:
+        assert run('display-message', '-p', '-t', session, '#{pane_dead}') == '0', 'blocked pane must stay alive'
+        capture = run('capture-pane', '-p', '-J', '-S', '-100', '-t', session)
+        assert blocked_expected not in capture, 'rejected request unexpectedly completed'
+        if 'fixture-request-blocked' in capture and 'esc to interrupt' not in capture.lower():
+            print('PASS rejected-native-request has no completion with live pane and gateway')
+            break
+        time.sleep(.2)
+    else:
+        print(capture[-2400:], file=sys.stderr)
+        raise RuntimeError('controlled rejection was not observed by the real client')
+    resumed_nonce = nonce + 'c'
+    resumed_expected = hashlib.sha256(resumed_nonce.encode()).hexdigest()
+    submit(resumed_nonce)
+    resumed_deadline = time.monotonic() + 30
+    while time.monotonic() < resumed_deadline:
+        capture = run('capture-pane', '-p', '-J', '-S', '-100', '-t', session)
+        if resumed_expected in capture and 'esc to interrupt' not in capture.lower():
+            print('PASS native-client completes a subsequent normal request')
+            break
+        time.sleep(.2)
+    else:
+        print(capture[-2400:], file=sys.stderr)
+        raise RuntimeError('native agent did not complete the subsequent normal request')
+`, socket, session, nonce, expected}, Stdout: &stdout, Stderr: &stderr,
+	})
+	require.NoError(t, err, "interactive session %s: %s", session, redactE2EDiagnosticSecrets(stderr.String()))
+	if len(expectBlocked) > 0 && expectBlocked[0] {
+		require.NotZero(t, res.ExitCode, "first-run dialog must reject readiness")
+		require.Contains(t, stderr.String(), "interactive startup dialog requires manual acceptance")
+		return
+	}
+	require.Zero(t, res.ExitCode, "interactive session %s: %s", session, redactE2EDiagnosticSecrets(stderr.String()))
+	require.Contains(t, stdout.String(), "completed interactive response")
+	t.Log(strings.TrimSpace(stdout.String()))
 }
 
 func assertE2EShellCheck(t *testing.T, root *cobra.Command, tb *dockerTestBuf, lab, orch string) {
@@ -1432,6 +1618,8 @@ func assertE2EGastownSessions(t *testing.T, state *RootState, id string) {
 		for _, session := range sessions {
 			present[session] = true
 		}
+		require.True(t, present["hq-mayor"], "persistent Mayor session must exist")
+		require.True(t, present["hq-deacon"], "persistent Deacon session must exist")
 		checked := 0
 		for _, agent := range agents {
 			// Boot/dogs can finish normally; absent idle agents are not required.
@@ -1441,8 +1629,29 @@ func assertE2EGastownSessions(t *testing.T, state *RootState, id string) {
 			checked++
 			require.True(t, agent.Running, "Present session %s is not recognized as running by Gastown", agent.Session)
 			assertE2EClaudeEnvironment(t, state, id, status.Tmux.Socket, agent.Session)
+			workspace := strings.TrimSpace(run(false, "tmux", "-L", status.Tmux.Socket,
+				"display-message", "-p", "-t", agent.Session, "#{pane_current_path}"))
+			assertE2EAgentWorkspaceTrusted(t, state, id, "claude-code", workspace)
+			assertE2EInteractiveResponse(t, state, id, status.Tmux.Socket, agent.Session)
 		}
 		require.Positive(t, checked, "No persistent agent session was checked")
+		// Exercise the adapter's normal launcher in a directory created after
+		// startup. Trust at install time cannot accidentally satisfy this case.
+		crew := fmt.Sprintf("readiness%x", time.Now().UnixNano())
+		run(false, "gt", "crew", "add", crew, "--rig", "agreement_hub")
+		run(false, "gt", "crew", "start", "agreement_hub", crew)
+		newSessions := strings.Fields(run(false, "tmux", "-L", status.Tmux.Socket, "list-sessions", "-F", "#{session_name}"))
+		var newSession string
+		for _, session := range newSessions {
+			if strings.HasSuffix(session, "-crew-"+crew) {
+				newSession = session
+				break
+			}
+		}
+		require.NotEmpty(t, newSession, "new crew must start an actual agent session")
+		assertE2EClaudeEnvironment(t, state, id, status.Tmux.Socket, newSession)
+		assertE2EAgentWorkspaceTrusted(t, state, id, "claude-code", "/lab/work/gt/agreement_hub/crew/"+crew)
+		assertE2EInteractiveResponse(t, state, id, status.Tmux.Socket, newSession)
 	})
 }
 
@@ -1932,28 +2141,66 @@ func startE2EFakeModelUpstream(t *testing.T) string {
 			return
 		}
 		if r.Method == http.MethodPost && (r.URL.Path == "/v1/messages" || r.URL.Path == "/backend-api/codex/responses") {
-			var payload struct {
-				Model string `json:"model"`
+			if r.URL.Path == "/v1/messages" {
+				providerKeyMatches := r.Header.Get("x-api-key") == "sk-e2e-upstream"
+				authorizationPresent := r.Header.Get("Authorization") != ""
+				if !providerKeyMatches || authorizationPresent {
+					t.Errorf("Anthropic API fixture auth mismatch: provider-key-match=%t, authorization-present=%t", providerKeyMatches, authorizationPresent)
+					http.Error(w, "fixture-upstream-auth-mismatch", http.StatusUnauthorized)
+					return
+				}
 			}
-			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			var payload struct {
+				Model  string `json:"model"`
+				Stream bool   `json:"stream"`
+			}
+			body, err := io.ReadAll(io.LimitReader(r.Body, 8<<20))
+			if err != nil || json.Unmarshal(body, &payload) != nil {
 				http.Error(w, "invalid fixture request", http.StatusBadRequest)
 				return
 			}
 			mu.Lock()
 			modelCalls++
 			mu.Unlock()
+			responseText := e2eFakeModelResponse
+			nonces := regexp.MustCompile(`taxiway-readiness-[0-9a-f]+(?:-blocked)?`).FindAll(body, -1)
+			if len(nonces) > 0 {
+				lastNonce := nonces[len(nonces)-1]
+				if bytes.HasSuffix(lastNonce, []byte("-blocked")) {
+					http.Error(w, "fixture-request-blocked", http.StatusForbidden)
+					return
+				}
+				responseText = fmt.Sprintf("%x", sha256.Sum256(lastNonce))
+			}
 			if r.URL.Path == "/v1/messages" {
-				writeE2EJSON(t, w, map[string]any{
+				message := map[string]any{
 					"id": "msg-taxiway-e2e", "type": "message", "role": "assistant", "model": payload.Model,
-					"content":     []map[string]any{{"type": "text", "text": e2eFakeModelResponse}},
+					"content":     []map[string]any{{"type": "text", "text": responseText}},
 					"stop_reason": "end_turn", "stop_sequence": nil,
 					"usage": map[string]any{"input_tokens": 1, "output_tokens": 1},
-				})
+				}
+				if !payload.Stream {
+					writeE2EJSON(t, w, message)
+					return
+				}
+				message["content"], message["stop_reason"] = []any{}, nil
+				w.Header().Set("Content-Type", "text/event-stream")
+				for _, event := range []map[string]any{
+					{"type": "message_start", "message": message},
+					{"type": "content_block_start", "index": 0, "content_block": map[string]any{"type": "text", "text": ""}},
+					{"type": "content_block_delta", "index": 0, "delta": map[string]any{"type": "text_delta", "text": responseText}},
+					{"type": "content_block_stop", "index": 0},
+					{"type": "message_delta", "delta": map[string]any{"stop_reason": "end_turn", "stop_sequence": nil}, "usage": map[string]any{"output_tokens": 1}},
+					{"type": "message_stop"},
+				} {
+					data, _ := json.Marshal(event)
+					_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event["type"], data)
+				}
 				return
 			}
 			item := map[string]any{
 				"id": "msg-taxiway-e2e", "type": "message", "status": "completed", "role": "assistant",
-				"content": []map[string]any{{"type": "output_text", "text": e2eFakeModelResponse, "annotations": []any{}}},
+				"content": []map[string]any{{"type": "output_text", "text": responseText, "annotations": []any{}}},
 			}
 			response := map[string]any{
 				"id": "resp-taxiway-e2e", "object": "response", "created_at": time.Now().Unix(),
@@ -1970,8 +2217,12 @@ func startE2EFakeModelUpstream(t *testing.T) string {
 			w.Header().Set("Content-Type", "text/event-stream")
 			for _, event := range []map[string]any{
 				{"type": "response.created", "response": started, "sequence_number": 0},
-				{"type": "response.output_item.done", "output_index": 0, "item": item, "sequence_number": 1},
-				{"type": "response.completed", "response": response, "sequence_number": 2},
+				{"type": "response.output_item.added", "output_index": 0, "item": map[string]any{"id": "msg-taxiway-e2e", "type": "message", "status": "in_progress", "role": "assistant", "content": []any{}}, "sequence_number": 1},
+				{"type": "response.content_part.added", "output_index": 0, "content_index": 0, "item_id": "msg-taxiway-e2e", "part": map[string]any{"type": "output_text", "text": "", "annotations": []any{}}, "sequence_number": 2},
+				{"type": "response.output_text.delta", "output_index": 0, "content_index": 0, "item_id": "msg-taxiway-e2e", "delta": responseText, "sequence_number": 3},
+				{"type": "response.output_text.done", "output_index": 0, "content_index": 0, "item_id": "msg-taxiway-e2e", "text": responseText, "sequence_number": 4},
+				{"type": "response.output_item.done", "output_index": 0, "item": item, "sequence_number": 5},
+				{"type": "response.completed", "response": response, "sequence_number": 6},
 			} {
 				data, _ := json.Marshal(event)
 				_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event["type"], data)

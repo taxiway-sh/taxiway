@@ -347,6 +347,25 @@ onboarding. Tests still verify those independent prerequisites. Live scenarios
 exercise actual file edits, command/build execution and HTTPS access, including
 delegated actions, without supplying their own permission overrides.
 
+The orchestrator E2E scenarios also send a unique harmless prompt through the
+real interactive CLI in its actual tmux session. Their controlled upstream
+computes a digest absent from the prompt; terminal echo, a running process and
+gateway health cannot satisfy this check. A rejected Codex request must show
+the controlled error without a completed digest, and a subsequent normal
+request must complete. Gas Town checks its persistent roles and a newly created
+crew workspace, including that workspace's trust settings.
+
+Claude-based E2E sessions select API-key mode with their controlled gateway and
+use `tests/fixtures/claude-onboarding.json`, containing
+only the two public first-run fields verified after a person completed native
+Claude Code `2.1.289` onboarding. The existing live helper merges those fields
+without copying accounts, OAuth credentials, preferences, trust or gateway
+keys. Prepare/run and phase-by-phase apply this fixture before starting the
+agent. The Claude `up` scenario first verifies that missing setup blocks
+interactive readiness, then applies the fixture and explicitly restarts the
+session. Successful response checks cover completed native setup; they do not
+claim that a user's first-ever interactive launch needs no onboarding.
+
 The Docker/Lima guest is the isolation boundary. `/lab/work` stays in the guest;
 `/lab/infra`, `/lab/agents` and the selected orchestrator are read-only host
 mounts. `/lab/git` and `/lab/recordings` are writable host directories. Neither
