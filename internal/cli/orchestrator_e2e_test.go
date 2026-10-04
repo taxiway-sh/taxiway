@@ -1349,9 +1349,10 @@ def native_agent_running():
 def submit(request_nonce):
     if sys.argv[1]:
         # Gastown v1.2.1 documents gt nudge as its native messaging API.
-        # Its wait-idle mode handles post-handoff readiness and tmux delivery.
+        # Idle was verified above. Custom agent presets have no wait-idle
+        # prompt detector, so use documented direct delivery instead of queueing.
         subprocess.check_output([str(pathlib.Path.home() / '.local/bin/gt'), 'nudge', session,
-                                 '--mode=wait-idle', '--message', 'Reply only with the SHA256 hex digest of this nonce: ' + request_nonce],
+                                 '--mode=immediate', '--message', 'Reply only with the SHA256 hex digest of this nonce: ' + request_nonce],
                                 cwd='/lab/work/gt', text=True, timeout=35)
         return
     if session != 'codex':
