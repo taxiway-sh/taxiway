@@ -34,6 +34,11 @@ Follow the documented tests, commits, PR and authorized merge/cleanup procedure.
 Preserve unrelated work and credentials. Necessary acceptance fixes stay in
 scope; unrelated discoveries become sanitized, deduplicated issue proposals.
 Ask whether to create them unless already authorized.
+For suspected dependency bugs, follow the [upstream contribution procedure](../../../docs/contributing/development.md#upstream-dependency-bugs):
+verify the installed/current supported version, integration boundary and correct
+public reporting channel; prepare a sanitized reproduction or narrow tested
+patch in isolation, with independent review. Authorization for Taxiway work
+does not authorize upstream issue/PR publication, comments, pushes or forks.
 
 ## Active-session loops
 

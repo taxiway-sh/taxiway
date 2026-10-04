@@ -160,6 +160,34 @@ evidence, impact and suggested scope, check duplicates, and propose an issue.
 Ask whether to create it unless already authorized. Keep acceptance-critical
 fixes in the current subject and avoid silently expanding scope.
 
+### Upstream dependency bugs
+
+For suspected LiteLLM, Langfuse, Claude Code, Codex, Gas Town or other dependency
+bugs, first identify the installed version, supported current version and exact
+integration boundary. Check existing reports and released fixes before deciding
+whether Taxiway integration or upstream behavior is responsible. Find the
+project's official contribution/reporting channel: do not assume every service
+has a public source repository or accepts code contributions. Repository-specific
+instructions take precedence within an upstream checkout.
+
+Prepare a minimal, sanitized reproduction with observed/expected behavior,
+versions, impact and relevant public evidence. Propose an upstream issue using
+that project's template, or prepare a narrow patch in a separate owned checkout
+with meaningful tests and a different review agent. Keep tokens, host details,
+private logs and unrelated Taxiway changes out of both. Investigate enough to
+make the proposal reviewable before requesting publication approval.
+
+Authorization to work on Taxiway is not permission to fork an upstream project,
+push code, open an issue/PR, or post comments there. Ask for explicit approval
+of the concrete upstream destination and prepared content before each new
+external contribution scope. Do not silently publish or modify upstream labels.
+Taxiway `gh` commands keep `--repo taxiway-sh/taxiway`; authorized upstream `gh`
+commands must use the verified `--repo <owner>/<repository>` explicitly, never
+the current-directory default or Taxiway's target by mistake.
+Track approved upstream links and status in the related Taxiway issue/PR, along
+with any local workaround and the version/verification criteria for removing
+it. Reuse an existing upstream report rather than opening duplicates.
+
 ### Monitoring, authentication and backlog
 
 The coordinator maintains three independent loops during the active session.
