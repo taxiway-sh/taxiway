@@ -572,12 +572,15 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 			defer cancel()
 			result, err := state.Driver.Exec(ctx, id, driver.ExecRequest{
 				Argv: []string{"bash", "-c", `set -euo pipefail
+signal="$3"
 freeze_tree() {
-  kill -STOP "$1"
+  kill -"$signal" "$1"
   printf '%s\n' "$1"
   local deadline=$((SECONDS + 5)) state
   while [[ -e /proc/$1/stat ]]; do
-    state=$(awk '{print $3}' "/proc/$1/stat")
+    stat=$(cat "/proc/$1/stat")
+    fields="${stat##*) }"
+    state="${fields%% *}"
     [[ "$state" == T || "$state" == t ]] && break
     (( SECONDS < deadline )) || { printf 'owned PID %s did not stop (state=%s)\n' "$1" "$state" >&2; return 1; }
     sleep 0.05
@@ -594,7 +597,7 @@ while [[ "$(tmux display-message -p -t "$1" '#{pane_current_command}')" != "$2" 
 done
 pid=$(tmux display-message -p -t "$1" '#{pane_pid}')
 [[ "$pid" =~ ^[0-9]+$ ]] && (( pid > 1 ))
-freeze_tree "$pid"`, "freeze-owned-agent", orch, map[string]string{"codex": "codex", "claude-code": "claude"}[orch]},
+freeze_tree "$pid"`, "freeze-owned-agent", orch, map[string]string{"codex": "codex", "claude-code": "claude"}[orch], map[string]string{"codex": "STOP", "claude-code": "TTIN"}[orch]},
 				Stdout: &stopped,
 				Stderr: &stoppedErr,
 			})
