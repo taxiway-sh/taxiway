@@ -550,113 +550,8 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 	})
 
 	runE2EStep(t, "reset:preview-with-quiescent-agent", func(t *testing.T) {
-		if orch == "codex" || orch == "claude-code" {
-			// A freshly restarted native client writes session files asynchronously.
-			// Freeze only this fixture's pane process tree while checking that preview
-			// preserves every file, then resume even if the assertion fails.
-			var stopped bytes.Buffer
-			var stoppedErr bytes.Buffer
-			var sessionsBefore bytes.Buffer
-			t.Cleanup(func() {
-				pids := strings.Fields(stopped.String())
-				if len(pids) == 0 {
-					return
-				}
-				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-				defer cancel()
-				// Descendants resume before their tmux server.
-				for left, right := 0, len(pids)-1; left < right; left, right = left+1, right-1 {
-					pids[left], pids[right] = pids[right], pids[left]
-				}
-				var resumeErr bytes.Buffer
-				result, err := state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: append([]string{"bash", "-c", `set -u
-failed=0
-for pid in "$@"; do
-  if [[ -e /proc/$pid/stat ]] && ! kill -CONT "$pid"; then
-    # A terminated child is harmless; continue so the server always resumes.
-    [[ ! -e /proc/$pid/stat ]] || failed=1
-  fi
-done
-exit "$failed"`, "resume-owned-agent"}, pids...), Stderr: &resumeErr})
-				require.NoError(t, err)
-				require.Zero(t, result.ExitCode, "resume this fixture's suspended processes: %s", resumeErr.String())
-				var sessionsAfter bytes.Buffer
-				result, err = state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: []string{"tmux", "list-sessions", "-F", "session|#{session_name}|#{session_id}"}, Stdout: &sessionsAfter})
-				require.NoError(t, err)
-				require.Zero(t, result.ExitCode)
-				require.Equal(t, sessionsBefore.String(), sessionsAfter.String(), "preview preserves native tmux sessions across verified quiescence")
-				var paneAfter bytes.Buffer
-				result, err = state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: []string{"tmux", "display-message", "-p", "-t", orch, "#{pane_dead}"}, Stdout: &paneAfter})
-				require.NoError(t, err)
-				require.Zero(t, result.ExitCode)
-				require.Equal(t, "0", strings.TrimSpace(paneAfter.String()), "native fixture remains alive after resume")
-			})
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			result, err := state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: []string{"tmux", "list-sessions", "-F", "session|#{session_name}|#{session_id}"}, Stdout: &sessionsBefore})
-			require.NoError(t, err)
-			require.Zero(t, result.ExitCode)
-			result, err = state.Driver.Exec(ctx, id, driver.ExecRequest{
-				Argv: []string{"bash", "-c", `set -euo pipefail
-freeze_tree() {
-  kill -STOP "$1"
-  printf '%s\n' "$1"
-  local deadline=$((SECONDS + 5)) state
-  while [[ -e /proc/$1/stat ]]; do
-    stat=$(cat "/proc/$1/stat")
-    fields="${stat##*) }"
-    state="${fields%% *}"
-    [[ "$state" != Z ]] || return 0 # Already terminated; cannot write files.
-    [[ "$state" == T || "$state" == t ]] && break
-    (( SECONDS < deadline )) || { printf 'owned PID %s did not stop (state=%s)\n' "$1" "$state" >&2; return 1; }
-    sleep 0.05
-  done
-  local child
-  if [[ -e /proc/$1/task/$1/children ]]; then
-    for child in $(cat "/proc/$1/task/$1/children"); do [[ ! -e /proc/$child/stat ]] || freeze_tree "$child"; done
-  fi
-}
-pid=$(tmux display-message -p -t "$1" '#{pane_pid}')
-[[ "$pid" =~ ^[0-9]+$ ]] && (( pid > 1 ))
-server=$(tmux display-message -p -t "$1" '#{pid}')
-[[ "$server" =~ ^[0-9]+$ ]] && (( server > 1 ))
-python3 - "$pid" "$server" <<'PY'
-import os, pathlib, sys
-pane, server = sys.argv[1:]
-assert pathlib.Path('/proc', server).stat().st_uid == os.getuid(), 'server must belong to this fixture user'
-assert pathlib.Path('/proc', server, 'comm').read_text().strip().startswith('tmux'), 'owned parent must be tmux'
-assert pathlib.Path('/proc', pane, 'stat').read_text().rsplit(')', 1)[1].split()[1] == server, 'pane must be child of this owned server'
-PY
-# tmux resumes stopped pane leaders; freeze this owned server first.
-freeze_tree "$server"`, "freeze-owned-agent", orch},
-				Stdout: &stopped,
-				Stderr: &stoppedErr,
-			})
-			require.NoError(t, err)
-			require.Zero(t, result.ExitCode, "freeze owned pane: %s", stoppedErr.String())
-			require.NotEmpty(t, strings.Fields(stopped.String()))
-			var metadata bytes.Buffer
-			result, err = state.Driver.Exec(ctx, id, driver.ExecRequest{
-				Argv: []string{"python3", "-c", `import pathlib, sys
-for pid in ' '.join(sys.argv[1:]).split():
-    path = pathlib.Path('/proc') / pid / 'stat'
-    if path.exists():
-        fields = path.read_text().rsplit(')', 1)[1].split()
-        print('suspended PID=%s PPID=%s state=%s' % (pid, fields[1], fields[0]))
-    else:
-        print('suspended PID=%s missing' % pid)
-for path in (pathlib.Path.home() / '.claude/sessions').glob('*.json'):
-    pid = path.stem
-    stat = pathlib.Path('/proc') / pid / 'stat'
-    fields = stat.read_text().rsplit(')', 1)[1].split() if stat.exists() else []
-    print('session PID=%s state=%s' % (pid, fields[0] if fields else 'missing'))
-`, strings.TrimSpace(stopped.String())}, Stdout: &metadata,
-			})
-			require.NoError(t, err)
-			require.Zero(t, result.ExitCode)
-			t.Log(metadata.String())
-		}
-		runE2EScriptDryRunStep(t, "taxiway:reset[--yes,--dry-run]", root, tb, state, stateDir, id, orch == "codex" || orch == "claude-code", []string{"Stopping workspace services", "Clearing lifecycle phase markers"}, "reset", "--yes", lab)
+		frozenTmux := quiesceE2EDryRunAgent(t, state, id, orch)
+		runE2EScriptDryRunStep(t, "taxiway:reset[--yes,--dry-run]", root, tb, state, stateDir, id, frozenTmux, []string{"Stopping workspace services", "Clearing lifecycle phase markers"}, "reset", "--yes", lab)
 	})
 	runE2EStep(t, "taxiway:reset[--yes]", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "reset", "--yes", lab)
@@ -668,12 +563,13 @@ for path in (pathlib.Path.home() / '.claude/sessions').glob('*.json'):
 	})
 
 	runE2EStep(t, "taxiway:rm[--yes,--dry-run]", func(t *testing.T) {
+		frozenTmux := quiesceE2EDryRunAgent(t, state, id, orch)
 		existedBefore, err := state.Driver.Exists(context.Background(), id)
 		require.NoError(t, err)
 		ref := config.LabRef{Lab: lab, Orch: orch, Driver: state.Driver.Name()}
 		sidecar := e2eLabLiteLLMContainer(state, ref)
 		sidecarStateBefore := e2eDockerContainerState(t, sidecar)
-		output := runE2EDryRunCommand(t, root, tb, state, false, "rm", "--yes", lab)
+		output := runE2EDryRunCommand(t, root, tb, state, frozenTmux, "rm", "--yes", lab)
 		require.Contains(t, output, "Deleting lab runtime and storage")
 		require.Contains(t, output, "Clearing lifecycle phase markers")
 		runE2EAssert(t, "assert:lab-runtime-preserved", func(t *testing.T) {
@@ -890,6 +786,123 @@ func cleanupE2EOrchestratorLab(t *testing.T, state *RootState, id, lab, orch str
 			t.Logf("cleanup lab %s: %v", lab, err)
 		}
 	})
+}
+
+func quiesceE2EDryRunAgent(t *testing.T, state *RootState, id, orch string) bool {
+	t.Helper()
+	if orch != "codex" && orch != "claude-code" {
+		return false
+	}
+	// A restarted native client writes and removes temporary/session files
+	// asynchronously, including after reset while rm preview takes its snapshot.
+	// Freeze only this fixture's pane process tree while checking that preview
+	// preserves every file, then resume even if the assertion fails.
+	var stopped bytes.Buffer
+	var stoppedErr bytes.Buffer
+	var sessionsBefore bytes.Buffer
+	t.Cleanup(func() {
+		pids := strings.Fields(stopped.String())
+		if len(pids) == 0 {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		// Descendants resume before their tmux server.
+		for left, right := 0, len(pids)-1; left < right; left, right = left+1, right-1 {
+			pids[left], pids[right] = pids[right], pids[left]
+		}
+		var resumeErr bytes.Buffer
+		result, err := state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: append([]string{"bash", "-c", `set -u
+failed=0
+for pid in "$@"; do
+  if [[ -e /proc/$pid/stat ]] && ! kill -CONT "$pid"; then
+    # A terminated child is harmless; continue so the server always resumes.
+    [[ ! -e /proc/$pid/stat ]] || failed=1
+  fi
+done
+exit "$failed"`, "resume-owned-agent"}, pids...), Stderr: &resumeErr})
+		require.NoError(t, err)
+		require.Zero(t, result.ExitCode, "resume this fixture's suspended processes: %s", resumeErr.String())
+		var sessionsAfter bytes.Buffer
+		result, err = state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: []string{"tmux", "list-sessions", "-F", "session|#{session_name}|#{session_id}"}, Stdout: &sessionsAfter})
+		require.NoError(t, err)
+		require.Zero(t, result.ExitCode)
+		require.Equal(t, sessionsBefore.String(), sessionsAfter.String(), "preview preserves native tmux sessions across verified quiescence")
+		var paneAfter bytes.Buffer
+		result, err = state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: []string{"tmux", "display-message", "-p", "-t", orch, "#{pane_dead}"}, Stdout: &paneAfter})
+		require.NoError(t, err)
+		require.Zero(t, result.ExitCode)
+		require.Equal(t, "0", strings.TrimSpace(paneAfter.String()), "native fixture remains alive after resume")
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	result, err := state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: []string{"tmux", "list-sessions", "-F", "session|#{session_name}|#{session_id}"}, Stdout: &sessionsBefore})
+	require.NoError(t, err)
+	require.Zero(t, result.ExitCode)
+	result, err = state.Driver.Exec(ctx, id, driver.ExecRequest{
+		Argv: []string{"bash", "-c", `set -euo pipefail
+freeze_tree() {
+  kill -STOP "$1"
+  printf '%s\n' "$1"
+  local deadline=$((SECONDS + 5)) state
+  while [[ -e /proc/$1/stat ]]; do
+    stat=$(cat "/proc/$1/stat")
+    fields="${stat##*) }"
+    state="${fields%% *}"
+    [[ "$state" != Z ]] || return 0 # Already terminated; cannot write files.
+    [[ "$state" == T || "$state" == t ]] && break
+    (( SECONDS < deadline )) || { printf 'owned PID %s did not stop (state=%s)\n' "$1" "$state" >&2; return 1; }
+    sleep 0.05
+  done
+  [[ -e /proc/$1/stat ]] || return 0
+  [[ -r /proc/$1/task/$1/children ]] || {
+    printf 'snapshot quiescence requires readable /proc/PID/task/PID/children (CONFIG_PROC_CHILDREN)\n' >&2
+    return 1
+  }
+  local child children
+  children=$(cat "/proc/$1/task/$1/children")
+  for child in $children; do [[ ! -e /proc/$child/stat ]] || freeze_tree "$child"; done
+}
+pid=$(tmux display-message -p -t "$1" '#{pane_pid}')
+[[ "$pid" =~ ^[0-9]+$ ]] && (( pid > 1 ))
+server=$(tmux display-message -p -t "$1" '#{pid}')
+[[ "$server" =~ ^[0-9]+$ ]] && (( server > 1 ))
+python3 - "$pid" "$server" <<'PY'
+import os, pathlib, sys
+pane, server = sys.argv[1:]
+assert pathlib.Path('/proc', server).stat().st_uid == os.getuid(), 'server must belong to this fixture user'
+assert pathlib.Path('/proc', server, 'comm').read_text().strip().startswith('tmux'), 'owned parent must be tmux'
+assert pathlib.Path('/proc', pane, 'stat').read_text().rsplit(')', 1)[1].split()[1] == server, 'pane must be child of this owned server'
+PY
+# tmux resumes stopped pane leaders; freeze this owned server first.
+freeze_tree "$server"`, "freeze-owned-agent", orch},
+		Stdout: &stopped,
+		Stderr: &stoppedErr,
+	})
+	require.NoError(t, err)
+	require.Zero(t, result.ExitCode, "freeze owned pane: %s", stoppedErr.String())
+	require.NotEmpty(t, strings.Fields(stopped.String()))
+	var metadata bytes.Buffer
+	result, err = state.Driver.Exec(ctx, id, driver.ExecRequest{
+		Argv: []string{"python3", "-c", `import pathlib, sys
+for pid in ' '.join(sys.argv[1:]).split():
+    path = pathlib.Path('/proc') / pid / 'stat'
+    if path.exists():
+        fields = path.read_text().rsplit(')', 1)[1].split()
+        print('suspended PID=%s PPID=%s state=%s' % (pid, fields[1], fields[0]))
+    else:
+        print('suspended PID=%s missing' % pid)
+for path in (pathlib.Path.home() / '.claude/sessions').glob('*.json'):
+    pid = path.stem
+    stat = pathlib.Path('/proc') / pid / 'stat'
+    fields = stat.read_text().rsplit(')', 1)[1].split() if stat.exists() else []
+    print('session PID=%s state=%s' % (pid, fields[0] if fields else 'missing'))
+`, strings.TrimSpace(stopped.String())}, Stdout: &metadata,
+	})
+	require.NoError(t, err)
+	require.Zero(t, result.ExitCode)
+	t.Log(metadata.String())
+	return true
 }
 
 func runE2EDryRunCommand(t *testing.T, root *cobra.Command, tb *dockerTestBuf, state *RootState, frozenTmux bool, args ...string) string {
