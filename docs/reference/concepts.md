@@ -90,11 +90,21 @@ taxiway up mylab --type <type> --repo https://github.com/org/repo
 ```
 
 During the workspace phase, Taxiway mirrors the source repository into a
-per-lab bare Git repository under the lab state directory. Orchestrator
-workspace scripts then clone from that isolated local remote. The lab's
+per-lab bare Git repository under the host lab state directory, exposed
+read-only at `/lab/git-source`. It copies that source into a writable bare fork
+at `/lab/git` in the guest's persistent storage. Host Git operations use only
+the host-owned source; the guest's configuration, hooks and pushes remain in
+the guest. Workspace refresh imports source updates without deleting guest-only
+refs. Orchestrator workspace scripts clone from that guest-local remote. The lab's
 `origin` points at the lab-local remote, not at the source repository, so
-pushes stay inside the lab state unless an orchestrator explicitly reconfigures
+pushes stay inside the guest state unless an orchestrator explicitly reconfigures
 remotes.
+
+Before running workspace operations with this version, recreate labs created
+with the earlier shared Git layout. Export recordings and preserve any lab
+work before removing them. Restarting an existing lab keeps its original mounts.
+Use `taxiway rm <lab> --yes`, then create the lab again with its desired options.
+Deleting only the container or VM leaves the earlier host Git state in place.
 
 Useful options:
 

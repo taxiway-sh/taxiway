@@ -368,7 +368,8 @@ claim that a user's first-ever interactive launch needs no onboarding.
 
 The Docker/Lima guest is the isolation boundary. `/lab/work` stays in the guest;
 `/lab/infra`, `/lab/agents` and the selected orchestrator are read-only host
-mounts. `/lab/git` and `/lab/recordings` are writable host directories. Neither
+mounts, including host Git sources at `/lab/git-source`. Writable forks at
+`/lab/git` stay in the guest; `/lab/recordings` is a writable host directory. Neither
 driver mounts the entire host home. Docker does not mount the Docker socket or
 request privileged mode. Agents can use passwordless sudo inside the guest.
 Network access and provisioned credentials can reach external services, and

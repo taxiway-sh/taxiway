@@ -22,14 +22,16 @@ flowchart LR
   repo[Runtime repo] --> infra["Bind mount: /lab/infra read-only"]
   repo --> agents["Bind mount: /lab/agents read-only"]
   repo --> orch["Bind mount: /lab/orchestrators/<type> read-only"]
-  git[Host git dir] --> gitMount["Bind mount: /lab/git writable"]
+  git[Host git dir] --> gitMount["Bind mount: /lab/git-source read-only"]
   recordings[Host recordings dir] --> recordingsMount["Bind mount: /lab/recordings writable"]
   labVolume["Docker volume: /lab"] --> container[Lab container]
   labVolume --> work["Internal: /lab/work writable"]
+  labVolume --> fork["Internal: /lab/git writable"]
   infra --> container
   agents --> container
   orch --> container
   work --> container
+  fork --> container
   gitMount --> container
   recordingsMount --> container
 ```
@@ -44,13 +46,14 @@ The driver:
 - bind-mounts runtime assets read-only at `/lab/infra`, `/lab/agents`, and
   `/lab/orchestrators/<type>`;
 - keeps `/lab/work` as internal writable lab state inside the Docker volume;
-- bind-mounts the host bare Git remotes directory at `/lab/git`;
+- bind-mounts the host source mirrors read-only at `/lab/git-source`;
+- keeps writable Git forks at `/lab/git` inside the Docker volume;
 - bind-mounts the host recordings directory at `/lab/recordings`.
 
 This matches the Lima driver contract: runtime assets are read-only, while
-`/lab/git` and `/lab/recordings` are host-visible writable per-lab state
-directories under `.lab-state/<lab>/`. `/lab/work` is writable but remains
-internal to the lab for stronger isolation.
+the host source at `/lab/git-source` is read-only and `/lab/recordings` is
+host-visible writable state under `.lab-state/<lab>/`. `/lab/work` and
+`/lab/git` are writable but remain internal to the lab for stronger isolation.
 
 The default image is `ubuntu:24.04`. It follows the tag so lab containers pick
 up upstream image patch updates when Docker pulls the image.
