@@ -456,12 +456,13 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 	}
 
 	runE2EStep(t, "taxiway:down[--dry-run]", func(t *testing.T) {
+		frozenTmux := quiesceE2EDryRunAgent(t, state, id, orch)
 		runningBefore, err := state.Driver.Running(context.Background(), id)
 		require.NoError(t, err)
 		ref := config.LabRef{Lab: lab, Orch: orch, Driver: state.Driver.Name()}
 		sidecar := e2eLabLiteLLMContainer(state, ref)
 		sidecarStateBefore := e2eDockerContainerState(t, sidecar)
-		output := runE2EDryRunCommand(t, root, tb, state, false, "down", lab)
+		output := runE2EDryRunCommand(t, root, tb, state, frozenTmux, "down", lab)
 		require.Contains(t, output, "Stopping lab runtime")
 		require.Contains(t, output, "Stopping LiteLLM sidecar")
 		runE2EAssert(t, "assert:lab-runtime-preserved", func(t *testing.T) {
