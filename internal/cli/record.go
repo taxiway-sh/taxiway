@@ -669,6 +669,12 @@ func runRecordAnalyze(cmd *cobra.Command, state *RootState, lab, recordName stri
 	if err != nil {
 		return err
 	}
+	if runner.Name == "claude-code" {
+		// Private snapshots are outside the project workspace. Grant access only
+		// to that directory, retaining the user's normal permission mode.
+		runner.Args = append(slices.Clone(runner.Args), "--add-dir", analysisDir, "--")
+		runner.InteractiveArgs = append(slices.Clone(runner.InteractiveArgs), "--add-dir", analysisDir, "--")
+	}
 	progress.Stepf("Selected runner: %s.", runner.Name)
 	if interactive {
 		if !analyzeRunnerInteractiveInput(cmd) || !analyzeRunnerInteractiveOutput(cmd) {

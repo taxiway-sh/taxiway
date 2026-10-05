@@ -253,6 +253,16 @@ func TestRecordAnalyzeInteractiveLaunchesRunnerWithInitialPrompt(t *testing.T) {
 	require.Len(t, got.Args, 1)
 	require.Contains(t, got.Args[0], "taxiway record analysis prompt")
 	require.Contains(t, got.Args[0], "walkthrough")
+
+	t.Setenv("PATH", testPathWithCommands(t, "claude"))
+	_, _, err = execRoot(t, root, stdout, stderr, "record", "analyze", "demo", "--runner", "claude-code", "--interactive")
+	require.NoError(t, err)
+	require.Equal(t, "claude", got.Command)
+	require.Len(t, got.Args, 4)
+	require.Equal(t, "--add-dir", got.Args[0])
+	require.Equal(t, "--", got.Args[2], "end variadic directory arguments before the prompt")
+	require.Contains(t, got.Args[3], "Recordings directory: "+got.Args[1])
+	require.NoDirExists(t, got.Args[1])
 }
 
 func TestRecordAnalyzeProgressRefreshesHeartbeatWithSpacing(t *testing.T) {
@@ -516,6 +526,7 @@ func TestRecordAnalyzeRunnerUsesPrivateSnapshot(t *testing.T) {
 		}
 		require.NotEqual(t, store.Dir(), snapshotDir)
 		require.NotEmpty(t, snapshotDir)
+		require.Equal(t, []string{"-p", "--add-dir", snapshotDir, "--"}, execution.Args)
 		require.NotContains(t, execution.Stdin, cast)
 		require.NoError(t, os.Remove(cast))
 		require.NoError(t, os.Symlink(outside, cast))
