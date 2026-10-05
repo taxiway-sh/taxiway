@@ -78,7 +78,7 @@ direct push to `main`.
 ## Contribution Workflow
 
 The repository owns one portable [Agent Skills](https://agentskills.io/)
-skill: [.agents/skills/taxiway-workflow/SKILL.md](../../.agents/skills/taxiway-workflow/SKILL.md).
+skill: [.agents/skills/taxiway-workflow/SKILL.md](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-workflow/SKILL.md).
 Codex discovers it there; `.claude/skills/taxiway-workflow` is a relative symlink
 to that same directory for Claude Code discovery. There are no separate workflow
 implementations, Dynamic Workflow dependencies, or client-specific schedulers.

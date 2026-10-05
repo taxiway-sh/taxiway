@@ -87,7 +87,7 @@ the source of truth for resuming commands without repeating command-line flags.
     "name": "default"
   },
   "settings": {
-    "version": "latest"
+    "codex-version": "latest"
   }
 }
 ```
