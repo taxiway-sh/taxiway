@@ -76,7 +76,7 @@ func e2eExpectations(t *testing.T, orch string) e2eOrchestratorExpectations {
 			workspaceAssertion: "assert:workspace-provisioned", workspace: e2eGastownFixtureWorkspace,
 			// Gastown approves each working directory when its agent launches.
 			workspaceTrustedBeforeStart: false, assertSessions: assertE2EGastownSessions,
-			checkHandoff: assertE2EGastownHandoff,
+			checkHandoff: runE2EGastownHandoff,
 		}
 	default:
 		t.Fatalf("unsupported E2E orchestrator %q", orch)
@@ -134,7 +134,7 @@ func testE2EOrchestratorPrepareRun(t *testing.T, orch string) {
 	cleanupE2EOrchestratorLab(t, state, id, lab, orch)
 	configureE2ELiteLLMModelCatalog(t, state, fakeUpstream.baseURL)
 	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
-	assertE2EInvalidModelSelections(t, root, tb, state, id, lab, orch)
+	runE2EInvalidModelSelections(t, root, tb, state, id, lab, orch)
 
 	runE2EStep(t, "taxiway:init", func(t *testing.T) {
 		ensureE2ERuntimeInitialized(t, root, tb)
@@ -154,7 +154,11 @@ func testE2EOrchestratorPrepareRun(t *testing.T, orch string) {
 		})
 	})
 
-	configureE2ECompletedClaudeOnboarding(t, state, id, orch)
+	if orch != "codex" {
+		runE2EStep(t, "fixture:complete-native-onboarding", func(t *testing.T) {
+			configureE2ECompletedClaudeOnboarding(t, state, id, orch)
+		})
+	}
 
 	runE2EStep(t, "taxiway:run[--skip-auth-check]", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "run", lab, "--skip-auth-check")
@@ -176,15 +180,29 @@ func testE2EOrchestratorPrepareRun(t *testing.T, orch string) {
 		runE2EAssert(t, "assert:gateway-routed", func(t *testing.T) {
 			assertE2EGatewayRequestRouted(t, state, lab, orch, fakeUpstream)
 		})
+		runE2EAssert(t, "assert:gateway-protocol-preserved", func(t *testing.T) {
+			assertE2EGatewayProtocol(t, state, lab, orch, fakeUpstream)
+		})
 		runE2EAssert(t, "assert:trace-ingested", func(t *testing.T) {
 			assertE2EObservabilityTraceIngested(t, state, lab, orch)
 		})
+		runE2EAssert(t, "assert:shell-target-ready", func(t *testing.T) {
+			assertE2EShellCheck(t, root, tb, lab, orch)
+		})
+		assertE2EStartedAgents(t, state, id, orch)
+
 	})
 
-	runE2EStep(t, e2eCommandStepAt("after-start", "shell", "--check"), func(t *testing.T) {
-		assertE2EShellCheck(t, root, tb, lab, orch)
-	})
-	assertE2EStartedAgents(t, state, id, orch, "after-start")
+	if orch == "gastown" {
+		runE2EGastownReadinessActions(t, state, id, "after-start")
+	} else {
+		runE2EStep(t, "agent:send[controlled-readiness-probe]", func(t *testing.T) {
+			observation := runE2EInteractiveProbe(t, state, id, "", orch)
+			runE2EAssert(t, "assert:interactive-response-completed", func(t *testing.T) {
+				assertE2EInteractiveObservation(t, observation, false)
+			})
+		})
+	}
 
 	runE2EStep(t, e2eCommandStepAt("after-start", "doctor"), func(t *testing.T) {
 		runE2ECommand(t, root, tb, "doctor", lab)
@@ -255,7 +273,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 	cleanupE2EOrchestratorLab(t, state, id, lab, orch)
 	configureE2ELiteLLMModelCatalog(t, state, fakeUpstream.baseURL)
 	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
-	assertE2EInvalidModelSelections(t, root, tb, state, id, lab, orch)
+	runE2EInvalidModelSelections(t, root, tb, state, id, lab, orch)
 	dryRunLabels := e2eSemanticDryRunLabels(orch)
 
 	runE2EStep(t, "taxiway:init", func(t *testing.T) {
@@ -291,7 +309,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		runE2EAssert(t, "assert:lab-listed", func(t *testing.T) {
 			assertE2EList(t, root, tb, lab, orch, "degraded", "created")
 		})
-		runE2EAssert(t, "assert:driver-inspection-contract", func(t *testing.T) {
+		runE2EAssert(t, "assert:driver-inspection-errors-preserved", func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
 			_, err := state.Driver.Exists(ctx, id)
@@ -299,17 +317,22 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 			st, err := state.Driver.Status(ctx, id)
 			require.ErrorIs(t, err, context.Canceled)
 			require.Empty(t, st.State)
-			pauseCtx, stop := context.WithTimeout(context.Background(), 10*time.Second)
-			defer stop()
-			out, err := exec.CommandContext(pauseCtx, "docker", "pause", id).CombinedOutput()
-			require.NoError(t, err, "pause owned lab: %s", out)
-			defer func() {
-				resumeCtx, done := context.WithTimeout(context.Background(), 10*time.Second)
-				defer done()
-				out, err := exec.CommandContext(resumeCtx, "docker", "unpause", id).CombinedOutput()
-				require.NoError(t, err, "resume owned lab: %s", out)
-			}()
-			st, err = state.Driver.Status(context.Background(), id)
+		})
+	})
+
+	runE2EStep(t, "docker:pause[owned-lab-inspection-fixture]", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		out, err := exec.CommandContext(ctx, "docker", "pause", id).CombinedOutput()
+		require.NoError(t, err, "pause owned lab: %s", out)
+		t.Cleanup(func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			out, err := exec.CommandContext(ctx, "docker", "unpause", id).CombinedOutput()
+			require.NoError(t, err, "resume owned lab: %s", out)
+		})
+		runE2EAssert(t, "assert:paused-lab-reported-stopped", func(t *testing.T) {
+			st, err := state.Driver.Status(context.Background(), id)
 			require.NoError(t, err)
 			require.Equal(t, "stopped", st.State, "paused lab must stay within the status contract")
 		})
@@ -395,7 +418,11 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		})
 	})
 
-	configureE2ECompletedClaudeOnboarding(t, state, id, orch)
+	if orch != "codex" {
+		runE2EStep(t, "fixture:complete-native-onboarding", func(t *testing.T) {
+			configureE2ECompletedClaudeOnboarding(t, state, id, orch)
+		})
+	}
 
 	runE2EScriptDryRunStep(t, "taxiway:start[--dry-run]", root, tb, state, stateDir, id, false, dryRunLabels.Start, "start", lab)
 	runE2EStep(t, "taxiway:start", func(t *testing.T) {
@@ -409,9 +436,17 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		runE2EAssert(t, "assert:gateway-routed", func(t *testing.T) {
 			assertE2EGatewayRequestRouted(t, state, lab, orch, fakeUpstream)
 		})
+		runE2EAssert(t, "assert:gateway-protocol-preserved", func(t *testing.T) {
+			assertE2EGatewayProtocol(t, state, lab, orch, fakeUpstream)
+		})
 		runE2EAssert(t, "assert:trace-ingested", func(t *testing.T) {
 			assertE2EObservabilityTraceIngested(t, state, lab, orch)
 		})
+		runE2EAssert(t, "assert:shell-target-ready", func(t *testing.T) {
+			assertE2EShellCheck(t, root, tb, lab, orch)
+		})
+		assertE2EStartedAgents(t, state, id, orch)
+
 	})
 
 	runE2EStep(t, "taxiway:observe[down]", func(t *testing.T) {
@@ -430,10 +465,16 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		})
 	})
 
-	runE2EStep(t, e2eCommandStepAt("after-start", "shell", "--check"), func(t *testing.T) {
-		assertE2EShellCheck(t, root, tb, lab, orch)
-	})
-	assertE2EStartedAgents(t, state, id, orch, "after-start")
+	if orch == "gastown" {
+		runE2EGastownReadinessActions(t, state, id, "after-start")
+	} else {
+		runE2EStep(t, "agent:send[controlled-readiness-probe]@after-start", func(t *testing.T) {
+			observation := runE2EInteractiveProbe(t, state, id, "", orch)
+			runE2EAssert(t, "assert:interactive-response-completed", func(t *testing.T) {
+				assertE2EInteractiveObservation(t, observation, false)
+			})
+		})
+	}
 
 	runE2EStep(t, e2eCommandStepAt("after-start", "doctor"), func(t *testing.T) {
 		runE2ECommand(t, root, tb, "doctor", lab)
@@ -455,14 +496,21 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		})
 	}
 
+	var downFrozen bool
+	var downResume func(*testing.T)
+	if orch != "gastown" {
+		runE2EStep(t, "fixture:quiesce-owned-agent-before-down-preview", func(fixtureT *testing.T) {
+			downFrozen, downResume = quiesceE2EDryRunAgent(t, fixtureT, state, id, orch)
+		})
+	}
 	runE2EStep(t, "taxiway:down[--dry-run]", func(t *testing.T) {
-		frozenTmux := quiesceE2EDryRunAgent(t, state, id, orch)
+
 		runningBefore, err := state.Driver.Running(context.Background(), id)
 		require.NoError(t, err)
 		ref := config.LabRef{Lab: lab, Orch: orch, Driver: state.Driver.Name()}
 		sidecar := e2eLabLiteLLMContainer(state, ref)
 		sidecarStateBefore := e2eDockerContainerState(t, sidecar)
-		output := runE2EDryRunCommand(t, root, tb, state, frozenTmux, "down", lab)
+		output := runE2EDryRunCommand(t, root, tb, state, downFrozen, "down", lab)
 		require.Contains(t, output, "Stopping lab runtime")
 		require.Contains(t, output, "Stopping LiteLLM sidecar")
 		runE2EAssert(t, "assert:lab-runtime-preserved", func(t *testing.T) {
@@ -474,6 +522,9 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 			require.Equal(t, sidecarStateBefore, e2eDockerContainerState(t, sidecar))
 		})
 	})
+	if downResume != nil {
+		runE2EStep(t, "fixture:resume-owned-agent-after-down-preview", func(t *testing.T) { downResume(t) })
+	}
 
 	runE2EStep(t, "taxiway:down", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "down", lab)
@@ -507,19 +558,32 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		runE2EAssert(t, "assert:gateway-routed", func(t *testing.T) {
 			assertE2EGatewayRequestRouted(t, state, lab, orch, fakeUpstream)
 		})
+		runE2EAssert(t, "assert:gateway-protocol-preserved", func(t *testing.T) {
+			assertE2EGatewayProtocol(t, state, lab, orch, fakeUpstream)
+		})
 		runE2EAssert(t, "assert:trace-ingested", func(t *testing.T) {
 			assertE2EObservabilityTraceIngested(t, state, lab, orch)
 		})
+		runE2EAssert(t, "assert:shell-target-ready", func(t *testing.T) {
+			assertE2EShellCheck(t, root, tb, lab, orch)
+		})
+		assertE2EStartedAgents(t, state, id, orch)
+
 	})
 
-	runE2EStep(t, e2eCommandStepAt("after-up", "shell", "--check"), func(t *testing.T) {
-		assertE2EShellCheck(t, root, tb, lab, orch)
-	})
-	assertE2EStartedAgents(t, state, id, orch, "after-up")
-	if expectations.checkHandoff != nil {
-		runE2EStep(t, "orchestrator:handoff", func(t *testing.T) {
-			expectations.checkHandoff(t, state, id)
+	if orch == "gastown" {
+		runE2EGastownReadinessActions(t, state, id, "after-up")
+	} else {
+		runE2EStep(t, "agent:send[controlled-readiness-probe]@after-up", func(t *testing.T) {
+			observation := runE2EInteractiveProbe(t, state, id, "", orch)
+			runE2EAssert(t, "assert:interactive-response-completed", func(t *testing.T) {
+				assertE2EInteractiveObservation(t, observation, false)
+			})
 		})
+	}
+	if expectations.checkHandoff != nil {
+		expectations.checkHandoff(t, state, id)
+		runE2EGastownReadinessActions(t, state, id, "after-handoff")
 	}
 
 	runE2EStep(t, e2eCommandStepAt("after-up", "doctor"), func(t *testing.T) {
@@ -550,10 +614,25 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		assertE2EFixtureWorkspace(t, state, id, orch)
 	})
 
-	runE2EStep(t, "reset:preview-with-quiescent-agent", func(t *testing.T) {
-		frozenTmux := quiesceE2EDryRunAgent(t, state, id, orch)
-		runE2EScriptDryRunStep(t, "taxiway:reset[--yes,--dry-run]", root, tb, state, stateDir, id, frozenTmux, []string{"Stopping workspace services", "Clearing lifecycle phase markers"}, "reset", "--yes", lab)
+	var resetFrozen bool
+	var resetResume func(*testing.T)
+	if orch != "gastown" {
+		runE2EStep(t, "fixture:quiesce-owned-agent-before-reset-preview", func(fixtureT *testing.T) {
+			resetFrozen, resetResume = quiesceE2EDryRunAgent(t, fixtureT, state, id, orch)
+		})
+	}
+	runE2EStep(t, "taxiway:reset[--yes,--dry-run]", func(t *testing.T) {
+
+		phaseStateBefore := captureE2EPhaseState(stateDir, id)
+		output := runE2EDryRunCommand(t, root, tb, state, resetFrozen, "reset", "--yes", lab)
+		require.Contains(t, output, "Stopping workspace services")
+		require.Contains(t, output, "Clearing lifecycle phase markers")
+		require.Equal(t, 1, strings.Count(output, "No changes were made."))
+		runE2EAssert(t, "assert:phase-markers-preserved", func(t *testing.T) { require.Equal(t, phaseStateBefore, captureE2EPhaseState(stateDir, id)) })
 	})
+	if resetResume != nil {
+		runE2EStep(t, "fixture:resume-owned-agent-after-reset-preview", func(t *testing.T) { resetResume(t) })
+	}
 	runE2EStep(t, "taxiway:reset[--yes]", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "reset", "--yes", lab)
 		_, err := os.Stat(phases.Dir(stateDir, id))
@@ -563,14 +642,21 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		})
 	})
 
+	var rmFrozen bool
+	var rmResume func(*testing.T)
+	if orch != "gastown" {
+		runE2EStep(t, "fixture:quiesce-owned-agent-before-rm-preview", func(fixtureT *testing.T) {
+			rmFrozen, rmResume = quiesceE2EDryRunAgent(t, fixtureT, state, id, orch)
+		})
+	}
 	runE2EStep(t, "taxiway:rm[--yes,--dry-run]", func(t *testing.T) {
-		frozenTmux := quiesceE2EDryRunAgent(t, state, id, orch)
+
 		existedBefore, err := state.Driver.Exists(context.Background(), id)
 		require.NoError(t, err)
 		ref := config.LabRef{Lab: lab, Orch: orch, Driver: state.Driver.Name()}
 		sidecar := e2eLabLiteLLMContainer(state, ref)
 		sidecarStateBefore := e2eDockerContainerState(t, sidecar)
-		output := runE2EDryRunCommand(t, root, tb, state, frozenTmux, "rm", "--yes", lab)
+		output := runE2EDryRunCommand(t, root, tb, state, rmFrozen, "rm", "--yes", lab)
 		require.Contains(t, output, "Deleting lab runtime and storage")
 		require.Contains(t, output, "Clearing lifecycle phase markers")
 		runE2EAssert(t, "assert:lab-runtime-preserved", func(t *testing.T) {
@@ -583,6 +669,9 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		})
 	})
 
+	if rmResume != nil {
+		runE2EStep(t, "fixture:resume-owned-agent-after-rm-preview", func(t *testing.T) { rmResume(t) })
+	}
 	runE2EStep(t, "taxiway:rm[--yes]", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "rm", "--yes", lab)
 		runE2EAssert(t, "assert:lab-removed", func(t *testing.T) {
@@ -614,7 +703,7 @@ func testE2EOrchestratorUp(t *testing.T, orch string) {
 	cleanupE2EOrchestratorLab(t, state, id, lab, orch)
 	configureE2ELiteLLMModelCatalog(t, state, fakeUpstream.baseURL)
 	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
-	assertE2EInvalidModelSelections(t, root, tb, state, id, lab, orch)
+	runE2EInvalidModelSelections(t, root, tb, state, id, lab, orch)
 
 	runE2EStep(t, "taxiway:init", func(t *testing.T) {
 		ensureE2ERuntimeInitialized(t, root, tb)
@@ -643,18 +732,30 @@ func testE2EOrchestratorUp(t *testing.T, orch string) {
 		runE2EAssert(t, "assert:gateway-routed", func(t *testing.T) {
 			assertE2EGatewayRequestRouted(t, state, lab, orch, fakeUpstream)
 		})
+		runE2EAssert(t, "assert:gateway-protocol-preserved", func(t *testing.T) {
+			assertE2EGatewayProtocol(t, state, lab, orch, fakeUpstream)
+		})
 		runE2EAssert(t, "assert:trace-ingested", func(t *testing.T) {
 			assertE2EObservabilityTraceIngested(t, state, lab, orch)
 		})
+		if orch == "codex" {
+			runE2EAssert(t, "assert:shell-target-ready", func(t *testing.T) { assertE2EShellCheck(t, root, tb, lab, orch) })
+
+			assertE2EStartedAgents(t, state, id, orch)
+		}
+
 	})
 
 	if orch == "claude-code" {
-		runE2EStep(t, "agents:first-run-dialog-rejects-readiness", func(t *testing.T) {
-			assertE2EInteractiveResponse(t, state, id, "", orch, true)
+		runE2EStep(t, "agent:send[first-run-readiness-probe]", func(t *testing.T) {
+			observation := runE2EInteractiveProbe(t, state, id, "", orch)
+			runE2EAssert(t, "assert:first-run-dialog-rejects-readiness", func(t *testing.T) {
+				assertE2EInteractiveObservation(t, observation, true)
+			})
 		})
 	}
 	if orch != "codex" {
-		runE2EStep(t, "agents:pause-before-completed-onboarding-fixture", func(t *testing.T) {
+		runE2EStep(t, "fixture:pause-before-native-onboarding", func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 			script := "tmux kill-session -t claude-code"
@@ -668,16 +769,26 @@ func testE2EOrchestratorUp(t *testing.T, orch string) {
 			require.NoError(t, err)
 			require.Zero(t, res.ExitCode, redactE2EDiagnosticSecrets(stderr.String()))
 		})
-		configureE2ECompletedClaudeOnboarding(t, state, id, orch)
+		runE2EStep(t, "fixture:complete-native-onboarding", func(t *testing.T) {
+			configureE2ECompletedClaudeOnboarding(t, state, id, orch)
+		})
 		runE2EStep(t, "taxiway:start[completed-native-onboarding-fixture]", func(t *testing.T) {
 			runE2ECommand(t, root, tb, "start", lab)
+			runE2EAssert(t, "assert:shell-target-ready", func(t *testing.T) { assertE2EShellCheck(t, root, tb, lab, orch) })
+			assertE2EStartedAgents(t, state, id, orch)
 		})
 	}
 
-	runE2EStep(t, "taxiway:shell[--check]", func(t *testing.T) {
-		assertE2EShellCheck(t, root, tb, lab, orch)
-	})
-	assertE2EStartedAgents(t, state, id, orch, "after-start")
+	if orch == "gastown" {
+		runE2EGastownReadinessActions(t, state, id, "after-start")
+	} else {
+		runE2EStep(t, "agent:send[controlled-readiness-probe]", func(t *testing.T) {
+			observation := runE2EInteractiveProbe(t, state, id, "", orch)
+			runE2EAssert(t, "assert:interactive-response-completed", func(t *testing.T) {
+				assertE2EInteractiveObservation(t, observation, false)
+			})
+		})
+	}
 
 	runE2EStep(t, "taxiway:doctor", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "doctor", lab)
@@ -789,10 +900,10 @@ func cleanupE2EOrchestratorLab(t *testing.T, state *RootState, id, lab, orch str
 	})
 }
 
-func quiesceE2EDryRunAgent(t *testing.T, state *RootState, id, orch string) bool {
+func quiesceE2EDryRunAgent(owner, t *testing.T, state *RootState, id, orch string) (bool, func(*testing.T)) {
 	t.Helper()
 	if orch != "codex" && orch != "claude-code" {
-		return false
+		return false, func(*testing.T) {}
 	}
 	// A restarted native client writes and removes temporary/session files
 	// asynchronously, including after reset while rm preview takes its snapshot.
@@ -801,19 +912,21 @@ func quiesceE2EDryRunAgent(t *testing.T, state *RootState, id, orch string) bool
 	var stopped bytes.Buffer
 	var stoppedErr bytes.Buffer
 	var sessionsBefore bytes.Buffer
-	t.Cleanup(func() {
-		pids := strings.Fields(stopped.String())
-		if len(pids) == 0 {
-			return
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		// Descendants resume before their tmux server.
-		for left, right := 0, len(pids)-1; left < right; left, right = left+1, right-1 {
-			pids[left], pids[right] = pids[right], pids[left]
-		}
-		var resumeErr bytes.Buffer
-		result, err := state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: append([]string{"bash", "-c", `set -u
+	var once sync.Once
+	resume := func(t *testing.T) {
+		once.Do(func() {
+			pids := strings.Fields(stopped.String())
+			if len(pids) == 0 {
+				return
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			// Descendants resume before their tmux server.
+			for left, right := 0, len(pids)-1; left < right; left, right = left+1, right-1 {
+				pids[left], pids[right] = pids[right], pids[left]
+			}
+			var resumeErr bytes.Buffer
+			result, err := state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: append([]string{"bash", "-c", `set -u
 failed=0
 for pid in "$@"; do
   if [[ -e /proc/$pid/stat ]] && ! kill -CONT "$pid"; then
@@ -822,19 +935,21 @@ for pid in "$@"; do
   fi
 done
 exit "$failed"`, "resume-owned-agent"}, pids...), Stderr: &resumeErr})
-		require.NoError(t, err)
-		require.Zero(t, result.ExitCode, "resume this fixture's suspended processes: %s", resumeErr.String())
-		var sessionsAfter bytes.Buffer
-		result, err = state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: []string{"tmux", "list-sessions", "-F", "session|#{session_name}|#{session_id}"}, Stdout: &sessionsAfter})
-		require.NoError(t, err)
-		require.Zero(t, result.ExitCode)
-		require.Equal(t, sessionsBefore.String(), sessionsAfter.String(), "preview preserves native tmux sessions across verified quiescence")
-		var paneAfter bytes.Buffer
-		result, err = state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: []string{"tmux", "display-message", "-p", "-t", orch, "#{pane_dead}"}, Stdout: &paneAfter})
-		require.NoError(t, err)
-		require.Zero(t, result.ExitCode)
-		require.Equal(t, "0", strings.TrimSpace(paneAfter.String()), "native fixture remains alive after resume")
-	})
+			require.NoError(t, err)
+			require.Zero(t, result.ExitCode, "resume this fixture's suspended processes: %s", resumeErr.String())
+			var sessionsAfter bytes.Buffer
+			result, err = state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: []string{"tmux", "list-sessions", "-F", "session|#{session_name}|#{session_id}"}, Stdout: &sessionsAfter})
+			require.NoError(t, err)
+			require.Zero(t, result.ExitCode)
+			require.Equal(t, sessionsBefore.String(), sessionsAfter.String(), "preview preserves native tmux sessions across verified quiescence")
+			var paneAfter bytes.Buffer
+			result, err = state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: []string{"tmux", "display-message", "-p", "-t", orch, "#{pane_dead}"}, Stdout: &paneAfter})
+			require.NoError(t, err)
+			require.Zero(t, result.ExitCode)
+			require.Equal(t, "0", strings.TrimSpace(paneAfter.String()), "native fixture remains alive after resume")
+		})
+	}
+	owner.Cleanup(func() { resume(owner) })
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	result, err := state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: []string{"tmux", "list-sessions", "-F", "session|#{session_name}|#{session_id}"}, Stdout: &sessionsBefore})
@@ -903,7 +1018,7 @@ for path in (pathlib.Path.home() / '.claude/sessions').glob('*.json'):
 	require.NoError(t, err)
 	require.Zero(t, result.ExitCode)
 	t.Log(metadata.String())
-	return true
+	return true, resume
 }
 
 func runE2EDryRunCommand(t *testing.T, root *cobra.Command, tb *dockerTestBuf, state *RootState, frozenTmux bool, args ...string) string {
@@ -1076,7 +1191,7 @@ func e2eAgents(t *testing.T, repoDir, orch string) []string {
 	return manifest.Agents
 }
 
-func assertE2EInvalidModelSelections(t *testing.T, root *cobra.Command, tb *dockerTestBuf, state *RootState, id, lab, orch string) {
+func runE2EInvalidModelSelections(t *testing.T, root *cobra.Command, tb *dockerTestBuf, state *RootState, id, lab, orch string) {
 	t.Helper()
 	prefix := "claude"
 	if orch == "codex" {
@@ -1086,17 +1201,21 @@ func assertE2EInvalidModelSelections(t *testing.T, root *cobra.Command, tb *dock
 		{prefix + "-e2e-unknown", "unknown LiteLLM model"},
 		{prefix + "-e2e-retired", "is retired"},
 	} {
-		runE2EAssert(t, "assert:model-rejected:"+tc.model, func(t *testing.T) {
+		runE2EStep(t, "taxiway:up[--type="+orch+",--set=model="+tc.model+",rejected]", func(t *testing.T) {
 			_, _, err := execDockerRoot(t, root, tb, "up", lab, "--type", orch, "--skip-auth-check", "--set", "model="+tc.model)
-			require.ErrorContains(t, err, tc.message)
-			require.ErrorContains(t, err, tc.model)
-			if strings.Contains(tc.model, "retired") {
-				require.ErrorContains(t, err, "select ")
-			}
-			exists, err := state.Driver.Exists(context.Background(), id)
-			require.NoError(t, err)
-			require.False(t, exists, "invalid selection must not create a lab")
-			require.NoDirExists(t, filepath.Join(config.StateDir(state.Flags.StateDir, state.RepoDir), lab), "invalid selection must not write lab state")
+			runE2EAssert(t, "assert:invalid-model-rejected", func(t *testing.T) {
+				require.ErrorContains(t, err, tc.message)
+				require.ErrorContains(t, err, tc.model)
+				if strings.Contains(tc.model, "retired") {
+					require.ErrorContains(t, err, "select ")
+				}
+			})
+			runE2EAssert(t, "assert:lab-and-state-absent", func(t *testing.T) {
+				exists, err := state.Driver.Exists(context.Background(), id)
+				require.NoError(t, err)
+				require.False(t, exists, "invalid selection must not create a lab")
+				require.NoDirExists(t, filepath.Join(config.StateDir(state.Flags.StateDir, state.RepoDir), lab), "invalid selection must not write lab state")
+			})
 		})
 	}
 }
@@ -1190,9 +1309,7 @@ func assertE2EAgentsWorkspaceTrusted(t *testing.T, state *RootState, id, orch, w
 	agents := e2eAgents(t, state.RepoDir, orch)
 	require.NotEmpty(t, agents, "orchestrator must declare its agents")
 	for _, agent := range agents {
-		runE2EAssert(t, "agent:"+agent, func(t *testing.T) {
-			assertE2EAgentWorkspaceTrusted(t, state, id, agent, workspacePath)
-		})
+		assertE2EAgentWorkspaceTrusted(t, state, id, agent, workspacePath)
 	}
 }
 
@@ -1238,69 +1355,60 @@ func e2eHarnessPin(orch string) string {
 	return "claude-code-version=2.1.289"
 }
 
-func assertE2EStartedAgents(t *testing.T, state *RootState, id, orch, stage string) {
+func assertE2EStartedAgents(t *testing.T, state *RootState, id, orch string) {
 	t.Helper()
 	expectations := e2eExpectations(t, orch)
-	runE2EStep(t, "agents:versions@"+stage, func(t *testing.T) {
-		agent, requested, _ := strings.Cut(e2eHarnessPin(orch), "=")
-		agent = strings.TrimSuffix(agent, "-version")
-		ref, ok, err := state.Driver.ReadLabRef(context.Background(), id)
-		require.NoError(t, err)
-		require.True(t, ok)
-		require.Equal(t, requested, ref.Settings[agent+"-version"])
-		versions, err := readAgentVersions(config.StateDir(state.Flags.StateDir, state.RepoDir), id)
-		require.NoError(t, err)
-		require.Equal(t, requested, versions[agent].Actual)
-		require.NotEmpty(t, versions[agent].Executable)
-		var stdout, stderr bytes.Buffer
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		res, err := state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: []string{versions[agent].Executable, "--version"}, Stdout: &stdout, Stderr: &stderr})
-		require.NoError(t, err)
-		require.Zero(t, res.ExitCode, stderr.String())
-		require.Contains(t, stdout.String(), requested)
-		if agent == "claude-code" {
-			res, err = state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: []string{"bash", "-lc", `test "$DISABLE_AUTOUPDATER" = 1`}, Stderr: &stderr})
-			require.NoError(t, err)
-			require.Zero(t, res.ExitCode, "ordinary guest shells must suppress pinned Claude updates: %s", stderr.String())
-		}
+	runE2EAssert(t, "assert:agent-versions-pinned", func(t *testing.T) {
+		assertE2EAgentVersions(t, state, id, orch)
 	})
-	runE2EStep(t, "models:configuration@"+stage, func(t *testing.T) {
-		runE2EAssert(t, "assert:gateway-provider-models", func(t *testing.T) {
-			assertE2EGatewayModels(t, state, id, orch)
-		})
-		if orch == "codex" {
-			runE2EAssert(t, "assert:codex-selected-model", func(t *testing.T) {
-				assertE2ECodexModel(t, state, id)
-			})
-		}
+	runE2EAssert(t, "assert:gateway-provider-models", func(t *testing.T) {
+		assertE2EGatewayModels(t, state, id, orch)
 	})
 	if orch == "codex" {
-		var stderr bytes.Buffer
-		res, err := state.Driver.Exec(context.Background(), id, driver.ExecRequest{
-			Argv:   []string{"python3", "-c", `import pathlib, tomllib; c=tomllib.loads((pathlib.Path.home()/".codex/config.toml").read_text()); assert c["approval_policy"] == "never"; assert c["sandbox_mode"] == "danger-full-access"`},
-			Stderr: &stderr,
+		runE2EAssert(t, "assert:codex-selected-model-and-permissions", func(t *testing.T) {
+			assertE2ECodexModel(t, state, id)
+			var stderr bytes.Buffer
+			res, err := state.Driver.Exec(context.Background(), id, driver.ExecRequest{Argv: []string{"python3", "-c", `import pathlib, tomllib; c=tomllib.loads((pathlib.Path.home()/".codex/config.toml").read_text()); assert c["approval_policy"] == "never"; assert c["sandbox_mode"] == "danger-full-access"`}, Stderr: &stderr})
+			require.NoError(t, err)
+			require.Zero(t, res.ExitCode, "Codex autonomous contract: %s", stderr.String())
 		})
-		require.NoError(t, err)
-		require.Equal(t, 0, res.ExitCode, "Codex autonomous contract at %s: %s", stage, stderr.String())
 	}
-	runE2EStep(t, "agents:workspace-trust@"+stage, func(t *testing.T) {
-		runE2EAssert(t, "assert:lab-work-trusted", func(t *testing.T) {
-			assertE2EAgentsWorkspaceTrusted(t, state, id, orch, LabWorkRoot)
-		})
-		runE2EAssert(t, "assert:repository-trusted", func(t *testing.T) {
-			assertE2EAgentsWorkspaceTrusted(t, state, id, orch, expectations.workspace(t).repository)
-		})
+	runE2EAssert(t, "assert:lab-work-trusted", func(t *testing.T) {
+		assertE2EAgentsWorkspaceTrusted(t, state, id, orch, LabWorkRoot)
+	})
+	runE2EAssert(t, "assert:repository-trusted", func(t *testing.T) {
+		assertE2EAgentsWorkspaceTrusted(t, state, id, orch, expectations.workspace(t).repository)
 	})
 	if expectations.assertSessions != nil {
-		runE2EStep(t, "orchestrator:sessions@"+stage, func(t *testing.T) {
+		runE2EAssert(t, "assert:orchestrator-sessions-healthy", func(t *testing.T) {
 			expectations.assertSessions(t, state, id)
 		})
 	}
-	if orch != "gastown" {
-		runE2EStep(t, "agents:interactive-readiness@"+stage, func(t *testing.T) {
-			assertE2EInteractiveResponse(t, state, id, "", orch)
-		})
+}
+
+func assertE2EAgentVersions(t *testing.T, state *RootState, id, orch string) {
+	t.Helper()
+	agent, requested, _ := strings.Cut(e2eHarnessPin(orch), "=")
+	agent = strings.TrimSuffix(agent, "-version")
+	ref, ok, err := state.Driver.ReadLabRef(context.Background(), id)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, requested, ref.Settings[agent+"-version"])
+	versions, err := readAgentVersions(config.StateDir(state.Flags.StateDir, state.RepoDir), id)
+	require.NoError(t, err)
+	require.Equal(t, requested, versions[agent].Actual)
+	require.NotEmpty(t, versions[agent].Executable)
+	var stdout, stderr bytes.Buffer
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	res, err := state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: []string{versions[agent].Executable, "--version"}, Stdout: &stdout, Stderr: &stderr})
+	require.NoError(t, err)
+	require.Zero(t, res.ExitCode, stderr.String())
+	require.Contains(t, stdout.String(), requested)
+	if agent == "claude-code" {
+		res, err = state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: []string{"bash", "-lc", `test "$DISABLE_AUTOUPDATER" = 1`}, Stderr: &stderr})
+		require.NoError(t, err)
+		require.Zero(t, res.ExitCode, "ordinary guest shells must suppress pinned Claude updates: %s", stderr.String())
 	}
 }
 
@@ -1311,7 +1419,7 @@ func configureE2ECompletedClaudeOnboarding(t *testing.T, state *RootState, id, o
 	if orch == "codex" {
 		return
 	}
-	runE2EStep(t, "agents:completed-native-onboarding-fixture", func(t *testing.T) {
+	{
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		repo := findRepoRoot(t)
@@ -1325,12 +1433,12 @@ _write_claude_onboarding(sys.argv[2], state)
 		`, repo, strings.TrimPrefix(labNameFromID(id), "e2e-"+os.Getenv("TAXIWAY_CONTEXT_ID")+"-"))
 		output, err := cmd.CombinedOutput()
 		require.NoError(t, err, "completed onboarding fixture: %s", redactE2EDiagnosticSecrets(string(output)))
-	})
+	}
 }
 
 // The expected digest is absent from the prompt, so terminal echo cannot pass.
 // Only the controlled upstream computes it after receiving the real CLI request.
-func assertE2EInteractiveResponse(t *testing.T, state *RootState, id, socket, session string, expectBlocked ...bool) {
+func runE2EInteractiveProbe(t *testing.T, state *RootState, id, socket, session string) e2eInteractiveObservation {
 	t.Helper()
 	nonce := fmt.Sprintf("taxiway-readiness-%x", time.Now().UnixNano())
 	expected := fmt.Sprintf("%x", sha256.Sum256([]byte(nonce)))
@@ -1459,15 +1567,30 @@ if session == 'codex':
         raise RuntimeError('native agent did not complete the subsequent normal request')
 `, socket, session, nonce, expected}, Stdout: &stdout, Stderr: &stderr,
 	})
-	require.NoError(t, err, "interactive session %s: %s", session, redactE2EDiagnosticSecrets(stderr.String()))
-	if len(expectBlocked) > 0 && expectBlocked[0] {
+	return e2eInteractiveObservation{session: session, result: res, err: err, stdout: stdout.String(), stderr: stderr.String()}
+}
+
+// Observation is separated from the native interaction so assertions never send input.
+type e2eInteractiveObservation struct {
+	session        string
+	result         driver.ExecResult
+	err            error
+	stdout, stderr string
+}
+
+func assertE2EInteractiveObservation(t *testing.T, observation e2eInteractiveObservation, expectBlocked bool) {
+	t.Helper()
+	session, res, err := observation.session, observation.result, observation.err
+	stdout, stderr := observation.stdout, observation.stderr
+	require.NoError(t, err, "interactive session %s: %s", session, redactE2EDiagnosticSecrets(stderr))
+	if expectBlocked {
 		require.NotZero(t, res.ExitCode, "first-run dialog must reject readiness")
-		require.Contains(t, stderr.String(), "interactive startup dialog requires manual acceptance")
+		require.Contains(t, stderr, "interactive startup dialog requires manual acceptance")
 		return
 	}
-	require.Zero(t, res.ExitCode, "interactive session %s: %s", session, redactE2EDiagnosticSecrets(stderr.String()))
-	require.Contains(t, stdout.String(), "completed interactive response")
-	t.Log(strings.TrimSpace(stdout.String()))
+	require.Zero(t, res.ExitCode, "interactive session %s: %s", session, redactE2EDiagnosticSecrets(stderr))
+	require.Contains(t, stdout, "completed interactive response")
+	t.Log(strings.TrimSpace(stdout))
 }
 
 func assertE2EShellCheck(t *testing.T, root *cobra.Command, tb *dockerTestBuf, lab, orch string) {
@@ -1684,7 +1807,7 @@ while True:
 
 func assertE2EGastownSessions(t *testing.T, state *RootState, id string) {
 	t.Helper()
-	runE2EAssert(t, "assert:orchestrator-present-sessions-healthy", func(t *testing.T) {
+	{
 		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer cancel()
 		run := func(allowCheckFailure bool, argv ...string) string {
@@ -1764,36 +1887,93 @@ func assertE2EGastownSessions(t *testing.T, state *RootState, id string) {
 			workspace := strings.TrimSpace(run(false, "tmux", "-L", status.Tmux.Socket,
 				"display-message", "-p", "-t", agent.Session, "#{pane_current_path}"))
 			assertE2EAgentWorkspaceTrusted(t, state, id, "claude-code", workspace)
-			assertE2EInteractiveResponse(t, state, id, status.Tmux.Socket, agent.Session)
 		}
 		require.Positive(t, checked, "No persistent agent session was checked")
+	}
+}
+
+func runE2EGastownReadinessActions(t *testing.T, state *RootState, id, stage string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	run := func(t *testing.T, _ bool, argv ...string) string {
+		var stdout, stderr bytes.Buffer
+		command := append([]string{"bash", "-c", `export PATH="$HOME/.local/bin:$PATH"; exec "$@"`, "gastown-e2e"}, argv...)
+		res, err := state.Driver.Exec(ctx, id, driver.ExecRequest{Workdir: "/lab/work/gt", Argv: command, Stdout: &stdout, Stderr: &stderr})
+		require.NoError(t, err)
+		require.Zero(t, res.ExitCode, "%v: %s", argv, redactE2EDiagnosticSecrets(stderr.String()))
+		return stdout.String()
+	}
+	type agentStatus struct {
+		Session string `json:"session"`
+		Role    string `json:"role"`
+	}
+	var status struct {
+		Agents []agentStatus `json:"agents"`
+		Rigs   []struct {
+			Agents []agentStatus `json:"agents"`
+		} `json:"rigs"`
+		Tmux struct {
+			Socket string `json:"socket"`
+		} `json:"tmux"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(run(t, false, "gt", "status", "--json")), &status))
+	present := map[string]bool{}
+	for _, session := range strings.Fields(run(t, false, "tmux", "-L", status.Tmux.Socket, "list-sessions", "-F", "#{session_name}")) {
+		present[session] = true
+	}
+	agents := status.Agents
+	for _, rig := range status.Rigs {
+		agents = append(agents, rig.Agents...)
+	}
+	for _, agent := range agents {
+		if !present[agent.Session] || agent.Role == "boot" || agent.Role == "dog" {
+			continue
+		}
+		runE2EStep(t, "agent:send[controlled-readiness-probe,"+agent.Session+"]@"+stage, func(t *testing.T) {
+			observation := runE2EInteractiveProbe(t, state, id, status.Tmux.Socket, agent.Session)
+			runE2EAssert(t, "assert:interactive-response-completed", func(t *testing.T) {
+				assertE2EInteractiveObservation(t, observation, false)
+			})
+		})
+	}
+
+	var newSession string
+	runE2EStep(t, "gt:crew[add,start,fresh-workspace]@"+stage, func(t *testing.T) {
+
 		// Exercise the adapter's normal launcher in a directory created after
 		// startup. Trust at install time cannot accidentally satisfy this case.
 		crew := fmt.Sprintf("readiness%x", time.Now().UnixNano())
-		run(false, "gt", "crew", "add", crew, "--rig", "agreement_hub")
-		run(false, "gt", "crew", "start", "agreement_hub", crew)
-		newSessions := strings.Fields(run(false, "tmux", "-L", status.Tmux.Socket, "list-sessions", "-F", "#{session_name}"))
-		var newSession string
+		run(t, false, "gt", "crew", "add", crew, "--rig", "agreement_hub")
+		run(t, false, "gt", "crew", "start", "agreement_hub", crew)
+		newSessions := strings.Fields(run(t, false, "tmux", "-L", status.Tmux.Socket, "list-sessions", "-F", "#{session_name}"))
 		for _, session := range newSessions {
 			if strings.HasSuffix(session, "-crew-"+crew) {
 				newSession = session
 				break
 			}
 		}
-		require.NotEmpty(t, newSession, "new crew must start an actual agent session")
-		assertE2EClaudeEnvironment(t, state, id, status.Tmux.Socket, newSession)
-		assertE2EAgentWorkspaceTrusted(t, state, id, "claude-code", "/lab/work/gt/agreement_hub/crew/"+crew)
-		assertE2EInteractiveResponse(t, state, id, status.Tmux.Socket, newSession)
+		runE2EAssert(t, "assert:fresh-crew-configured-and-trusted", func(t *testing.T) {
+			require.NotEmpty(t, newSession, "new crew must start an actual agent session")
+			assertE2EClaudeEnvironment(t, state, id, status.Tmux.Socket, newSession)
+			assertE2EAgentWorkspaceTrusted(t, state, id, "claude-code", "/lab/work/gt/agreement_hub/crew/"+crew)
+		})
+	})
+	runE2EStep(t, "agent:send[fresh-crew-readiness-probe]@"+stage, func(t *testing.T) {
+		observation := runE2EInteractiveProbe(t, state, id, status.Tmux.Socket, newSession)
+		runE2EAssert(t, "assert:interactive-response-completed", func(t *testing.T) {
+			assertE2EInteractiveObservation(t, observation, false)
+		})
 	})
 }
 
 // Exercise Gastown's real respawn path, not a Lab down/up. The command is
 // directed at a session without attaching a client or asking Claude to act.
-func assertE2EGastownHandoff(t *testing.T, state *RootState, id string) {
+func runE2EGastownHandoff(t *testing.T, state *RootState, id string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
-	run := func(argv ...string) string {
+	run := func(t *testing.T, argv ...string) string {
 		var stdout, stderr bytes.Buffer
 		command := append([]string{"bash", "-c", `export PATH="$HOME/.local/bin:$PATH"; exec "$@"`, "gastown-e2e"}, argv...)
 		res, err := state.Driver.Exec(ctx, id, driver.ExecRequest{
@@ -1808,48 +1988,54 @@ func assertE2EGastownHandoff(t *testing.T, state *RootState, id string) {
 			Socket string `json:"socket"`
 		} `json:"tmux"`
 	}
-	require.NoError(t, json.Unmarshal([]byte(run("gt", "status", "--json")), &status))
+	require.NoError(t, json.Unmarshal([]byte(run(t, "gt", "status", "--json")), &status))
 	require.NotEmpty(t, status.Tmux.Socket)
 	// Exercise the installed CLI from Deacon's own pane context. A named
 	// self-target must hook work without injecting a notification into Claude.
-	deaconPane := run("tmux", "-L", status.Tmux.Socket, "display-message", "-p", "-t", "hq-deacon", "#{pane_id}")
-	sling := run("env", "GT_ROLE=deacon", "TMUX_PANE="+deaconPane,
-		"gt", "sling", "mol-deacon-patrol", "deacon")
-	require.Contains(t, sling, "Self-sling: work hooked, will process on next turn")
-	// Resolve hook status from the target's workspace so phase-by-phase labs
-	// query the same Beads database that sling used for the town-level role.
-	hook := run("bash", "-c", "cd /lab/work/gt/deacon && gt hook status --json")
-	require.Contains(t, hook, "mol-deacon-patrol", "self-sling must attach real patrol work")
+	runE2EStep(t, "gt:sling[mol-deacon-patrol,deacon]", func(t *testing.T) {
+		deaconPane := run(t, "tmux", "-L", status.Tmux.Socket, "display-message", "-p", "-t", "hq-deacon", "#{pane_id}")
+		sling := run(t, "env", "GT_ROLE=deacon", "TMUX_PANE="+deaconPane,
+			"gt", "sling", "mol-deacon-patrol", "deacon")
+		runE2EAssert(t, "assert:self-sling-hooked-without-notification", func(t *testing.T) {
+			require.Contains(t, sling, "Self-sling: work hooked, will process on next turn")
+			// Resolve hook status from the target's workspace so phase-by-phase labs
+			// query the same Beads database that sling used for the town-level role.
+			hook := run(t, "bash", "-c", "cd /lab/work/gt/deacon && gt hook status --json")
+			require.Contains(t, hook, "mol-deacon-patrol", "self-sling must attach real patrol work")
+		})
+	})
 	// Initiate from Mayor (no patrol cooldown): repeat remote refinery handoff,
 	// then exercise Mayor's self-handoff through the same restart builder.
-	for _, target := range []string{"ah-refinery", "ah-refinery", "hq-mayor"} {
-		before := run("tmux", "-L", status.Tmux.Socket, "display-message", "-p", "-t", target, "#{pane_pid}")
-		role := "agreement_hub/refinery"
-		if target == "hq-mayor" {
-			role = "mayor"
-		}
-		// Handoff requires a tmux caller context. run-shell supplies TMUX but
-		// not TMUX_PANE; expand the target pane ID explicitly. No client attach.
-		run("tmux", "-L", status.Tmux.Socket, "run-shell", "-b", "-t", "hq-mayor",
-			`cd /lab/work/gt && export PATH="$HOME/.local/bin:$PATH" GT_ROLE=mayor TMUX_PANE='#{pane_id}'; gt handoff `+role+` --watch=false --yes --no-git-check`)
-		deadline := time.Now().Add(45 * time.Second)
-		var pane string
-		for time.Now().Before(deadline) {
-			pane = run("tmux", "-L", status.Tmux.Socket, "display-message", "-p", "-t", target,
-				"#{pane_pid}|#{pane_dead}|#{pane_current_command}")
-			parts := strings.Split(pane, "|")
-			if len(parts) == 3 && parts[0] != before && parts[1] == "0" && (parts[2] == "claude" || parts[2] == "node") {
-				break
+	for attempt, target := range []string{"ah-refinery", "ah-refinery", "hq-mayor"} {
+		runE2EStep(t, fmt.Sprintf("gt:handoff[%s,attempt=%d]", target, attempt+1), func(t *testing.T) {
+			before := run(t, "tmux", "-L", status.Tmux.Socket, "display-message", "-p", "-t", target, "#{pane_pid}")
+			role := "agreement_hub/refinery"
+			if target == "hq-mayor" {
+				role = "mayor"
 			}
-			time.Sleep(time.Second)
-		}
-		parts := strings.Split(pane, "|")
-		require.Len(t, parts, 3, "handoff %s: %s", target, pane)
-		require.NotEqual(t, before, parts[0], "handoff must replace %s", target)
-		require.Equal(t, "0", parts[1], "replacement %s must be alive", target)
-		require.Contains(t, []string{"claude", "node"}, parts[2], "replacement %s must execute Claude", target)
-		// Compare in the guest without printing credentials in test output.
-		run("python3", "-c", `import json, pathlib, sys
+			// Handoff requires a tmux caller context. run-shell supplies TMUX but
+			// not TMUX_PANE; expand the target pane ID explicitly. No client attach.
+			run(t, "tmux", "-L", status.Tmux.Socket, "run-shell", "-b", "-t", "hq-mayor",
+				`cd /lab/work/gt && export PATH="$HOME/.local/bin:$PATH" GT_ROLE=mayor TMUX_PANE='#{pane_id}'; gt handoff `+role+` --watch=false --yes --no-git-check`)
+			deadline := time.Now().Add(45 * time.Second)
+			var pane string
+			for time.Now().Before(deadline) {
+				pane = run(t, "tmux", "-L", status.Tmux.Socket, "display-message", "-p", "-t", target,
+					"#{pane_pid}|#{pane_dead}|#{pane_current_command}")
+				parts := strings.Split(pane, "|")
+				if len(parts) == 3 && parts[0] != before && parts[1] == "0" && (parts[2] == "claude" || parts[2] == "node") {
+					break
+				}
+				time.Sleep(time.Second)
+			}
+			runE2EAssert(t, "assert:replacement-process-model-and-gateway-preserved", func(t *testing.T) {
+				parts := strings.Split(pane, "|")
+				require.Len(t, parts, 3, "handoff %s: %s", target, pane)
+				require.NotEqual(t, before, parts[0], "handoff must replace %s", target)
+				require.Equal(t, "0", parts[1], "replacement %s must be alive", target)
+				require.Contains(t, []string{"claude", "node"}, parts[2], "replacement %s must execute Claude", target)
+				// Compare in the guest without printing credentials in test output.
+				run(t, "python3", "-c", `import json, pathlib, sys
 p = pathlib.Path('/proc') / sys.argv[1]
 env = dict(entry.split(b'=', 1) for entry in (p / 'environ').read_bytes().split(b'\0') if b'=' in entry)
 agent = json.loads(pathlib.Path('/lab/work/gt/settings/agents.json').read_text())['agents']['claude-code-litellm']
@@ -1859,9 +2045,13 @@ args = (p / 'cmdline').read_bytes().split(b'\0')
 assert b'--model' in args, 'handoff lost model selection'
 assert args[args.index(b'--model') + 1] == sys.argv[2].encode(), 'handoff changed model'
 `, parts[0], e2eExpectations(t, "gastown").model)
-		assertE2EClaudeEnvironment(t, state, id, status.Tmux.Socket, target)
+				assertE2EClaudeEnvironment(t, state, id, status.Tmux.Socket, target)
+				if target == "hq-mayor" {
+					assertE2EGastownSessions(t, state, id)
+				}
+			})
+		})
 	}
-	assertE2EGastownSessions(t, state, id)
 }
 
 func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, state *RootState, lab, orch string) {
@@ -1885,46 +2075,46 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 			require.Contains(t, out, "Recording started: "+recordName)
 			require.Contains(t, out, ".cast")
 		})
-	})
 
-	runE2EStep(t, "record:recorder-client-live", func(t *testing.T) {
-		session := requireE2ERecordingSession(t, state, lab, recordName)
-		t.Cleanup(func() {
-			if !t.Failed() {
-				return
-			}
-			data, err := os.ReadFile(session.CastPathHost)
-			if err != nil {
-				t.Logf("recorder diagnostic: cast unreadable: %v", err)
-				return
-			}
-			if len(data) > 2048 {
-				data = data[:2048]
-			}
-			t.Logf("recorder diagnostic (bounded fixture cast): %s", data)
-		})
-		require.Eventually(t, func() bool {
-			res, err := state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "has-session", "-t", "=" + session.RecorderSession}})
-			if err != nil || res.ExitCode != 0 {
-				return false
-			}
-			var tty, clients bytes.Buffer
-			res, err = state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "show-option", "-qv", "-t", session.RecorderSession, "@taxiway-recorder-client"}, Stdout: &tty})
-			if err != nil || res.ExitCode != 0 || strings.TrimSpace(tty.String()) == "" {
-				return false
-			}
-			res, err = state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "list-clients", "-F", "#{client_tty}"}, Stdout: &clients})
-			if err != nil || res.ExitCode != 0 {
-				return false
-			}
-			recorderTTY = strings.TrimSpace(tty.String())
-			for _, client := range strings.Split(strings.TrimSpace(clients.String()), "\n") {
-				if client == recorderTTY {
-					return true
+		runE2EAssert(t, "assert:recorder-client-live", func(t *testing.T) {
+			session := requireE2ERecordingSession(t, state, lab, recordName)
+			t.Cleanup(func() {
+				if !t.Failed() {
+					return
 				}
-			}
-			return false
-		}, 10*time.Second, 100*time.Millisecond, "recorder must remain alive with its own attached client before stop")
+				data, err := os.ReadFile(session.CastPathHost)
+				if err != nil {
+					t.Logf("recorder diagnostic: cast unreadable: %v", err)
+					return
+				}
+				if len(data) > 2048 {
+					data = data[:2048]
+				}
+				t.Logf("recorder diagnostic (bounded fixture cast): %s", data)
+			})
+			require.Eventually(t, func() bool {
+				res, err := state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "has-session", "-t", "=" + session.RecorderSession}})
+				if err != nil || res.ExitCode != 0 {
+					return false
+				}
+				var tty, clients bytes.Buffer
+				res, err = state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "show-option", "-qv", "-t", session.RecorderSession, "@taxiway-recorder-client"}, Stdout: &tty})
+				if err != nil || res.ExitCode != 0 || strings.TrimSpace(tty.String()) == "" {
+					return false
+				}
+				res, err = state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "list-clients", "-F", "#{client_tty}"}, Stdout: &clients})
+				if err != nil || res.ExitCode != 0 {
+					return false
+				}
+				recorderTTY = strings.TrimSpace(tty.String())
+				for _, client := range strings.Split(strings.TrimSpace(clients.String()), "\n") {
+					if client == recorderTTY {
+						return true
+					}
+				}
+				return false
+			}, 10*time.Second, 100*time.Millisecond, "recorder must remain alive with its own attached client before stop")
+		})
 	})
 
 	statusInput := e2eExpectations(t, orch).recordInput
@@ -1935,48 +2125,53 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 		})
 	})
 
-	runE2EStep(t, "record:capture-real-client-output", func(t *testing.T) {
+	runE2EStep(t, "tmux:display-message[recorder-capture-marker]", func(t *testing.T) {
 		res, err := state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "display-message", "-c", recorderTTY, "-d", "2000", captureMarker}})
 		require.NoError(t, err)
 		require.Zero(t, res.ExitCode)
-		session := requireE2ERecordingSession(t, state, lab, recordName)
-		require.Eventually(t, func() bool {
-			data, err := os.ReadFile(session.CastPathHost)
-			if err != nil {
-				return false
-			}
-			var output strings.Builder
-			for _, line := range bytes.Split(bytes.TrimSpace(data), []byte("\n"))[1:] {
-				var event []json.RawMessage
-				if json.Unmarshal(line, &event) != nil || len(event) != 3 {
-					continue
+		runE2EAssert(t, "assert:real-recorder-output-captured", func(t *testing.T) {
+			session := requireE2ERecordingSession(t, state, lab, recordName)
+			require.Eventually(t, func() bool {
+				data, err := os.ReadFile(session.CastPathHost)
+				if err != nil {
+					return false
 				}
-				var kind, text string
-				if json.Unmarshal(event[1], &kind) == nil && kind == "o" && json.Unmarshal(event[2], &text) == nil {
-					output.WriteString(text)
+				var output strings.Builder
+				for _, line := range bytes.Split(bytes.TrimSpace(data), []byte("\n"))[1:] {
+					var event []json.RawMessage
+					if json.Unmarshal(line, &event) != nil || len(event) != 3 {
+						continue
+					}
+					var kind, text string
+					if json.Unmarshal(event[1], &kind) == nil && kind == "o" && json.Unmarshal(event[2], &text) == nil {
+						output.WriteString(text)
+					}
 				}
-			}
-			return strings.Contains(output.String(), captureMarker)
-		}, 10*time.Second, 100*time.Millisecond, "cast must contain output shown to the live recorder client")
+				return strings.Contains(output.String(), captureMarker)
+			}, 10*time.Second, 100*time.Millisecond, "cast must contain output shown to the live recorder client")
+		})
 	})
 
-	runE2EStep(t, "record:nondefault-prefix", func(t *testing.T) {
-		res, err := state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "set-option", "-g", "prefix", "C-a"}})
-		require.NoError(t, err)
-		require.Zero(t, res.ExitCode)
-		var prefix bytes.Buffer
-		res, err = state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "show-option", "-gv", "prefix"}, Stdout: &prefix})
-		require.NoError(t, err)
-		require.Zero(t, res.ExitCode)
-		require.Equal(t, "C-a", strings.TrimSpace(prefix.String()))
-		session := requireE2ERecordingSession(t, state, lab, recordName)
-		res, err = state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "has-session", "-t", "=" + session.RecorderSession}})
-		require.NoError(t, err)
-		require.Zero(t, res.ExitCode)
-	})
 	t.Cleanup(func() {
 		_, _ = state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "set-option", "-g", "prefix", "C-b"}})
 	})
+	runE2EStep(t, "tmux:set-option[prefix=C-a]", func(t *testing.T) {
+		res, err := state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "set-option", "-g", "prefix", "C-a"}})
+		require.NoError(t, err)
+		require.Zero(t, res.ExitCode)
+		runE2EAssert(t, "assert:recorder-survives-nondefault-prefix", func(t *testing.T) {
+			var prefix bytes.Buffer
+			res, err = state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "show-option", "-gv", "prefix"}, Stdout: &prefix})
+			require.NoError(t, err)
+			require.Zero(t, res.ExitCode)
+			require.Equal(t, "C-a", strings.TrimSpace(prefix.String()))
+			session := requireE2ERecordingSession(t, state, lab, recordName)
+			res, err = state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"tmux", "has-session", "-t", "=" + session.RecorderSession}})
+			require.NoError(t, err)
+			require.Zero(t, res.ExitCode)
+		})
+	})
+
 	runE2EStep(t, "taxiway:record[stop]", func(t *testing.T) {
 		out := runE2ECommand(t, root, tb, "record", "stop", lab)
 		runE2EAssert(t, "assert:recording-stopped", func(t *testing.T) {
@@ -2008,7 +2203,7 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 		})
 	})
 
-	runE2EStep(t, "record:ambiguous-name-and-id", func(t *testing.T) {
+	runE2EStep(t, "taxiway:record[start,stop,rm,list,duplicate-name]", func(t *testing.T) {
 		first := requireE2ERecordingSession(t, state, lab, recordName)
 		firstData, err := os.ReadFile(first.CastPathHost)
 		require.NoError(t, err)
@@ -2017,23 +2212,31 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 		store := recording.NewStore(config.StateDir(state.Flags.StateDir, state.RepoDir), lab)
 		idx, err := store.Load()
 		require.NoError(t, err)
-		require.Len(t, idx.Sessions, 2)
-		preserved, err := os.ReadFile(first.CastPathHost)
-		require.NoError(t, err)
-		require.Equal(t, firstData, preserved)
+		runE2EAssert(t, "assert:existing-cast-preserved-on-duplicate-name", func(t *testing.T) {
+			require.Len(t, idx.Sessions, 2)
+			preserved, err := os.ReadFile(first.CastPathHost)
+			require.NoError(t, err)
+			require.Equal(t, firstData, preserved)
+		})
 		latest := idx.Sessions[1]
 		require.NotEqual(t, first.ID, latest.ID)
 		_, _, err = execDockerRoot(t, root, tb, "record", "rm", lab, "--name", recordName)
-		require.ErrorContains(t, err, "ambiguous")
-		require.FileExists(t, first.CastPathHost)
-		require.FileExists(t, latest.CastPathHost)
+		runE2EAssert(t, "assert:ambiguous-remove-rejected-and-casts-preserved", func(t *testing.T) {
+			require.ErrorContains(t, err, "ambiguous")
+			require.FileExists(t, first.CastPathHost)
+			require.FileExists(t, latest.CastPathHost)
+		})
 		out := runE2ECommand(t, root, tb, "record", "list", lab)
-		require.Contains(t, out, latest.ID)
+		runE2EAssert(t, "assert:duplicate-recording-id-listed", func(t *testing.T) {
+			require.Contains(t, out, latest.ID)
+		})
 		runE2ECommand(t, root, tb, "record", "rm", lab, "--id", latest.ID)
-		require.NoFileExists(t, latest.CastPathHost)
-		require.FileExists(t, first.CastPathHost)
+		runE2EAssert(t, "assert:remove-by-id-preserves-other-cast", func(t *testing.T) {
+			require.NoFileExists(t, latest.CastPathHost)
+			require.FileExists(t, first.CastPathHost)
+		})
 	})
-	runE2EStep(t, "record:host-filesystem-containment", func(t *testing.T) {
+	runE2EStep(t, "fixture:poison-recording-index[outside,symlink]", func(t *testing.T) {
 		store := recording.NewStore(config.StateDir(state.Flags.StateDir, state.RepoDir), lab)
 		indexPath := filepath.Join(store.Dir(), "recordings.json")
 		original, err := os.ReadFile(indexPath)
@@ -2063,34 +2266,40 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 			defer os.Remove(link)
 			for _, args := range [][]string{{"record", "list", lab}, {"record", "rm", lab, "--id", session.ID}, {"record", "analyze", lab, "--prompt-only"}} {
 				out, _, err := execDockerRoot(t, root, tb, args...)
-				require.Error(t, err)
-				require.NotContains(t, out, outside)
-				current, err := os.ReadFile(indexPath)
-				require.NoError(t, err)
-				require.Equal(t, data, current)
-				sentinel, err := os.ReadFile(outside)
-				require.NoError(t, err)
-				require.Equal(t, "harmless outside sentinel", string(sentinel))
+				runE2EAssert(t, "assert:unsafe-recording-rejected-and-files-preserved:"+mode+":"+args[1], func(t *testing.T) {
+					require.Error(t, err)
+					require.NotContains(t, out, outside)
+					current, err := os.ReadFile(indexPath)
+					require.NoError(t, err)
+					require.Equal(t, data, current)
+					sentinel, err := os.ReadFile(outside)
+					require.NoError(t, err)
+					require.Equal(t, "harmless outside sentinel", string(sentinel))
+				})
 			}
 		}
 		require.NoError(t, os.WriteFile(indexPath, original, 0600))
 		prompt := runE2ECommand(t, root, tb, "record", "analyze", lab, "--prompt-only")
-		captured, err := os.ReadFile(castPath)
-		require.NoError(t, err)
-		require.NotEmpty(t, captured)
-		require.Contains(t, prompt, string(captured))
+		runE2EAssert(t, "assert:restored-recording-included-in-analysis-prompt", func(t *testing.T) {
+			captured, err := os.ReadFile(castPath)
+			require.NoError(t, err)
+			require.NotEmpty(t, captured)
+			require.Contains(t, prompt, string(captured))
+		})
 	})
-	runE2EStep(t, "record:global-list-corrupt-lab", func(t *testing.T) {
+	runE2EStep(t, "fixture:corrupt-index-and-record-list[global]", func(t *testing.T) {
 		bad := recording.NewStore(config.StateDir(state.Flags.StateDir, state.RepoDir), "e2e-corrupt-index")
 		require.NoError(t, bad.Save(recording.Index{}))
 		defer os.RemoveAll(filepath.Dir(bad.Dir()))
 		require.NoError(t, os.WriteFile(filepath.Join(bad.Dir(), "recordings.json"), []byte("invalid"), 0600))
 		out, warning, err := execDockerRoot(t, root, tb, "record", "list")
-		require.NoError(t, err)
-		require.Contains(t, out, recordName)
-		require.Contains(t, warning, "e2e-corrupt-index")
+		runE2EAssert(t, "assert:global-list-preserves-valid-recordings-and-warns", func(t *testing.T) {
+			require.NoError(t, err)
+			require.Contains(t, out, recordName)
+			require.Contains(t, warning, "e2e-corrupt-index")
+		})
 	})
-	runE2EStep(t, "record:offline-player", func(t *testing.T) {
+	runE2EStep(t, "taxiway:record[player,--write-only,symlink-fixture]", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "record", "player", lab, "--write-only")
 		store := recording.NewStore(config.StateDir(state.Flags.StateDir, state.RepoDir), lab)
 		root, err := store.OpenRoot(false)
@@ -2099,19 +2308,21 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 		server := httptest.NewServer(http.FileServer(http.FS(recording.PlayerFiles(root))))
 		defer server.Close()
 		client := &http.Client{Timeout: 5 * time.Second}
-		for _, file := range []string{"index.html", "player/asciinema-player.min.js", "player/asciinema-player.css", "player/LICENSE", filepath.Base(castPath)} {
-			response, err := client.Get(server.URL + "/" + file)
-			require.NoError(t, err)
-			data, err := io.ReadAll(response.Body)
-			response.Body.Close()
-			require.NoError(t, err)
-			require.Equal(t, http.StatusOK, response.StatusCode)
-			require.NotEmpty(t, data)
-			if file == "index.html" {
-				require.NotContains(t, string(data), "https://")
-				require.Contains(t, string(data), "player/asciinema-player.min.js")
+		runE2EAssert(t, "assert:offline-player-assets-and-cast-served", func(t *testing.T) {
+			for _, file := range []string{"index.html", "player/asciinema-player.min.js", "player/asciinema-player.css", "player/LICENSE", filepath.Base(castPath)} {
+				response, err := client.Get(server.URL + "/" + file)
+				require.NoError(t, err)
+				data, err := io.ReadAll(response.Body)
+				response.Body.Close()
+				require.NoError(t, err)
+				require.Equal(t, http.StatusOK, response.StatusCode)
+				require.NotEmpty(t, data)
+				if file == "index.html" {
+					require.NotContains(t, string(data), "https://")
+					require.Contains(t, string(data), "player/asciinema-player.min.js")
+				}
 			}
-		}
+		})
 		outside := filepath.Join(t.TempDir(), "sentinel.cast")
 		require.NoError(t, os.WriteFile(outside, []byte("harmless outside sentinel"), 0600))
 		link := filepath.Join(store.Dir(), "containment.cast")
@@ -2122,8 +2333,10 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 		data, err := io.ReadAll(response.Body)
 		response.Body.Close()
 		require.NoError(t, err)
-		require.NotEqual(t, http.StatusOK, response.StatusCode)
-		require.NotContains(t, string(data), "harmless outside sentinel")
+		runE2EAssert(t, "assert:player-rejects-outside-symlink", func(t *testing.T) {
+			require.NotEqual(t, http.StatusOK, response.StatusCode)
+			require.NotContains(t, string(data), "harmless outside sentinel")
+		})
 	})
 	runE2EStep(t, "taxiway:record[rm,--name=e2e-status]", func(t *testing.T) {
 		out := runE2ECommand(t, root, tb, "record", "rm", lab, "--name", recordName)
@@ -2146,10 +2359,12 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 	for _, stoppedLab := range []bool{false, true} {
 		for _, remove := range []bool{false, true} {
 			name := fmt.Sprintf("e2e-recovery-stopped-%t-remove-%t", stoppedLab, remove)
-			runE2EStep(t, "record:recovery["+name+"]", func(t *testing.T) {
+			runE2EStep(t, "taxiway:record[start,interrupt,stop-or-rm,recovery,"+name+"]", func(t *testing.T) {
 				runE2ECommand(t, root, tb, "record", "start", lab, "--name", name)
 				session := requireE2ERecordingSession(t, state, lab, name)
-				assertE2EAsciicastFile(t, session.CastPathHost)
+				runE2EAssert(t, "assert:recovery-recording-cast-started", func(t *testing.T) {
+					assertE2EAsciicastFile(t, session.CastPathHost)
+				})
 				if stoppedLab {
 					runE2ECommand(t, root, tb, "down", lab)
 				} else {
@@ -2161,20 +2376,28 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 				}
 				if remove {
 					runE2ECommand(t, root, tb, "record", "rm", lab, "--name", name, "--force")
-					require.NoFileExists(t, session.CastPathHost)
+					runE2EAssert(t, "assert:interrupted-recording-force-removed", func(t *testing.T) {
+						require.NoFileExists(t, session.CastPathHost)
+					})
 					out := runE2ECommand(t, root, tb, "record", "list", lab)
-					require.NotContains(t, out, name)
+					runE2EAssert(t, "assert:removed-recovery-recording-absent", func(t *testing.T) {
+						require.NotContains(t, out, name)
+					})
 				} else {
 					runE2ECommand(t, root, tb, "record", "stop", lab, "--name", name)
-					recovered := requireE2ERecordingSession(t, state, lab, name)
-					require.Equal(t, recording.StateStopped, recovered.State)
-					require.NotNil(t, recovered.StoppedAt)
-					assertE2EAsciicastFile(t, session.CastPathHost)
+					runE2EAssert(t, "assert:interrupted-recording-reconciled-stopped", func(t *testing.T) {
+						recovered := requireE2ERecordingSession(t, state, lab, name)
+						require.Equal(t, recording.StateStopped, recovered.State)
+						require.NotNil(t, recovered.StoppedAt)
+						assertE2EAsciicastFile(t, session.CastPathHost)
+					})
 					runE2ECommand(t, root, tb, "record", "rm", lab, "--name", name)
 				}
 				if stoppedLab {
 					runE2ECommand(t, root, tb, "up", lab, "--skip-auth-check")
-					assertE2EShellCheck(t, root, tb, lab, orch)
+					runE2EAssert(t, "assert:shell-target-ready-after-recording-recovery", func(t *testing.T) {
+						assertE2EShellCheck(t, root, tb, lab, orch)
+					})
 				}
 			})
 		}
@@ -2616,7 +2839,8 @@ func assertE2EGatewayRequestRouted(t *testing.T, state *RootState, lab, orch str
 	apiKey := values[labLiteLLMAPIKeyEnv]
 	require.NotEmpty(t, apiKey)
 	for _, model := range e2eGatewayModelNames(t, orch) {
-		runE2EAssert(t, "assert:model-routed:"+model, func(t *testing.T) {
+		t.Logf("routing model=%s from host and guest", model)
+		{
 			deadline := time.Now().Add(90 * time.Second)
 			var lastErr error
 			for time.Now().Before(deadline) {
@@ -2626,7 +2850,8 @@ func assertE2EGatewayRequestRouted(t *testing.T, state *RootState, lab, orch str
 					if labErr == nil {
 						require.Equal(t, e2eFakeModelResponse, hostContent)
 						require.Equal(t, e2eFakeModelResponse, labContent)
-						return
+						lastErr = nil
+						break
 					}
 					err = labErr
 				}
@@ -2634,18 +2859,24 @@ func assertE2EGatewayRequestRouted(t *testing.T, state *RootState, lab, orch str
 				time.Sleep(2 * time.Second)
 			}
 			require.NoError(t, lastErr, "model %s must route via fake upstream %s\n%s", model, upstream.baseURL, collectE2ELiteLLMDiagnostics(t, state, ref, upstream.baseURL))
-		})
+		}
 	}
 
-	assertE2EGatewayProtocol(t, state, lab, orch, apiKey, upstream)
 }
 
 // These assertions run against the lifecycle scenario's real lab gateway, with
 // its database and telemetry enabled. The fixture never opens another sidecar.
-func assertE2EGatewayProtocol(t *testing.T, state *RootState, lab, orch, apiKey string, upstream *e2eModelUpstream) {
+func assertE2EGatewayProtocol(t *testing.T, state *RootState, lab, orch string, upstream *e2eModelUpstream) {
+	ref := config.LabRef{Lab: lab, Orch: orch, Driver: state.Driver.Name()}
+	values, err := readLabGatewayEnv(config.StateDir(state.Flags.StateDir, state.RepoDir), ref)
+	require.NoError(t, err)
+	apiKey := values[labLiteLLMAPIKeyEnv]
+	require.NotEmpty(t, apiKey)
 	t.Helper()
+	contract := "model text response"
 	request := func(t *testing.T, marker, endpoint, mode string, payload map[string]any, status int, contentType, reply string) ([]byte, []e2eProtocolRequest) {
 		t.Helper()
+		t.Logf("protocol contract=%s mode=%s model=%v expected_status=%d marker=%s", contract, mode, payload["model"], status, marker)
 		fixture := &e2eProtocolFixture{status: status, contentType: contentType, body: reply}
 		upstream.mu.Lock()
 		upstream.fixtures[marker] = fixture
@@ -2742,7 +2973,8 @@ func assertE2EGatewayProtocol(t *testing.T, state *RootState, lab, orch, apiKey 
 		endpoint = "/v1/responses"
 	}
 	for _, mode := range modes {
-		runE2EAssert(t, "assert:gateway-protocol:"+mode, func(t *testing.T) {
+		t.Logf("protocol auth mode=%s", mode)
+		{
 			anthropicReply := func(model string, content any, reason any) map[string]any {
 				return map[string]any{"id": "msg_fixture", "type": "message", "role": "assistant", "model": model, "content": content, "stop_reason": reason, "stop_sequence": nil, "usage": map[string]any{"input_tokens": 10, "output_tokens": 4}}
 			}
@@ -2761,6 +2993,7 @@ func assertE2EGatewayProtocol(t *testing.T, state *RootState, lab, orch, apiKey 
 				return stream(t, result)
 			}
 			text := map[string]any{"type": "message", "id": "msg_fixture", "role": "assistant", "status": "completed", "content": []any{map[string]any{"type": "output_text", "text": "Hello", "annotations": []any{}}}}
+			contract = "model text response"
 			for _, model := range models {
 				m := marker()
 				payload := map[string]any{"model": model, "max_tokens": 128, "messages": []any{map[string]any{"role": "user", "content": m}}}
@@ -2794,6 +3027,7 @@ func assertE2EGatewayProtocol(t *testing.T, state *RootState, lab, orch, apiKey 
 					require.Equal(t, []any{map[string]any{"type": "text", "text": "Hello"}}, actual["content"])
 				}
 			}
+			contract = "reasoning and tool result replay"
 			model := models[0]
 			m := marker()
 			if orch == "codex" {
@@ -2825,6 +3059,7 @@ func assertE2EGatewayProtocol(t *testing.T, state *RootState, lab, orch, apiKey 
 				require.Equal(t, payload["messages"], calls[0].payload["messages"])
 				require.Equal(t, payload["thinking"], calls[0].payload["thinking"])
 				require.Equal(t, tools, calls[0].payload["tools"])
+				contract = "streamed signature and text"
 				expected := []map[string]any{
 					{"type": "message_start", "message": anthropicReply(model, []any{}, nil)},
 					{"type": "content_block_start", "index": 0, "content_block": map[string]any{"type": "thinking", "thinking": "", "signature": ""}},
@@ -2848,6 +3083,7 @@ func assertE2EGatewayProtocol(t *testing.T, state *RootState, lab, orch, apiKey 
 				require.Equal(t, expected[7]["delta"], got[7]["delta"])
 			}
 			// Distinct models avoid router cooldown masking the second provider error.
+			contract = "provider error passthrough"
 			for index, code := range []int{401, 429} {
 				model := models[len(models)-2+index]
 				m := marker()
@@ -2861,7 +3097,7 @@ func assertE2EGatewayProtocol(t *testing.T, state *RootState, lab, orch, apiKey 
 					require.Equal(t, model, call.payload["model"])
 				}
 			}
-		})
+		}
 	}
 }
 
