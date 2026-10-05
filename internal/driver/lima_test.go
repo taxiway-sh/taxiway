@@ -265,7 +265,7 @@ exit 0
 	require.Equal(t, "repo: /repo\norch: gastown\ngit: /state/demo/git\nrecordings: /state/demo/recordings\n", string(rendered))
 	require.Equal(t, []string{
 		"start --timeout=15m0s --name=taxiway-demo " + renderedPath,
-		`shell --workdir=/ taxiway-demo -- sh -c test -s /run/lima-boot-done || { printf 'Lima boot scripts have not finished\n' >&2; exit 1; }; sudo mkdir -p /lab/work && sudo chown "$(id -u):$(id -g)" /lab/work`,
+		`shell --workdir=/ taxiway-demo -- sh -c test -s /run/lima-boot-done || { printf 'Lima boot scripts have not finished\n' >&2; exit 1; }; sudo mkdir -p /lab/work /lab/git && sudo chown "$(id -u):$(id -g)" /lab/work /lab/git`,
 	}, readCommandLog(t, logPath))
 	require.FileExists(t, filepath.Join(stateDir, "demo", "created_at"))
 }
@@ -317,7 +317,7 @@ exit 9
 	require.NoError(t, err)
 	require.Equal(t, 9, result.ExitCode)
 	require.Equal(t, []string{
-		`shell --workdir=/ taxiway-demo -- sh -c test -s /run/lima-boot-done || { printf 'Lima boot scripts have not finished\n' >&2; exit 1; }; sudo mkdir -p /lab/work && sudo chown "$(id -u):$(id -g)" /lab/work|TAXIWAY_AGENT=`,
+		`shell --workdir=/ taxiway-demo -- sh -c test -s /run/lima-boot-done || { printf 'Lima boot scripts have not finished\n' >&2; exit 1; }; sudo mkdir -p /lab/work /lab/git && sudo chown "$(id -u):$(id -g)" /lab/work /lab/git|TAXIWAY_AGENT=`,
 		"shell --workdir=/lab/work taxiway-demo -- sh -c echo hi|TAXIWAY_AGENT=codex",
 	}, readCommandLog(t, logPath))
 }

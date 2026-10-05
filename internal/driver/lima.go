@@ -384,7 +384,7 @@ func (l *LimaDriver) Exec(ctx context.Context, id string, req ExecRequest) (Exec
 
 func (l *LimaDriver) prepareInternalDirs(ctx context.Context, id string) error {
 	cmd := exec.CommandContext(ctx, "limactl", "shell", "--workdir=/", id, "--", "sh", "-c",
-		`test -s /run/lima-boot-done || { printf 'Lima boot scripts have not finished\n' >&2; exit 1; }; sudo mkdir -p /lab/work && sudo chown "$(id -u):$(id -g)" /lab/work`)
+		`test -s /run/lima-boot-done || { printf 'Lima boot scripts have not finished\n' >&2; exit 1; }; sudo mkdir -p /lab/work /lab/git && sudo chown "$(id -u):$(id -g)" /lab/work /lab/git`)
 	cmd.WaitDelay = time.Second
 	if out, err := cmd.CombinedOutput(); err != nil {
 		if ctx.Err() != nil {
