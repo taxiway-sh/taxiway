@@ -218,9 +218,10 @@ their own diagnosis. Follow [the reference-login commands](live-tests.md#authent
 in the affected context and give the user the exact command for their driver
 and reference lab. If native refresh cannot recover, ask for that login once;
 verify a bounded real request before copying to authorized test labs. Never
-print tokens or alter host authentication. #116 tracks automated validity and
-recovery improvements; this workflow does not implement another OAuth client
-or claim the current presence-only helper already provides that preflight.
+print tokens or alter host authentication. The existing reference preflight
+runs a bounded native Claude request and permits native OAuth refresh before
+copying authentication. Reuse it; this workflow does not implement another
+OAuth client or infer validity from file presence.
 
 For an existing Docker Claude reference lab, the reconnect command is the
 native client login, with its **verified container name** substituted:

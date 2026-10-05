@@ -91,8 +91,10 @@ The adapter uses the `codex` agent, which installs the npm package
 `@openai/codex`. The install phase also ensures the `bubblewrap` Linux sandboxing
 utility is available, which Codex uses for process isolation.
 
-The verify phase checks `codex --version`, `codex --help`, and whether API-key or
-OAuth credentials are available, without making an API call.
+The verify phase checks `codex --version`, `codex --help`, and whether the lab's
+LiteLLM gateway key is configured. A missing key prints guidance; this phase
+does not validate host OAuth, gateway readiness or provider access. Those need
+a successful request through the gateway.
 
 ## Inspect the Adapter
 
