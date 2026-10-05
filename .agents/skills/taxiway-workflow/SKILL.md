@@ -31,6 +31,8 @@ Use a dedicated worktree/implementer per subject and a different reviewer.
 Resolve review findings and verify corrections. If delegation is unavailable,
 report the missing review rather than review your own work as independent.
 Follow the documented tests, commits, PR and authorized merge/cleanup procedure.
+For release preparation/publication, use `taxiway-release` and the
+[release recipe](../../../docs/contributing/release-qualification.md).
 Pending publication/merge approval blocks only that action on that subject.
 Keep other already-authorized, independent implementation, tests, reviews and
 status checks moving within capacity. Reconcile assignments before starting

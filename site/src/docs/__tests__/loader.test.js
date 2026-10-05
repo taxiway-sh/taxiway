@@ -13,6 +13,15 @@ describe('docs loader', () => {
     expect(seen.size).toBe(docs.length);
   });
 
+  it('exposes the release recipe next to publication documentation', () => {
+    const pages = navGroups.find(group => group.name === 'Contributing').pages;
+    const release = pages.findIndex(page => page.rel === 'contributing/release');
+    expect(pages[release + 1].route).toBe('/docs/contributing/release-qualification');
+    expect(resolveDocLink('contributing/release', 'release-qualification.md')).toEqual({
+      kind: 'internal', to: '/docs/contributing/release-qualification',
+    });
+  });
+
   it('derives a title from the first H1', () => {
     expect(titleFromRaw('Intro\n\n# First title\n\n# Second title', 'Fallback')).toBe('First title');
     expect(titleFromRaw('No heading', 'Fallback')).toBe('Fallback');

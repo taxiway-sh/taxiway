@@ -70,6 +70,7 @@ const PAGE_ORDER = [
   'orchestrators/claude-code', 'orchestrators/codex', 'orchestrators/gastown',
   'how-to/gateway', 'how-to/observability', 'how-to/recordings',
   'contributing/development', 'contributing/testing', 'contributing/issues', 'contributing/release',
+  'contributing/release-qualification',
   'contributing/installation-qualification',
 ];
 const orderIndex = (rel) => {

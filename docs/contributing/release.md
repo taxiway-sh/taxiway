@@ -15,7 +15,11 @@ the binary to `$HOME/.local/bin` by default.
 
 ## Cut a Release
 
-1. Ensure `main` is green and ready.
+1. Qualify the exact clean candidate with the
+   [release recipe](release-qualification.md) and shared `taxiway-release` skill.
+   Present its evidence, blockers and untested combinations. Core CI alone is
+   insufficient. Qualification-only invocation does not authorize publication;
+   get explicit authorization before creating/pushing a tag or publishing.
 2. Create and push a semver tag:
 
    ```bash

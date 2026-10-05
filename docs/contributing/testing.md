@@ -6,6 +6,9 @@ matches your change.
 
 To verify a published release across platforms and drivers, see
 [Installation qualification](installation-qualification.md).
+For pre-publication source, documentation, live and packaging checks followed
+by published-artifact checks, use the [release recipe](release-qualification.md).
+The evidence helper is tested with `make test-release-tools` (no labs/accounts).
 
 ## Choosing tests
 
