@@ -54,10 +54,10 @@ jobs:
         id: lint
         continue-on-error: true
         run: make lint-scripts
-      - name: Gateway protocol smoke tests
+      - name: Orchestrator lifecycle gateway checks
         id: protocol
         continue-on-error: true
-        run: go test -tags=e2e ./internal/cli -run '^TestE2E_Gateway.*Protocol$' -count=1
+        run: make test-e2e-claude-code-up test-e2e-codex-up
       - name: Include validation results
         env:
           BUILD: ${{ steps.build.outcome }}

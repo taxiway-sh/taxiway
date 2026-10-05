@@ -1,8 +1,9 @@
 # Testing
 
-Taxiway's development tests cover individual behaviors, runtime scripts,
-orchestrator lifecycles, and the documentation site. Choose the suite that
-matches your change.
+Taxiway's E2Es prevent regressions in the lifecycle of each orchestrator on
+Docker. Live validation lets an agent simply test the feature it is developing
+on Docker or Lima, chosen according to the feature. Unit, shell and site tests
+cover their respective contracts. Choose the checks that match your change.
 
 To verify a published release across platforms and drivers, see
 [Installation qualification](installation-qualification.md).
@@ -16,13 +17,18 @@ The evidence helper is tested with `make test-release-tools` (no labs/accounts).
 |---|---|---|
 | Unit | Go behavior, driver commands, configuration, and phase edge cases | Go; no Docker or Lima |
 | Shell scripts | Installer and runtime script contracts | Local shell tools; no running lab |
-| End-to-end | Durable product regressions: orchestrator lifecycle, gateway protocols and native driver behavior | Go/Docker; Python and Lima for native checks |
+| End-to-end | Nonregression in each orchestrator's lifecycle, including its configured gateway | Go and Docker |
 | Live validation | Task-specific manual checks by an agent using reusable tooling | Python, Docker/Lima; account login when inference is needed |
 | Site | Documentation routing, navigation, rendering, and landing page content | Node.js and the site dependencies |
 
 Unit and shell tests provide quick feedback during development. End-to-end
 tests cover what happens when an orchestrator is provisioned and operated
 inside a lab.
+
+Durable E2E assertions enrich the nine existing scenarios in
+`internal/cli/orchestrator_e2e_test.go`. Add helpers to that same file; do not
+create another scenario file, standalone suite, `TestE2E_` entry point, CI job
+or Makefile runner. `e2e_support_test.go` owns setup/cleanup, not a parallel suite.
 
 ## Running tests
 
@@ -93,34 +99,6 @@ Passing core CI does not replace this check: the GitHub E2E workflow runs on a
 schedule or manual dispatch. A skipped or blocked run must be reported and
 resolved before claiming E2E validation.
 
-### Native driver E2Es
-
-```bash
-make test-e2e-native-docker
-make test-e2e-lima
-```
-
-`make test-e2e` remains the Go matrix; native targets run separately.
-These explicit targets build the worktree CLI and use `direnv exec .` to load
-its isolated dev environment. Python 3.11+ and the selected driver are required;
-Lima first-run downloads and provisioning need network access and capacity for
-one 4-CPU/8-GiB VM. They are account-free and not implicitly added to ordinary CI.
-
-`tests/e2e/test_recording_lifecycle.py` checks native Lima guest execution,
-recording mount visibility, actual capture, nondefault tmux prefix, containment,
-stopped-VM recovery and removal. Docker recording already has those assertions
-in the existing Go orchestrator E2Es; the native Docker target only checks the
-unique cleanup paths after guest failure and host timeout. Both drivers verify
-owned resource removal and preserve unrelated guests. Use `--outcome` to narrow
-an outcome, or `--setup-timeout` to bound provisioning; Docker `success` is
-intentionally rejected because its recording regression belongs in the Go suite.
-
-`tests/e2e/test_lima_startup.py` checks fresh readiness, rejection of a Running
-VM with unfinished boot scripts, ready retry and stop/start recovery. It restores
-the boot marker in `finally` and checks owned cleanup. Neither script accesses
-credentials or proves inference. Reports show revision/driver/behavior; failure,
-missing prerequisites or skipped checks do not count as validation.
-
 ### Task-specific live validation
 
 An agent uses `tests/live/taxiway_live.py` to verify the feature in a real lab,
@@ -139,11 +117,12 @@ Remove only owned temporary labs automatically.
 
 | Former script | Durable E2E coverage | Task-specific real-account evidence |
 |---|---|---|
-| `test_recording_lifecycle.py` | Existing Go recording scenarios cover Docker capture/prefix/containment/recovery; native `tests/e2e/` retains Lima recording and both drivers' exceptional cleanup | None required |
-| `test_lima_startup.py` | Native `tests/e2e/` retains fresh readiness, boot-marker rejection/retry and restart | None required |
+| `test_recording_lifecycle.py` | Existing Go recording scenarios cover Docker capture/prefix/containment/recovery. Exceptional `temporary_lab` cleanup belongs to helper safety tests. Native Lima observations are selected live recipes, not covered by Docker | Readiness/mounts/recording/containment/recovery and ownership observations in the live guide; scripts remain temporary |
+| `test_lima_startup.py` | The current nine scenarios use Docker; Lima fresh readiness, boot-marker rejection/retry and restart are live recipes | Workflow skill routes to bounded live recipes; do not claim automated Lima coverage |
 | `test_claude_models.py` | Existing gateway/orchestrator E2Es cover protocol routing, model configuration, permission defaults and restart | Actual alias/full-ID access, inherited/explicit child models, tools/build/HTTPS, OAuth reuse after restart |
 | `test_codex_models.py` | Existing gateway/orchestrator E2Es cover Responses routing, model configuration, permission defaults and restart | Actual principal/child model access, session relationships, gateway tokens and delegated tool effects |
 | `test_gastown.py` | Existing Gas Town E2Es cover workspace/roles, model/alias/gateway environment, self-sling and handoff process/configuration preservation | Actual patrol checks/report/heartbeat progress, fresh startup, progress after Deacon handoff, launcher inference and delegation |
+| `gateway_protocol_e2e_test.go` and its Python runner | Protocol assertions are part of the existing gateway-routed steps, using each lab's actual sidecar and controlled upstream, including its database/telemetry | No real-account claim |
 
 The real-account column is documented manual validation, not automated regression
 coverage. Removing the fixed scripts does not make those claims pass under a
@@ -252,20 +231,19 @@ credential-free E2E assertions or committing a feature-specific live suite.
 |---|---|
 | Go behavior or driver command | Nearest `_test.go` file, with no build tag; verify with `make test-unit` |
 | Shell behavior | A `test_*.sh` file under `tests/scripts/`; verify with `make test-scripts` |
-| Orchestrator lifecycle | A `*_e2e_test.go` file; verify with the relevant end-to-end target |
-| Native Lima/owned-cleanup behavior | Enrich existing `tests/e2e/` scenarios; run the explicit native target |
+| Orchestrator lifecycle or gateway protocol | Enrich the nine existing scenarios and helpers in `internal/cli/orchestrator_e2e_test.go`; run the affected existing targets |
 | Real-account agent or feature behavior | Temporary manual check outside Git using `taxiway_live.py`; run explicitly in a dev/e2e context |
 | Documentation page or site navigation | Existing tests under `site/src/`; run site tests and build |
 
-Go end-to-end files must start with the following directive and a blank line:
+The existing Go E2E files start with the following directive and a blank line:
 
 ```go
 //go:build e2e
 
 ```
 
-Use the `TestE2E_` prefix for Go end-to-end functions so the focused targets find
-them. Local Docker availability checks may use `requireDockerOrSkip(t)`.
+Keep the nine existing `TestE2E_` functions; extend their current steps instead
+of adding entry points. Local Docker availability checks may use `requireDockerOrSkip(t)`.
 
 When adding documentation pages, test routes, links, and navigation rather
 than asserting a fixed total page count.

@@ -165,15 +165,3 @@ test-scripts: ## Run shell script tests
 		echo "==> $$script"; \
 		bash "$$script"; \
 	done
-
-.PHONY: test-e2e-native-docker test-e2e-lima
-
-# Explicit native E2Es; no provider calls. Run in this worktree's dev context.
-test-e2e-native-docker:
-	go build -o taxiway ./cmd/taxiway
-	direnv exec . python3 tests/e2e/test_recording_lifecycle.py --driver docker
-
-test-e2e-lima:
-	go build -o taxiway ./cmd/taxiway
-	direnv exec . python3 tests/e2e/test_lima_startup.py --driver lima
-	direnv exec . python3 tests/e2e/test_recording_lifecycle.py --driver lima

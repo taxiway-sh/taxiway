@@ -5,6 +5,11 @@ description: Use when preparing, qualifying, cutting or resuming a Taxiway relea
 
 # Taxiway release qualification
 
+Durable E2E assertions enrich the nine existing scenarios in
+`internal/cli/orchestrator_e2e_test.go`. Add helpers to that same file; do not
+create another scenario file, standalone suite, `TestE2E_` entry point, CI job
+or Makefile runner. `e2e_support_test.go` owns setup/cleanup, not a parallel suite.
+
 Read `AGENTS.md` and the [release recipe](../../../docs/contributing/release-qualification.md).
 That document owns checks, evidence and phase-specific commands. Use the same
 source in Codex and Claude Code; no client-specific workflow engine is needed.

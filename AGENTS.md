@@ -27,9 +27,14 @@ Kubernetes and heavyweight infrastructure are out of scope.
 - Taxiway is in beta: do not add historical compatibility or migration code/tests
   unless requested. Keep current lifecycle, idempotency and recovery coverage.
 - Test product behavior directly; do not add a separate test layer for test assertions.
-- When a feature changes provisioned or runtime behavior, enrich the relevant
-  existing E2E scenarios with assertions of that behavior. Run them and verify
-  they pass before merging; core CI or skipped E2E tests are not sufficient.
+- E2Es prevent regressions in each orchestrator's lifecycle on Docker.
+  Live validation lets an agent simply test its feature on Docker or Lima.
+- When a feature changes provisioned or runtime behavior, enrich the affected
+  scenarios among the nine existing scenarios in `internal/cli/orchestrator_e2e_test.go` with
+  assertions of that behavior and helpers in that file. Do not add parallel E2E
+  suites, scenario files, `TestE2E_` entry points, jobs or Makefile runners.
+  `e2e_support_test.go` is setup/cleanup support, not an alternative suite.
+  Run the affected existing scenarios and verify they pass before merging; core CI or skipped E2E tests are not sufficient.
 - Do not add PRDs, ADRs, approval gates, run manifests, or agent workflow docs
   unless explicitly requested.
 - Do not commit working plans, scratch files, local run logs, generated lab
@@ -48,7 +53,8 @@ Kubernetes and heavyweight infrastructure are out of scope.
 - Live validation is a task-specific manual check by an agent, not a committed
   feature regression suite. Reuse `tests/live/taxiway_live.py` and read
   `tests/live/AGENTS.md` plus `docs/contributing/live-tests.md`. Keep its scripts
-  and sanitized evidence temporary; durable behavior assertions belong in E2E.
+  and sanitized evidence temporary; lifecycle nonregression assertions enrich
+  the existing orchestrator E2Es. Unit/component contracts keep their own tests.
 - For release requests, use the shared `taxiway-release` skill and
   [release recipe](docs/contributing/release-qualification.md); qualification
   does not authorize publication, and missing/skipped checks are not validation.
