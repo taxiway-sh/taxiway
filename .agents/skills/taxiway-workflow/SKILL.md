@@ -27,6 +27,18 @@ assignments. Let the user select work; do not silently relabel or start it.
 
 ## Execution
 
+Durable E2E assertions enrich the nine existing scenarios in
+`internal/cli/orchestrator_e2e_test.go`. Add helpers to that same file; do not
+create another scenario file, standalone suite, `TestE2E_` entry point, CI job
+or Makefile runner. `e2e_support_test.go` owns setup/cleanup, not a parallel suite.
+
+E2Es prevent regressions in each orchestrator's lifecycle on Docker. Live
+validation lets an agent simply check the feature it is developing on Docker
+or Lima, selected according to that feature. It is a temporary,
+task-specific manual check using `tests/live/taxiway_live.py`; do not commit
+feature-specific live suites, scripts or reports. Real-provider checks are
+explicitly opt-in and their actual effects require evidence.
+
 Use a dedicated worktree/implementer per subject and a different reviewer.
 Resolve review findings and verify corrections. If delegation is unavailable,
 report the missing review rather than review your own work as independent.
@@ -49,6 +61,32 @@ verify the installed/current supported version, integration boundary and correct
 public reporting channel; prepare a sanitized reproduction or narrow tested
 patch in isolation, with independent review. Authorization for Taxiway work
 does not authorize upstream issue/PR publication, comments, pushes or forks.
+
+## Task-specific live validation
+
+When an agent needs to verify its current feature like a manual tester, select
+Docker or Lima according to the affected feature, then read
+[the live guide](../../../docs/contributing/live-tests.md) and `tests/live/AGENTS.md`.
+Choose the relevant observations, create any script outside Git and use
+`tests/live/taxiway_live.py` for isolated contexts, bounded commands, authentication
+reuse, guest execution and owned cleanup. A smoke marker or process status alone
+is insufficient: inspect actual files, tool/client events, sessions and gateway
+results relevant to the feature. Real model calls are opt-in; do not add them to CI.
+
+For Lima driver/readiness/mount/recording/recovery work, use the
+[driver/recording recipes](../../../docs/contributing/live-tests.md#lima-driver-and-recording-recipes)
+(the mount/recording/cleanup observations also apply to Docker).
+Choose fresh boot readiness, unfinished-boot retry, stop/start, writable mounts,
+actual recording capture/containment or exceptional cleanup as needed. Use
+`temporary_lab(..., driver="lima", prepare_only=True)` for provider-free checks;
+it starts no agent roles or gateway and cannot establish inference or delegation.
+Bound initial provisioning and every guest action; restore injected boot/index
+fixtures in `finally`, remove only the owned lab and compare unrelated VM status.
+Keep reference labs intact. Report selected outcomes, driver/revision, observed
+effects, verified cleanup and blocked/unexecuted paths. Do not convert recipes
+into committed feature scripts or a second E2E runner. Durable Docker assertions
+stay in the nine current Go scenarios; account-free results never prove real
+account behavior.
 
 ## Active-session loops
 

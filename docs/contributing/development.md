@@ -141,9 +141,14 @@ assignments. Make commits by intention. Beta features may break older behavior:
 do not add historical migration/compatibility code or tests unless requested.
 Current lifecycle, reset/recovery and idempotency tests remain relevant.
 
-Follow [Testing](testing.md) and [Live Tests](live-tests.md), with real provider
-tests where needed. Enrich affected existing E2Es rather than adding an
-assertion-only layer or separate jobs. Coordinate Docker/Lima runs across
+Follow [Testing](testing.md) and [Live validation](live-tests.md). E2Es prevent
+regressions in each orchestrator's lifecycle on Docker. Live validation lets an
+agent simply test its current feature on Docker or Lima with shared helpers;
+keep temporary scripts/results outside Git. Enrich
+nine existing scenarios in `internal/cli/orchestrator_e2e_test.go`, with
+helpers in that file. Do not add another scenario file, parallel suite,
+`TestE2E_` entry point, CI job or Makefile runner; `e2e_support_test.go` remains
+setup/cleanup support. Coordinate Docker/Lima runs across
 subjects: default to one heavy run at a time, identify context ownership, and
 defer work if memory, network pools or client capacity are exhausted. Diagnose
 and retry narrowly; never globally prune resources or delete another context.

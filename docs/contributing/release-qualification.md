@@ -11,7 +11,7 @@ See [Release](release.md) for the separately authorized publication procedure.
 
 Start from the exact clean committed candidate in a dedicated worktree. Read
 [Testing](testing.md), [live test instructions](https://github.com/taxiway-sh/taxiway/blob/main/tests/live/AGENTS.md) and
-[Live tests](live-tests.md). Required tools depend on the checks: Go, Bash,
+[Live validation](live-tests.md). Required tools depend on the checks: Go, Bash,
 Python 3, Node/npm, GoReleaser, Docker, Lima and GitHub CLI. Missing prerequisites
 are `NOT_EXECUTED`, never a pass. Use the supported tool versions documented by
 the repository. Do not update provider clients or the catalog during a recipe.
@@ -88,15 +88,15 @@ promise. Do not turn untested supported paths into PASS or hide them.
 | `core` | `make lint build test-unit`; helper tests: `make test-release-tools` | Build/lint/unit results, counts, actual candidate; no unexpected skips. |
 | `scripts` | `make test-scripts` | Installer, settings, versions, previews, confirmations and runtime contracts pass. No dry-run mutation. |
 | `site` | In `site/`: `npm ci`, `npm test`, `npm run build` | Routes/navigation/build pass; manually inspect changed pages, links and examples. |
-| `gateway` | `go test -v -tags=e2e -count=1 -timeout=180s -run '^TestE2E_Gateway' ./internal/cli` | Streaming, tools, provider errors and replay contracts pass with fake providers; no claim of account access. |
+| `gateway` | Gateway-routed assertions in the existing orchestrator lifecycle targets (`make test-e2e-claude-code`, `make test-e2e-codex`, `make test-e2e-gastown`) | Actual lab gateway routing, streaming, tool replay and provider errors survive configured/start/restart lifecycle stages using controlled providers; no real-account claim or separate protocol runner. |
 | `e2e-codex` | `make test-e2e-codex` | Up, prepare/run and phase-by-phase all pass, including models, autonomous permissions, exact versions and restart. |
 | `e2e-claude-code` | `make test-e2e-claude-code` | All three scenarios pass, model/config propagation, trust/onboarding and restart checked. |
 | `e2e-gastown` | `make test-e2e-gastown` | All three scenarios pass, deacon/startup sessions and doctor health, renewal/handoff configuration checked. |
-| `live-codex` | `tests/live/test_codex_models.py --lab test-codex` | Real headless principal/child relationships, requested/observed models and gateway calls. Separately verify bounded tool effects and actual interactive tmux completion. |
-| `live-claude` | `tests/live/test_claude_models.py --auth-lab test-claude` | Real headless principal/delegation and auth reuse/restart. Separately verify tool effects and actual interactive completion without onboarding. |
-| `live-gastown` | `tests/live/test_gastown.py --auth-lab test-claude` | Deacon patrol, Mayor handoff and principal/subagent requests. Separately attach to the Mayor and check bounded real work without auth/permission/onboarding loops; this does not qualify a full refinery workload. |
-| `lima` | `tests/live/test_lima_startup.py --driver lima` plus relevant existing lifecycle/live checks | Guest readiness, mounts, gateway, start/restart and diagnostics; state which adapters actually ran on Lima. Docker results do not qualify Lima. |
-| `recording` | `tests/live/test_recording_lifecycle.py --driver docker --outcome all`; repeat with `--driver lima` when qualifying Lima | Cast contains expected fixture output, recorder stop preserves agent, interrupted/stopped guest recovery works. Also manually verify listing/removal and browser replay/export offline. |
+| `live-codex` | Task-specific bounded check with `taxiway_live.py`; see [model gateway validation](model-gateway-tests.md) | Real principal/child relationships, requested/observed models and gateway calls with output tokens. Verify relevant tool effects and actual interactive tmux completion. Keep scripts/results temporary. |
+| `live-claude` | Task-specific bounded check with a verified Claude reference; see [model gateway validation](model-gateway-tests.md) | Real principal/delegation and auth reuse/restart. Verify relevant tool effects and interactive completion without onboarding. Keep scripts/results temporary. |
+| `live-gastown` | Task-specific bounded Gas Town observations; see [model gateway validation](model-gateway-tests.md) | Actual Deacon patrol progress, relevant handoffs and principal/subagent requests. Attach to Mayor and verify bounded real work without auth/permission/onboarding loops; does not qualify a full refinery workload. |
+| `lima` | Selected [Lima live recipes](live-tests.md#lima-driver-and-recording-recipes) using `taxiway_live.py` | Real guest readiness/retry, mounts, recording and stop/start observations; separately verify gateway/inference when in scope and state actual adapters. Current Docker E2Es do not qualify Lima. No separate native suite is endorsed. |
+| `recording` | Recording assertions in the existing Go orchestrator scenarios; scoped temporary Lima checks when qualifying Lima | Actual cast output, recorder stop preserves agent, containment and interrupted/stopped guest recovery. Verify actual Lima behavior separately; also manually verify browser replay/export offline. |
 | `docs-cli` | Compare docs/help to CLI, settings, manifests, installer and runtime scripts; execute representative documented examples | See checklist below; precise findings, corrections or documented limitations. Text matching alone is insufficient. |
 | `package` | `goreleaser check`; `goreleaser release --snapshot --clean`; inspect archives/checksums/installer and run extracted host binary | Correct four platform archives, executable, matching runtime, catalog, local player/scripts/styles, metadata and paths. Snapshot is not a published-release installation. |
 | `isolation-cleanup` | Scoped ownership inventory before/after; two contexts/labs; supported failure/retry cases | No collisions; intended mounts only; host agent config preserved; owned guests/gateways/networks/volumes removed; unrelated instances unchanged. |
@@ -104,10 +104,12 @@ promise. Do not turn untested supported paths into PASS or hide them.
 | `breaking-changes` | Review behavior and diff since the last published release, not only commit labels | Release notes identify each breaking change with before/after, impact and user action (recreate lab, change setting, etc.). Breaking changes are allowed; no migration mechanism is implied. |
 | `review` | Different agent reviews candidate diff, findings, fixes and actual proof | Independent review and correction evidence; no self-review presented as independent. |
 
-Python scenario commands in the table run through `direnv exec . python3` with
-the worktree environment and matching `./taxiway` binary. Follow
-[model gateway scenarios](model-gateway-tests.md) and live guide for setup,
-preflight and their supported arguments; do not reinvent authentication plumbing.
+Durable assertions enrich only the nine existing scenarios and helpers in
+`internal/cli/orchestrator_e2e_test.go`; do not add parallel scenario files,
+suites, entry points, jobs or Makefile runners. Run temporary live scripts through `direnv exec . python3` with
+`PYTHONPATH="$PWD/tests/live"` from the worktree. Follow
+[model gateway validation](model-gateway-tests.md) and the live guide for setup
+and preflight; do not reinvent authentication plumbing.
 Build the candidate binary before testing. For missing/rejected authentication,
 give the user the exact native reconnection command for the owned reference lab,
 then verify a bounded real request. Reuse `taxiway_live.py` for authorized labs.

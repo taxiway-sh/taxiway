@@ -1,109 +1,180 @@
-# Testing model selection and subagents
+# Model gateway validation
 
-These suites use the shared `taxiway_live.py` helpers. For authentication reuse,
-temporary labs and scenarios for other features, see [reusable live tests](live-tests.md).
-The examples reuse the worktree’s persistent `test-claude` and `test-codex` labs;
-names describe the orchestrator rather than the feature under development.
-Pass an existing lab’s actual name to `--auth-lab` or `--lab`.
+Gateway assertions protect each orchestrator's lifecycle: configured, started,
+routed and restarted. They enrich the nine existing scenarios and
+helpers in `internal/cli/orchestrator_e2e_test.go`. Do not add a standalone
+protocol runner, another E2E suite/file, entry point, job or Makefile runner. Agents validate real
+account/model behavior as temporary manual checks using the shared tooling in
+[Live validation](live-tests.md). Real-provider requests are explicitly opt-in;
+choose only the checks relevant to the feature, with short prompts, command
+bounds and client budgets where supported. Keep scripts and reports outside Git.
 
 ## Automated checks without provider calls
-
-From the repository or development worktree:
 
 ```bash
 go test ./...
 make lint test-scripts build
-go test -tags=e2e -count=1 -timeout=180s -run '^TestE2E_Gateway' ./internal/cli
+make test-e2e-claude-code-up
+make test-e2e-codex-up
 ```
 
-The last command requires Docker. It runs the shipped LiteLLM image against a
-local fake provider with external networking disabled and fake credentials.
-It checks Anthropic subscription/API-key routing, signed thinking replay,
-ChatGPT Responses streaming, encrypted reasoning, tool replay, explicit
-`parallel_tool_calls` values and provider errors. These checks do not prove that
-a real account has access to a model.
+Existing lifecycle scenarios exercise their actual lab LiteLLM gateway with
+a local controlled provider and fake credentials. They cover Anthropic
+subscription/API-key routing, signed thinking replay, Responses streaming,
+encrypted reasoning, tool replay, `parallel_tool_calls` and provider errors.
+Orchestrator E2Es cover shipped model defaults/selections, configuration,
+interactive completion and restart/handoff propagation. These checks cannot
+establish real account access or model-driven delegation.
 
-## Live Claude tests with one authentication
+## Choose a real-account check
 
-Use a dev worktree with its `.envrc` loaded. Build the local binary so its code
-matches the mounted assets. The commands below preserve the reference lab:
+Use existing labs `test-claude`, `test-codex` and `test-gastown` in the isolated
+worktree context, or their actual existing names. Follow the live guide for
+reference preflight, authentication propagation and owned temporary labs. Codex
+uses the existing host login through its gateway; do not copy auth into clients.
 
-```bash
-go build -o taxiway ./cmd/taxiway
-direnv exec . ./taxiway init
-direnv exec . ./taxiway up test-claude --driver docker --type claude-code --skip-auth-check
-direnv exec . ./taxiway auth test-claude claude-code
-direnv exec . python3 tests/live/test_claude_models.py --auth-lab test-claude
+For Claude model selection, try the configured principal model, an alias such
+as `sonnet`, or a full catalog ID relevant to the change. For delegation, define
+a small custom agent with an explicit model or inherited model and ask the
+principal to invoke it once and wait for its result. Capture bounded
+`stream-json` output with `--verbose --forward-subagent-text`; verify client
+success, the actual Agent tool invocation and child response model IDs.
+Use `run_in_lab` to load the target's own gateway environment. After a restart,
+repeat a bounded real request to establish auth and routing still work; credential
+file presence alone is insufficient.
+
+For Codex, ask for one fresh-context subagent with the model needed for the
+feature, then wait for completion. Inspect guest session journals for actual
+parent/child relationships, exact expected child count, requested child models, the `taxiway-litellm`
+provider and inherited approval/sandbox settings. Inspect matching gateway
+requests and positive output tokens. A shared telemetry session ID or session
+count alone does not prove delegation. Gateway/Langfuse evidence must identify
+observed models, not just the model requested in a prompt.
+
+For permission/tool features, ask for a harmless proof file and a tiny build
+such as `python3 -m py_compile`; inspect the file, compiled artifact, tool events
+and absence of permission denials. If outbound networking is affected, use one
+bounded HTTPS request and inspect its result. Test delegated actions when the
+change affects children, without supplying extra permission bypass flags that
+could conceal a broken shipped default.
+
+For Gas Town startup/patrol changes, inspect `gt status --json`, actual role
+processes, onboarding readiness and the selected model/gateway environment.
+Observe Deacon tool results for at least three distinct patrol checks, a
+successful `gt patrol report` and advancing heartbeat cycle. An alive daemon or
+heartbeat alone is insufficient. If handoff is affected, check a replaced
+Deacon/Mayor process and fresh patrol progress after `gt handoff`; a self-sling
+interruption is a failure even if the daemon recovers. A separate fresh lab can
+expose startup failures hidden by populated hooks. Stop background patrols once
+the selected observations are complete to bound account usage. This does not
+qualify a full polecat/refinery/merge-queue workload.
+
+For Gas Town inference, execute a bounded request through its shipped
+`launch-agent.sh`, then inspect principal/child model responses and actual file,
+build or network effects relevant to the feature. Do not inject replacement
+gateway settings that bypass the launcher being validated.
+
+For interactive changes, attach with `taxiway shell <lab>` and verify real
+completion without onboarding/authentication/permission loops. Headless success
+alone does not establish interactive readiness.
+
+Record the tested commit, driver, client versions, selected checks, actual
+effects and sanitized evidence. Mark blocked or unexecuted paths explicitly.
+Preserve reference labs and clean only owned temporary resources. See
+[Claude subagents](https://code.claude.com/docs/en/sub-agents) and
+[Codex subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents)
+for client usage.
+
+## Evidence collection examples
+
+Use these fragments inside a temporary feature check, choosing `driver="docker"`
+or `driver="lima"` in `temporary_lab` according to the feature. The shared helper
+resolves guest execution from the persisted driver; gateway containers still use
+Docker for both. Capture output locally and return only relevant evidence.
+
+For a bounded Claude observation, choose the model/agents relevant to the task:
+
+```python
+output = run_in_lab(lab, ["claude", "-p", prompt, "--model", selected_model,
+    "--output-format", "stream-json", "--verbose", "--forward-subagent-text",
+    "--no-session-persistence", "--effort", "low", "--tools", "Agent,Bash",
+    "--max-budget-usd", "1", "--agents", json.dumps(selected_agents)],
+    agent="claude-code", timeout=180)
+events = [json.loads(line) for line in output.splitlines() if line.startswith(b"{")]
+results = [event for event in events if event.get("type") == "result"]
+assert results and results[-1].get("subtype") == "success"
+assert not results[-1].get("is_error") and not results[-1].get("permission_denials")
+children = {event.get("message", {}).get("model") for event in events
+            if event.get("type") == "assistant" and event.get("parent_tool_use_id")}
+agent_calls = [block.get("input", {}).get("subagent_type") for event in events
+    if event.get("type") == "assistant"
+    for block in event.get("message", {}).get("content", [])
+    if block.get("type") == "tool_use" and block.get("name") == "Agent"]
+# Assert the requested child identities/models, then inspect their actual effects.
 ```
 
-If the reference lab already exists, its persisted driver is used. Both Docker
-and Lima reference labs are supported. Authenticate once in that lab; no token
-needs to be pasted into a terminal command or stored in the repository. The
-suite copies OAuth credentials through process memory to a temporary Docker
-lab, with file permissions `0600`, and removes that temporary lab afterward.
-The authenticated reference lab remains available for reruns and manual tests.
+For Codex, use `run_in_lab(..., agent="codex", timeout=180)` with
+`codex exec --skip-git-repo-check --json -m <model> -c
+'features.multi_agent_v2=true' <short-prompt>`. Require `turn.completed`, no
+`error`/`turn.failed`, and extract `thread_id` from `thread.started`. A bounded
+guest Python query over `~/.codex/sessions/**/*.jsonl` reads only these fields:
 
-The six live cases check:
-
-1. A principal using the configured Opus model.
-2. A principal selecting the `sonnet` alias.
-3. A principal selecting the full Haiku model ID.
-4. A subagent inheriting the principal's model.
-5. An Opus principal delegating to Sonnet and Haiku subagents.
-6. Authentication propagation and a successful call after restarting a second lab.
-
-The suite asserts client success, the answer marker, actual Agent tool calls
-and forwarded subagent model IDs. It limits the tools available to the test
-agents and bounds each invocation with a timeout and a client budget.
-
-## Live Codex tests
-
-The gateway uses the existing host Codex subscription login. With that login
-available, create a reference lab and run:
-
-```bash
-direnv exec . ./taxiway up test-codex --driver docker --type codex
-direnv exec . python3 tests/live/test_codex_models.py --lab test-codex
+```python
+# Inside the guest; parent is the thread ID from the current client observation.
+children = []
+for path in (Path.home() / ".codex/sessions").rglob("*.jsonl"):
+    meta, context = {}, {}
+    for line in path.read_text().splitlines():
+        try: event = json.loads(line)
+        except ValueError: continue
+        if event.get("type") == "session_meta": meta = event.get("payload", {})
+        if event.get("type") == "turn_context": context = event.get("payload", {})
+    if meta.get("parent_thread_id") == parent:
+        children.append({"model": context.get("model"),
+                         "provider": meta.get("model_provider"),
+                         "approval": context.get("approval_policy"),
+                         "sandbox": context.get("sandbox_policy", {}).get("type")})
+# Return only this metadata, never full journals or arbitrary message content.
 ```
 
-The four live cases check the configured principal, an alternate Luna
-principal, an inherited subagent, and two subagents using Luna and Sol.
-They assert successful client responses, parent/child session relationships,
-the child models and provider, and actual gateway requests with output tokens.
-Codex V2 may share a telemetry session ID between a principal and its children:
-session counts alone are not proof of delegation. Client session journals stay
-inside the reference lab. Each invocation has a timeout and a read-only sandbox.
+Execute the guest query with `guest(..., timeout=30)` and assert the expected
+count/models, provider `taxiway-litellm`, approval `never`, sandbox
+`danger-full-access`. For tools, check exact harmless file contents and a compiled
+artifact with `guest`, plus the bounded network-proof file where relevant.
 
-Both live suites use real subscription requests and consume account usage.
-They are opt-in and are not part of ordinary unit tests or unattended CI.
-They test routing and delegation, not every catalog model, model quality, or
-the accuracy of LiteLLM pricing/context metadata.
+For gateway evidence, identify the lab's gateway Postgres container using its
+owned runtime ID. Query only aggregates after the observation's UTC start time,
+not full request logs; poll for at most 20 seconds because writes are asynchronous:
 
-## Manual checks
-
-```bash
-direnv exec . ./taxiway describe claude-code
-direnv exec . ./taxiway describe codex
-direnv exec . ./taxiway shell test-claude
+```sql
+SELECT model, count(DISTINCT session_id), sum(completion_tokens)
+FROM "LiteLLM_SpendLogs"
+WHERE "startTime" >= TIMESTAMP '<observation-start-UTC>' AND completion_tokens > 0
+GROUP BY model LIMIT 20;
 ```
 
-In Claude, try `/model sonnet`, ask a short question, then return to `/model opus`.
-For explicit subagent models, define custom agents with `model: sonnet` and
-`model: haiku` in the lab's `.claude/agents/` directory, restart the session,
-and ask the principal to delegate one task to each. See the official
-[Claude subagent documentation](https://code.claude.com/docs/en/sub-agents).
+Run bounded `docker exec <owned-gateway-postgres> psql -U litellm -d litellm
+-At -c <query>` through `command(..., timeout=30)`. Assert observed models and
+positive output tokens. Langfuse generations can establish the same evidence;
+a requested model, response marker or session count cannot replace it.
 
-Attach to Codex with `taxiway shell test-codex` and ask it to spawn two
-fresh-context subagents using `gpt-6-luna` and `gpt-6-sol`, wait for both, and
-summarize their results. See the official
-[Codex subagent documentation](https://learn.chatgpt.com/docs/agent-configuration/subagents).
-Inspect generations in Langfuse to verify the models and output tokens;
-an agent's assertion that it delegated is not sufficient evidence.
+For Gas Town, read `gt status --json` and its `tmux.socket`. Use that socket for
+`tmux -L <socket> display-message -p -t hq-deacon
+'#{pane_pid}|#{pane_dead}|#{pane_current_command}'` before/after handoff; require a
+new live Claude process. Inspect process argv/environment **inside the guest**,
+returning booleans for model, gateway/alias and permission settings rather than
+values containing secrets. Apply the same technique to Mayor when relevant.
 
-Keep the reference labs available for manual validation after an automated run.
-Remove them explicitly when their validation work is finished:
-
-```bash
-direnv exec . ./taxiway rm test-claude --yes
-direnv exec . ./taxiway rm test-codex --yes
-```
+For actual patrols, inspect `/lab/work/gt/deacon/heartbeat.json` and Claude journals
+under `~/.claude/projects/**/*.jsonl`, filtering `cwd` to `/lab/work/gt/deacon`.
+Match `tool_use` IDs for Bash to `tool_result.tool_use_id`; only successful
+results count. Useful checks include `gt mail inbox`, `gt convoy`, `gt witness
+status`, `gt refinery status`, `gt deacon cleanup-orphans`, `gt dog`, `gt dispatch`.
+A successful `gt patrol report` must show a closed patrol and a new patrol;
+heartbeat cycle and successful check/report counts must advance after the
+observation's baseline. Flag any errored/interrupted result for
+`gt sling mol-deacon-patrol deacon` rather than treating later recovery as success.
+Return only distinct checks/counts/report count/cycle/interruption booleans.
+Bound polling (for example 180 seconds for fresh startup, 600 for a complete
+patrol) and guest inspections (30–90 seconds); stop `gt down` once selected
+observations finish. Do not print full transcripts or unlimited role logs.

@@ -132,7 +132,7 @@ func testE2EOrchestratorPrepareRun(t *testing.T, orch string) {
 	fakeUpstream := startE2EFakeModelUpstream(t)
 	root, state, tb := buildRealOrchestratorDockerRoot(t, orch, scope)
 	cleanupE2EOrchestratorLab(t, state, id, lab, orch)
-	configureE2ELiteLLMModelCatalog(t, state, fakeUpstream)
+	configureE2ELiteLLMModelCatalog(t, state, fakeUpstream.baseURL)
 	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
 	assertE2EInvalidModelSelections(t, root, tb, state, id, lab, orch)
 
@@ -253,7 +253,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 	fakeUpstream := startE2EFakeModelUpstream(t)
 	root, state, tb := buildRealOrchestratorDockerRoot(t, orch, scope)
 	cleanupE2EOrchestratorLab(t, state, id, lab, orch)
-	configureE2ELiteLLMModelCatalog(t, state, fakeUpstream)
+	configureE2ELiteLLMModelCatalog(t, state, fakeUpstream.baseURL)
 	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
 	assertE2EInvalidModelSelections(t, root, tb, state, id, lab, orch)
 	dryRunLabels := e2eSemanticDryRunLabels(orch)
@@ -612,7 +612,7 @@ func testE2EOrchestratorUp(t *testing.T, orch string) {
 	fakeUpstream := startE2EFakeModelUpstream(t)
 	root, state, tb := buildRealOrchestratorDockerRoot(t, orch, scope)
 	cleanupE2EOrchestratorLab(t, state, id, lab, orch)
-	configureE2ELiteLLMModelCatalog(t, state, fakeUpstream)
+	configureE2ELiteLLMModelCatalog(t, state, fakeUpstream.baseURL)
 	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
 	assertE2EInvalidModelSelections(t, root, tb, state, id, lab, orch)
 
@@ -2319,11 +2319,32 @@ func e2eDockerNetworkExists(t *testing.T, name string) bool {
 	return err == nil
 }
 
-func startE2EFakeModelUpstream(t *testing.T) string {
+// Protocol fixtures extend the same upstream used by the existing lifecycle
+// scenarios. Unique input markers keep background roles away from fixture replies.
+type e2eProtocolFixture struct {
+	status            int
+	contentType, body string
+	requests          []e2eProtocolRequest
+}
+
+type e2eProtocolRequest struct {
+	path    string
+	headers http.Header
+	payload map[string]any
+}
+
+type e2eModelUpstream struct {
+	baseURL  string
+	mu       sync.Mutex
+	fixtures map[string]*e2eProtocolFixture
+}
+
+func startE2EFakeModelUpstream(t *testing.T) *e2eModelUpstream {
 	t.Helper()
 	var mu sync.Mutex
 	var modelCalls int
 	var requests []string
+	fixtureUpstream := &e2eModelUpstream{fixtures: map[string]*e2eProtocolFixture{}}
 	listener, err := net.Listen("tcp", "0.0.0.0:0")
 	require.NoError(t, err)
 	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -2335,15 +2356,6 @@ func startE2EFakeModelUpstream(t *testing.T) string {
 			return
 		}
 		if r.Method == http.MethodPost && (r.URL.Path == "/v1/messages" || r.URL.Path == "/backend-api/codex/responses") {
-			if r.URL.Path == "/v1/messages" {
-				providerKeyMatches := r.Header.Get("x-api-key") == "sk-e2e-upstream"
-				authorizationPresent := r.Header.Get("Authorization") != ""
-				if !providerKeyMatches || authorizationPresent {
-					t.Errorf("Anthropic API fixture auth mismatch: provider-key-match=%t, authorization-present=%t", providerKeyMatches, authorizationPresent)
-					http.Error(w, "fixture-upstream-auth-mismatch", http.StatusUnauthorized)
-					return
-				}
-			}
 			var payload struct {
 				Model  string `json:"model"`
 				Stream bool   `json:"stream"`
@@ -2352,6 +2364,30 @@ func startE2EFakeModelUpstream(t *testing.T) string {
 			if err != nil || json.Unmarshal(body, &payload) != nil {
 				http.Error(w, "invalid fixture request", http.StatusBadRequest)
 				return
+			}
+			fixtureUpstream.mu.Lock()
+			for marker, fixture := range fixtureUpstream.fixtures {
+				if bytes.Contains(body, []byte(marker)) {
+					var decoded map[string]any
+					require.NoError(t, json.Unmarshal(body, &decoded))
+					fixture.requests = append(fixture.requests, e2eProtocolRequest{r.URL.Path, r.Header.Clone(), decoded})
+					status, contentType, response := fixture.status, fixture.contentType, fixture.body
+					fixtureUpstream.mu.Unlock()
+					w.Header().Set("Content-Type", contentType)
+					w.WriteHeader(status)
+					_, _ = io.WriteString(w, response)
+					return
+				}
+			}
+			fixtureUpstream.mu.Unlock()
+			if r.URL.Path == "/v1/messages" {
+				providerKeyMatches := r.Header.Get("x-api-key") == "sk-e2e-upstream"
+				authorizationPresent := r.Header.Get("Authorization") != ""
+				if !providerKeyMatches || authorizationPresent {
+					t.Errorf("Anthropic API fixture auth mismatch: provider-key-match=%t, authorization-present=%t", providerKeyMatches, authorizationPresent)
+					http.Error(w, "fixture-upstream-auth-mismatch", http.StatusUnauthorized)
+					return
+				}
 			}
 			mu.Lock()
 			modelCalls++
@@ -2439,7 +2475,8 @@ func startE2EFakeModelUpstream(t *testing.T) string {
 	})
 	_, port, err := net.SplitHostPort(listener.Addr().String())
 	require.NoError(t, err)
-	return "http://host.docker.internal:" + port
+	fixtureUpstream.baseURL = "http://host.docker.internal:" + port
+	return fixtureUpstream
 }
 
 func writeE2EJSON(t *testing.T, w http.ResponseWriter, value any) {
@@ -2571,7 +2608,7 @@ func assertE2EGatewayRuntimeRunning(t *testing.T, state *RootState, lab, orch st
 	require.Contains(t, services, "postgres")
 }
 
-func assertE2EGatewayRequestRouted(t *testing.T, state *RootState, lab, orch string, fakeUpstreamBaseURL string) {
+func assertE2EGatewayRequestRouted(t *testing.T, state *RootState, lab, orch string, upstream *e2eModelUpstream) {
 	t.Helper()
 	ref := config.LabRef{Lab: lab, Orch: orch, Driver: state.Driver.Name()}
 	values, err := readLabGatewayEnv(config.StateDir(state.Flags.StateDir, state.RepoDir), ref)
@@ -2596,7 +2633,234 @@ func assertE2EGatewayRequestRouted(t *testing.T, state *RootState, lab, orch str
 				lastErr = err
 				time.Sleep(2 * time.Second)
 			}
-			require.NoError(t, lastErr, "model %s must route via fake upstream %s\n%s", model, fakeUpstreamBaseURL, collectE2ELiteLLMDiagnostics(t, state, ref, fakeUpstreamBaseURL))
+			require.NoError(t, lastErr, "model %s must route via fake upstream %s\n%s", model, upstream.baseURL, collectE2ELiteLLMDiagnostics(t, state, ref, upstream.baseURL))
+		})
+	}
+
+	assertE2EGatewayProtocol(t, state, lab, orch, apiKey, upstream)
+}
+
+// These assertions run against the lifecycle scenario's real lab gateway, with
+// its database and telemetry enabled. The fixture never opens another sidecar.
+func assertE2EGatewayProtocol(t *testing.T, state *RootState, lab, orch, apiKey string, upstream *e2eModelUpstream) {
+	t.Helper()
+	request := func(t *testing.T, marker, endpoint, mode string, payload map[string]any, status int, contentType, reply string) ([]byte, []e2eProtocolRequest) {
+		t.Helper()
+		fixture := &e2eProtocolFixture{status: status, contentType: contentType, body: reply}
+		upstream.mu.Lock()
+		upstream.fixtures[marker] = fixture
+		upstream.mu.Unlock()
+		defer func() { upstream.mu.Lock(); delete(upstream.fixtures, marker); upstream.mu.Unlock() }()
+		data, err := json.Marshal(payload)
+		require.NoError(t, err)
+		req, err := http.NewRequest(http.MethodPost, state.proxyRuntime().BaseURL()+endpoint, bytes.NewReader(data))
+		require.NoError(t, err)
+		req.Host = labLiteLLMHost(lab)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("x-litellm-api-key", "Bearer "+apiKey)
+		req.Header.Set("x-litellm-agent-id", "taxiway-e2e-protocol")
+		if mode == "subscription" {
+			req.Header.Set("Authorization", "Bearer sk-ant-oat01-e2e-fixture")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		client := &http.Client{Timeout: 30 * time.Second}
+		var body []byte
+		var responseCode int
+		for {
+			attempt := req.Clone(ctx)
+			attempt.Body = io.NopCloser(bytes.NewReader(data))
+			response, err := client.Do(attempt)
+			require.NoError(t, err)
+			body, err = io.ReadAll(io.LimitReader(response.Body, 1<<20))
+			response.Body.Close()
+			require.NoError(t, err)
+			responseCode = response.StatusCode
+			// Error fixtures exercise the real router, which briefly cools a
+			// model down. Observe recovery before the next healthy-mode check;
+			// never retry a provider-error fixture or an unrelated failure.
+			if status == http.StatusOK && responseCode == http.StatusTooManyRequests &&
+				bytes.Contains(body, []byte("All deployments for selected model are in cooldown")) {
+				time.Sleep(time.Second)
+				continue
+			}
+			break
+		}
+		require.Equal(t, status, responseCode, "fixture status; response: %s", redactE2EDiagnosticSecrets(string(body)))
+		upstream.mu.Lock()
+		captured := append([]e2eProtocolRequest(nil), fixture.requests...)
+		upstream.mu.Unlock()
+		require.NotEmpty(t, captured, "real lab gateway must call controlled upstream: status=%d model=%v response=%s", status, payload["model"], redactE2EDiagnosticSecrets(string(body)))
+		for _, call := range captured {
+			require.True(t, call.headers.Get("x-litellm-api-key") == "", "gateway key must not reach provider")
+			if orch == "codex" {
+				require.Equal(t, "/backend-api/codex/responses", call.path)
+				require.True(t, call.headers.Get("Authorization") == "Bearer e2e-fake-access", "fake Codex auth must reach provider")
+				require.True(t, call.headers.Get("chatgpt-account-id") == "e2e-fake-account", "fake account must reach provider")
+			} else {
+				require.Equal(t, "/v1/messages", strings.Split(call.path, "?")[0])
+				if mode == "subscription" {
+					require.True(t, call.headers.Get("Authorization") == "Bearer sk-ant-oat01-e2e-fixture", "fake subscription auth must reach provider")
+				} else {
+					require.True(t, call.headers.Get("x-api-key") == "sk-e2e-upstream", "fake API key must reach provider")
+				}
+			}
+		}
+		return body, captured
+	}
+	jsonText := func(t *testing.T, value any) string {
+		data, err := json.Marshal(value)
+		require.NoError(t, err)
+		return string(data)
+	}
+	events := func(t *testing.T, body []byte) []map[string]any {
+		var result []map[string]any
+		for _, line := range bytes.Split(body, []byte("\n")) {
+			if !bytes.HasPrefix(line, []byte("data: ")) || bytes.Equal(line[6:], []byte("[DONE]")) {
+				continue
+			}
+			var event map[string]any
+			require.NoError(t, json.Unmarshal(line[6:], &event))
+			result = append(result, event)
+		}
+		require.NotEmpty(t, result, "fixture SSE response: %s", redactE2EDiagnosticSecrets(string(body)))
+		return result
+	}
+	stream := func(t *testing.T, items []map[string]any) string {
+		var body strings.Builder
+		for _, event := range items {
+			fmt.Fprintf(&body, "event: %s\ndata: %s\n\n", event["type"], jsonText(t, event))
+		}
+		return body.String()
+	}
+	marker := func() string { return fmt.Sprintf("taxiway-protocol-%x", time.Now().UnixNano()) }
+	models := e2eGatewayModelNames(t, orch)
+	modes := []string{"api-key", "subscription"}
+	endpoint := "/v1/messages"
+	if orch == "codex" {
+		modes = []string{"chatgpt"}
+		endpoint = "/v1/responses"
+	}
+	for _, mode := range modes {
+		runE2EAssert(t, "assert:gateway-protocol:"+mode, func(t *testing.T) {
+			anthropicReply := func(model string, content any, reason any) map[string]any {
+				return map[string]any{"id": "msg_fixture", "type": "message", "role": "assistant", "model": model, "content": content, "stop_reason": reason, "stop_sequence": nil, "usage": map[string]any{"input_tokens": 10, "output_tokens": 4}}
+			}
+			codexReply := func(model string, output any) map[string]any {
+				return map[string]any{"id": "resp_fixture", "object": "response", "created_at": 1790950000, "status": "completed", "model": model, "output": output, "error": nil, "incomplete_details": nil, "usage": map[string]any{"input_tokens": 10, "output_tokens": 4, "total_tokens": 14, "input_tokens_details": map[string]any{"cached_tokens": 0}, "output_tokens_details": map[string]any{"reasoning_tokens": 0}}}
+			}
+			codexStream := func(model string, output []any) string {
+				response := codexReply(model, output)
+				initial := codexReply(model, []any{})
+				initial["status"] = "in_progress"
+				result := []map[string]any{{"type": "response.created", "response": initial, "sequence_number": 0}}
+				for index, item := range output {
+					result = append(result, map[string]any{"type": "response.output_item.done", "output_index": index, "item": item, "sequence_number": len(result)})
+				}
+				result = append(result, map[string]any{"type": "response.completed", "response": response, "sequence_number": len(result)})
+				return stream(t, result)
+			}
+			text := map[string]any{"type": "message", "id": "msg_fixture", "role": "assistant", "status": "completed", "content": []any{map[string]any{"type": "output_text", "text": "Hello", "annotations": []any{}}}}
+			for _, model := range models {
+				m := marker()
+				payload := map[string]any{"model": model, "max_tokens": 128, "messages": []any{map[string]any{"role": "user", "content": m}}}
+				reply := jsonText(t, anthropicReply(model, []any{map[string]any{"type": "text", "text": "Hello"}}, "end_turn"))
+				contentType := "application/json"
+				if orch == "codex" {
+					payload = map[string]any{"model": model, "stream": true, "input": []any{map[string]any{"role": "user", "content": m}}, "reasoning": map[string]any{"effort": "medium"}, "parallel_tool_calls": false}
+					reply = codexStream(model, []any{text})
+					contentType = "text/event-stream"
+				}
+				body, calls := request(t, m, endpoint, mode, payload, 200, contentType, reply)
+				call := calls[0]
+				require.Equal(t, model, call.payload["model"])
+				if orch == "codex" {
+					require.Equal(t, payload["input"], call.payload["input"])
+					require.Equal(t, payload["reasoning"], call.payload["reasoning"])
+					require.Equal(t, false, call.payload["parallel_tool_calls"])
+					require.Equal(t, true, call.payload["stream"])
+					require.Equal(t, false, call.payload["store"])
+					require.Contains(t, call.payload["include"], "reasoning.encrypted_content")
+					actual := events(t, body)
+					require.Equal(t, "response.completed", actual[len(actual)-1]["type"])
+					response := actual[len(actual)-1]["response"].(map[string]any)
+					require.Equal(t, model, response["model"])
+					require.Equal(t, []any{text}, response["output"])
+				} else {
+					require.Equal(t, payload["messages"], call.payload["messages"])
+					var actual map[string]any
+					require.NoError(t, json.Unmarshal(body, &actual))
+					require.Equal(t, "end_turn", actual["stop_reason"])
+					require.Equal(t, []any{map[string]any{"type": "text", "text": "Hello"}}, actual["content"])
+				}
+			}
+			model := models[0]
+			m := marker()
+			if orch == "codex" {
+				reasoning := map[string]any{"type": "reasoning", "id": "rs_fixture", "summary": []any{}, "encrypted_content": "opaque-test-reasoning"}
+				tool := map[string]any{"type": "function_call", "id": "fc_fixture", "call_id": "call_fixture", "name": "read_file", "arguments": "{\"path\":\"README.md\"}", "status": "completed"}
+				payload := map[string]any{"model": model, "stream": true, "input": []any{map[string]any{"role": "user", "content": m}}, "tools": []any{map[string]any{"type": "function", "name": "read_file", "parameters": map[string]any{"type": "object", "properties": map[string]any{}}}}, "parallel_tool_calls": true}
+				body, _ := request(t, m, endpoint, mode, payload, 200, "text/event-stream", codexStream(model, []any{reasoning, tool}))
+				actual := events(t, body)
+				require.Equal(t, "response.completed", actual[len(actual)-1]["type"])
+				output := actual[len(actual)-1]["response"].(map[string]any)["output"].([]any)
+				require.Equal(t, []any{reasoning, tool}, output)
+				payload["input"] = append(append(payload["input"].([]any), output...), map[string]any{"type": "function_call_output", "call_id": "call_fixture", "output": "File contents"})
+				_, calls := request(t, m, endpoint, mode, payload, 200, "text/event-stream", codexStream(model, []any{text}))
+				require.Equal(t, payload["input"], calls[0].payload["input"])
+				require.Equal(t, payload["tools"], calls[0].payload["tools"])
+				require.Equal(t, true, calls[0].payload["parallel_tool_calls"])
+			} else {
+				thinking := map[string]any{"type": "thinking", "thinking": "", "signature": "test-opaque-signature"}
+				tool := map[string]any{"type": "tool_use", "id": "toolu_fixture", "name": "read_file", "input": map[string]any{"path": "README.md"}}
+				tools := []any{map[string]any{"name": "read_file", "description": "Read a file", "input_schema": map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}}, "required": []any{"path"}}}}
+				payload := map[string]any{"model": model, "max_tokens": 1024, "thinking": map[string]any{"type": "adaptive"}, "tools": tools, "messages": []any{map[string]any{"role": "user", "content": m}}}
+				body, _ := request(t, m, endpoint, mode, payload, 200, "application/json", jsonText(t, anthropicReply(model, []any{thinking, tool}, "tool_use")))
+				var actual map[string]any
+				require.NoError(t, json.Unmarshal(body, &actual))
+				require.Equal(t, []any{thinking, tool}, actual["content"])
+				require.Equal(t, "tool_use", actual["stop_reason"])
+				payload["messages"] = append(payload["messages"].([]any), map[string]any{"role": "assistant", "content": actual["content"]}, map[string]any{"role": "user", "content": []any{map[string]any{"type": "tool_result", "tool_use_id": "toolu_fixture", "content": "File contents"}}})
+				_, calls := request(t, m, endpoint, mode, payload, 200, "application/json", jsonText(t, anthropicReply(model, []any{map[string]any{"type": "text", "text": "Done"}}, "end_turn")))
+				require.Equal(t, payload["messages"], calls[0].payload["messages"])
+				require.Equal(t, payload["thinking"], calls[0].payload["thinking"])
+				require.Equal(t, tools, calls[0].payload["tools"])
+				expected := []map[string]any{
+					{"type": "message_start", "message": anthropicReply(model, []any{}, nil)},
+					{"type": "content_block_start", "index": 0, "content_block": map[string]any{"type": "thinking", "thinking": "", "signature": ""}},
+					{"type": "content_block_delta", "index": 0, "delta": map[string]any{"type": "signature_delta", "signature": "test-opaque-signature"}},
+					{"type": "content_block_stop", "index": 0},
+					{"type": "content_block_start", "index": 1, "content_block": map[string]any{"type": "text", "text": ""}},
+					{"type": "content_block_delta", "index": 1, "delta": map[string]any{"type": "text_delta", "text": "Hello"}},
+					{"type": "content_block_stop", "index": 1},
+					{"type": "message_delta", "delta": map[string]any{"stop_reason": "end_turn", "stop_sequence": nil}, "usage": map[string]any{"output_tokens": 4}},
+					{"type": "message_stop"},
+				}
+				payload["stream"] = true
+				body, _ = request(t, m, endpoint, mode, payload, 200, "text/event-stream", stream(t, expected))
+				got := events(t, body)
+				require.Len(t, got, len(expected))
+				for i := range expected {
+					require.Equal(t, expected[i]["type"], got[i]["type"])
+				}
+				require.Equal(t, expected[2]["delta"], got[2]["delta"])
+				require.Equal(t, expected[5]["delta"], got[5]["delta"])
+				require.Equal(t, expected[7]["delta"], got[7]["delta"])
+			}
+			// Distinct models avoid router cooldown masking the second provider error.
+			for index, code := range []int{401, 429} {
+				model := models[len(models)-2+index]
+				m := marker()
+				payload := map[string]any{"model": model, "max_tokens": 128, "messages": []any{map[string]any{"role": "user", "content": m}}}
+				if orch == "codex" {
+					payload = map[string]any{"model": model, "stream": true, "input": m}
+				}
+				errorType := map[int]string{401: "authentication_error", 429: "rate_limit_error"}[code]
+				_, calls := request(t, m, endpoint, mode, payload, code, "application/json", jsonText(t, map[string]any{"type": "error", "error": map[string]any{"type": errorType, "message": "Fixture provider error"}}))
+				for _, call := range calls {
+					require.Equal(t, model, call.payload["model"])
+				}
+			}
 		})
 	}
 }
