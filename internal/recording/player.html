@@ -153,11 +153,11 @@
     function castFileForSession(session) {
       const fromHostPath = basename(session.cast_path_host);
       if (fromHostPath) {
-        return fromHostPath;
+        return /^[A-Za-z0-9_-]+\.cast$/.test(fromHostPath) ? fromHostPath : "";
       }
 
       if (session.id) {
-        return session.id + ".cast";
+        return /^[A-Za-z0-9_-]+$/.test(session.id) ? session.id + ".cast" : "";
       }
 
       return "";

@@ -7,6 +7,7 @@ from pathlib import Path
 import shlex
 import subprocess
 import sys
+import tempfile
 import time
 
 from taxiway_live import command, guest, lab_ref, runtime_id, temporary_lab, validate_context
@@ -73,6 +74,53 @@ def recorder_attached(lab, recorder_option_target):
         # record start launches its client asynchronously; poll within the bound.
         return False
 
+
+def recording_containment(lab, taxiway, recording):
+    """A real guest modifies its mounted index; outside fixtures stay private."""
+    index = Path(os.environ["TAXIWAY_LAB_STATE_DIR"]) / lab / "recordings/recordings.json"
+    original = index.read_bytes()
+    with tempfile.TemporaryDirectory(prefix="taxiway-recording-containment-") as directory:
+        outside = Path(directory) / "sentinel.cast"
+        outside.write_bytes(b"harmless outside sentinel")
+        try:
+            for mode in ("outside", "symlink"):
+                script = f'''python3 - <<'PY'
+import json, pathlib
+p = pathlib.Path('/lab/recordings/recordings.json')
+data = json.loads({original.decode()!r})
+entry = data['sessions'][-1]
+outside = {str(outside)!r}
+if {mode!r} == 'symlink':
+    link = pathlib.Path('/lab/recordings/containment.cast')
+    link.symlink_to(outside)
+    entry['cast_path_host'] = {str(index.parent / 'containment.cast')!r}
+    entry['cast_path'] = '/lab/recordings/containment.cast'
+else:
+    entry['cast_path_host'] = outside
+p.write_text(json.dumps(data))
+PY'''
+                guest(lab, script, timeout=15)
+                poisoned = index.read_bytes()
+                for args in (("record", "list", lab),
+                             ("record", "rm", lab, "--id", recording["id"]),
+                             ("record", "analyze", lab, "--prompt-only")):
+                    rejected = False
+                    try:
+                        command([taxiway, *args], timeout=30)
+                    except RuntimeError:
+                        rejected = True
+                    require(rejected, "Untrusted recording metadata was accepted")
+                    require(outside.read_bytes() == b"harmless outside sentinel", "Outside recording sentinel changed")
+                    require(index.read_bytes() == poisoned, "Rejected recording command modified its index")
+                guest(lab, "rm -f /lab/recordings/containment.cast", timeout=15)
+        finally:
+            # Restore only this owned test lab, even after a failed assertion.
+            index.write_bytes(original)
+            guest(lab, "rm -f /lab/recordings/containment.cast", timeout=15)
+    prompt = command([taxiway, "record", "analyze", lab, "--prompt-only"], timeout=30)
+    require(Path(recording["cast_path_host"]).read_bytes() in prompt,
+            "Valid analysis lost captured artifact contents")
+
 def record(lab, taxiway):
     print("STEP recording target-session", flush=True)
     guest(lab, "tmux new-session -d -s claude-code 'bash --noprofile --norc'; tmux set-option -g prefix C-a")
@@ -93,6 +141,8 @@ def record(lab, taxiway):
     require(session(lab)["state"] == "stopped", "Recording index was not stopped")
     guest(lab, f"if tmux has-session -t {recorder}; then exit 1; fi; tmux has-session -t '=claude-code'", timeout=10)
     require("LIVE_RECORDING_PROOF" in cast_output(cast), "Stopped cast lost captured output")
+    print("STEP recording host-containment", flush=True)
+    recording_containment(lab, taxiway, recording)
     print("STEP recording remove", flush=True)
     command([taxiway, "record", "rm", lab, "--id", recording["id"]], timeout=60)
     require(not cast.exists(), "Recording removal left its cast")

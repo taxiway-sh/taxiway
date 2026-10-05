@@ -2033,6 +2033,53 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 		require.NoFileExists(t, latest.CastPathHost)
 		require.FileExists(t, first.CastPathHost)
 	})
+	runE2EStep(t, "record:host-filesystem-containment", func(t *testing.T) {
+		store := recording.NewStore(config.StateDir(state.Flags.StateDir, state.RepoDir), lab)
+		indexPath := filepath.Join(store.Dir(), "recordings.json")
+		original, err := os.ReadFile(indexPath)
+		require.NoError(t, err)
+		defer func() { require.NoError(t, os.WriteFile(indexPath, original, 0600)) }()
+		outside := filepath.Join(t.TempDir(), "sentinel.cast")
+		require.NoError(t, os.WriteFile(outside, []byte("harmless outside sentinel"), 0600))
+		for _, mode := range []string{"outside", "symlink"} {
+			var idx recording.Index
+			require.NoError(t, json.Unmarshal(original, &idx))
+			session := &idx.Sessions[0]
+			session.CastPathHost = outside
+			link := filepath.Join(store.Dir(), "containment.cast")
+			if mode == "symlink" {
+				session.CastPathHost = link
+				session.CastPath = "/lab/recordings/containment.cast"
+			}
+			data, err := json.Marshal(idx)
+			require.NoError(t, err)
+			script := "printf %s " + shellQuote(string(data)) + " > /lab/recordings/recordings.json"
+			if mode == "symlink" {
+				script += "; ln -s " + shellQuote(outside) + " /lab/recordings/containment.cast"
+			}
+			res, err := state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{Argv: []string{"bash", "-lc", script}})
+			require.NoError(t, err)
+			require.Zero(t, res.ExitCode)
+			defer os.Remove(link)
+			for _, args := range [][]string{{"record", "list", lab}, {"record", "rm", lab, "--id", session.ID}, {"record", "analyze", lab, "--prompt-only"}} {
+				out, _, err := execDockerRoot(t, root, tb, args...)
+				require.Error(t, err)
+				require.NotContains(t, out, outside)
+				current, err := os.ReadFile(indexPath)
+				require.NoError(t, err)
+				require.Equal(t, data, current)
+				sentinel, err := os.ReadFile(outside)
+				require.NoError(t, err)
+				require.Equal(t, "harmless outside sentinel", string(sentinel))
+			}
+		}
+		require.NoError(t, os.WriteFile(indexPath, original, 0600))
+		prompt := runE2ECommand(t, root, tb, "record", "analyze", lab, "--prompt-only")
+		captured, err := os.ReadFile(castPath)
+		require.NoError(t, err)
+		require.NotEmpty(t, captured)
+		require.Contains(t, prompt, string(captured))
+	})
 	runE2EStep(t, "record:global-list-corrupt-lab", func(t *testing.T) {
 		bad := recording.NewStore(config.StateDir(state.Flags.StateDir, state.RepoDir), "e2e-corrupt-index")
 		require.NoError(t, bad.Save(recording.Index{}))
@@ -2046,7 +2093,10 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 	runE2EStep(t, "record:offline-player", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "record", "player", lab, "--write-only")
 		store := recording.NewStore(config.StateDir(state.Flags.StateDir, state.RepoDir), lab)
-		server := httptest.NewServer(http.FileServer(http.Dir(store.Dir())))
+		root, err := store.OpenRoot(false)
+		require.NoError(t, err)
+		defer root.Close()
+		server := httptest.NewServer(http.FileServer(http.FS(recording.PlayerFiles(root))))
 		defer server.Close()
 		client := &http.Client{Timeout: 5 * time.Second}
 		for _, file := range []string{"index.html", "player/asciinema-player.min.js", "player/asciinema-player.css", "player/LICENSE", filepath.Base(castPath)} {
@@ -2062,6 +2112,18 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 				require.Contains(t, string(data), "player/asciinema-player.min.js")
 			}
 		}
+		outside := filepath.Join(t.TempDir(), "sentinel.cast")
+		require.NoError(t, os.WriteFile(outside, []byte("harmless outside sentinel"), 0600))
+		link := filepath.Join(store.Dir(), "containment.cast")
+		require.NoError(t, os.Symlink(outside, link))
+		defer os.Remove(link)
+		response, err := client.Get(server.URL + "/containment.cast")
+		require.NoError(t, err)
+		data, err := io.ReadAll(response.Body)
+		response.Body.Close()
+		require.NoError(t, err)
+		require.NotEqual(t, http.StatusOK, response.StatusCode)
+		require.NotContains(t, string(data), "harmless outside sentinel")
 	})
 	runE2EStep(t, "taxiway:record[rm,--name=e2e-status]", func(t *testing.T) {
 		out := runE2ECommand(t, root, tb, "record", "rm", lab, "--name", recordName)
