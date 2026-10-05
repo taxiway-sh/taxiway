@@ -19,6 +19,8 @@
 !.claude/skills/
 .claude/skills/*
 !.claude/skills/taxiway-workflow
+!.claude/skills/taxiway-release
+__pycache__/
 .idea/
 .obsidian/
 
