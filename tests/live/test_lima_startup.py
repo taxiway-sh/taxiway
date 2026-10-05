@@ -55,7 +55,7 @@ if touch "$source/.guest-write-probe" 2>/dev/null || sudo touch "$source/.guest-
     exit 1
 fi
 printf '\\n# guest-only fixture\\n' >> "$fork/config"
-git -C /lab/work/repo/agreement-hub push "$fork" HEAD:refs/heads/taxiway-isolation-test
+git -C /lab/work/agreement-hub push "$fork" HEAD:refs/heads/taxiway-isolation-test
 """, timeout=30)
             require((host_mirror / "config").read_bytes() == host_config,
                     "Guest metadata changed host Git configuration")
