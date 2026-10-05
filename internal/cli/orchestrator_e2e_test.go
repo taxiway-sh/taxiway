@@ -967,14 +967,18 @@ func captureE2EDryRunRuntime(t *testing.T, state *RootState, frozenTmux bool) ma
 		if !running {
 			continue
 		}
-		var output bytes.Buffer
+		var output, diagnostic bytes.Buffer
 		result, err := d.Exec(context.Background(), id, driver.ExecRequest{
 			Argv: []string{"bash", "-c", `set -euo pipefail
+operation=initialization
+trap 'printf "snapshot operation=%s exit=%s\n" "$operation" "$?" >&2' ERR
 for path in "$HOME/.config/taxiway" "$HOME/.codex" "$HOME/.claude" /lab/work; do
   if [ -d "$path" ]; then
     # GasTown's running database and daemon logs change independently of previews.
     # Keep their directory presence while hashing persistent configuration and workspace files.
+    operation=directory-modes
     find "$path" \( -path /lab/work/gt/.dolt-data -o -path /lab/work/gt/daemon \) -printf 'mode|%m|%p\n' -prune -o -printf 'mode|%m|%p\n'
+    operation=file-digests
     find "$path" \( -path /lab/work/gt/.dolt-data -o -path /lab/work/gt/daemon \) -prune -o -type f ! -path /lab/work/gt/.runtime/doctor-fix.log -exec sha256sum {} +
   fi
 done
@@ -982,9 +986,14 @@ if [[ "$1" != frozen ]] && command -v tmux >/dev/null 2>&1; then
   tmux list-sessions -F 'session|#{session_name}|#{session_id}' 2>/dev/null || true
 fi`, "capture-preview", map[bool]string{true: "frozen", false: "active"}[frozenTmux]},
 			Stdout: &output,
+			Stderr: &diagnostic,
 		})
-		require.NoError(t, err)
-		require.Zero(t, result.ExitCode)
+		message := redactE2EDiagnosticSecrets(diagnostic.String())
+		if len(message) > 4096 {
+			message = "[truncated] " + message[len(message)-4096:]
+		}
+		require.NoError(t, err, "snapshot lab %s: %s", ref.Lab, message)
+		require.Zero(t, result.ExitCode, "snapshot lab %s: %s", ref.Lab, message)
 		for _, line := range strings.Split(strings.TrimSpace(output.String()), "\n") {
 			if strings.HasPrefix(line, "session|") {
 				fields := strings.SplitN(line, "|", 3)
