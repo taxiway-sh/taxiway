@@ -53,7 +53,7 @@ type CreateOptions struct {
 	Orch string // orchestrator name (e.g. "claude-code")
 
 	RepoDir       string // host repo root used to populate or mount /lab
-	GitDir        string // host bare git remotes dir mounted at /lab/git when the driver supports it
+	GitDir        string // host bare git remotes dir mounted read-only at /lab/git-source when the driver supports it
 	RecordingsDir string // host recordings dir mounted at /lab/recordings when the driver supports it
 
 	TemplatePath string // driver template path when the driver needs one

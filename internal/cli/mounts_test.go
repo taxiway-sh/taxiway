@@ -29,7 +29,7 @@ func TestCreate_PassesStateMountDirs(t *testing.T) {
 	require.Equal(t, expectedGitDir, mock.LastCreateOptions.GitDir,
 		"GitDir must point to per-lab git remote directory")
 	require.DirExists(t, expectedGitDir,
-		"GitDir must exist before Create so drivers can mount it at /lab/git")
+		"GitDir must exist before Create so drivers can mount it read-only at /lab/git-source")
 
 	expectedRecordingsDir := filepath.Join(stateDir, "gastown", "recordings")
 	require.Equal(t, expectedRecordingsDir, mock.LastCreateOptions.RecordingsDir,
@@ -65,7 +65,7 @@ func TestStart_RecreatesMissingStateMountDirs(t *testing.T) {
 	require.NoDirExists(t, filepath.Join(stateDir, "gastown", "work"),
 		"host-side work directory should not be recreated")
 	require.DirExists(t, gitDir,
-		"GitDir must be recreated before starting an existing lab so /lab/git remains mountable")
+		"GitDir must be recreated before starting an existing lab so /lab/git-source remains mountable")
 	require.DirExists(t, recordingsDir,
 		"RecordingsDir must be recreated before starting an existing lab so /lab/recordings remains mountable")
 }

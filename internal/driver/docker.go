@@ -136,7 +136,8 @@ func labVolumeName(id string) string {
 //	/lab/agents                   → opts.RepoDir/agents bind mount (read-only)
 //	/lab/orchestrators/<orch>     → opts.RepoDir/orchestrators/<orch> bind mount (read-only)
 //	/lab/work                     → internal writable lab state
-//	/lab/git                      → opts.GitDir bind mount (writable)
+//	/lab/git                      → internal writable lab Git remotes
+//	/lab/git-source               → opts.GitDir bind mount (read-only)
 //	/lab/recordings               → opts.RecordingsDir bind mount (writable)
 func (d *DockerDriver) Create(_ context.Context, id string, opts CreateOptions) error {
 	if opts.Lab == "" || opts.Orch == "" || opts.RepoDir == "" || opts.GitDir == "" || opts.RecordingsDir == "" {
@@ -259,7 +260,7 @@ func dockerRunArgs(id, volName string, opts CreateOptions, image string) []strin
 		"-v", filepath.Join(opts.RepoDir, "infra") + ":/lab/infra:ro",
 		"-v", filepath.Join(opts.RepoDir, "agents") + ":/lab/agents:ro",
 		"-v", filepath.Join(opts.RepoDir, "orchestrators", opts.Orch) + ":/lab/orchestrators/" + opts.Orch + ":ro",
-		"-v", opts.GitDir + ":/lab/git",
+		"-v", opts.GitDir + ":/lab/git-source:ro",
 	}
 	if opts.RecordingsDir != "" {
 		args = append(args, "-v", opts.RecordingsDir+":/lab/recordings")

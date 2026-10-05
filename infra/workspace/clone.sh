@@ -8,7 +8,7 @@
 #   - If not present → git clone [--branch TAXIWAY_REPO_REF] TAXIWAY_REPO_URL TAXIWAY_WORKSPACE_DIR.
 #
 # Security: git is invoked with -c protocol.file.allow=never except for
-# Taxiway-managed file:///lab/git/*.git remotes prepared on the host.
+# Taxiway-managed file:///lab/git/*.git forks prepared inside the guest.
 #
 # Environment variables consumed:
 #   TAXIWAY_REPO_URL        (required) — git URL of the repository to clone.

@@ -25,8 +25,8 @@ mounts:
     mountPoint: "/lab/orchestrators/{{.Orch}}"
     writable: false
   - location: "{{.GitDir}}"
-    mountPoint: "/lab/git"
-    writable: true
+    mountPoint: "/lab/git-source"
+    writable: false
   - location: "{{.RecordingsDir}}"
     mountPoint: "/lab/recordings"
     writable: true
@@ -45,5 +45,5 @@ provision:
         sed -i '/[[:space:]]{{.LabHost}}$/d' /etc/hosts
         printf '%s {{.LabHost}}\n' "$host_ip" >> /etc/hosts
       fi
-      mkdir -p /lab/orchestrators /lab/work
+      mkdir -p /lab/orchestrators /lab/work /lab/git /lab/recordings
       chown -R "${LIMA_USER:-ubuntu}:${LIMA_USER:-ubuntu}" /lab/work /lab/git /lab/recordings 2>/dev/null || true

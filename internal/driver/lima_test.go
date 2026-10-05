@@ -26,8 +26,8 @@ func TestRenderLimaYAML(t *testing.T) {
     mountPoint: "/lab/orchestrators/{{.Orch}}"
     writable: false
   - location: "{{.GitDir}}"
-    mountPoint: "/lab/git"
-    writable: true
+    mountPoint: "/lab/git-source"
+    writable: false
   - location: "{{.RecordingsDir}}"
     mountPoint: "/lab/recordings"
     writable: true
@@ -59,7 +59,7 @@ func TestRenderLimaYAML(t *testing.T) {
 
 	// Git dir mount
 	require.Contains(t, out, `/home/lab/.lab-state/gastown/git`)
-	require.Contains(t, out, `mountPoint: "/lab/git"`)
+	require.Contains(t, out, `mountPoint: "/lab/git-source"`)
 
 	// Recordings dir mount
 	require.Contains(t, out, `/home/lab/.lab-state/gastown/recordings`)
@@ -154,7 +154,7 @@ func TestRealLimaTemplateMountsAgents(t *testing.T) {
 	require.Contains(t, rendered, `location: "/home/lab/repo/agents"`)
 	require.Contains(t, rendered, `mountPoint: "/lab/agents"`)
 	require.Contains(t, rendered, `location: "/home/lab/.lab-state/gastown/git"`)
-	require.Contains(t, rendered, `mountPoint: "/lab/git"`)
+	require.Contains(t, rendered, `mountPoint: "/lab/git-source"`)
 	require.Contains(t, rendered, `location: "/home/lab/.lab-state/gastown/recordings"`)
 	require.Contains(t, rendered, `mountPoint: "/lab/recordings"`)
 }
@@ -186,7 +186,7 @@ func TestRealLimaTemplateUsesMinimalRuntimeMounts(t *testing.T) {
 	require.Contains(t, rendered, `mountPoint: "/lab/infra"`)
 	require.Contains(t, rendered, `mountPoint: "/lab/agents"`)
 	require.Contains(t, rendered, `mountPoint: "/lab/orchestrators/gastown"`)
-	require.Contains(t, rendered, `mountPoint: "/lab/git"`)
+	require.Contains(t, rendered, `mountPoint: "/lab/git-source"`)
 	require.Contains(t, rendered, `mountPoint: "/lab/recordings"`)
 	require.NotContains(t, rendered, `mountPoint: "/lab/work"`)
 	require.NotContains(t, rendered, `mountPoint: "/lab/agent-lab"`)
@@ -202,7 +202,7 @@ func TestRealLimaTemplateUsesMinimalRuntimeMounts(t *testing.T) {
 	require.NoError(t, yaml.Unmarshal(renderedBytes, &spec))
 	require.Len(t, spec.Mounts, 5, "only runtime assets and scoped output directories may be mounted")
 	for _, mount := range spec.Mounts {
-		require.Equal(t, mount.MountPoint == "/lab/git" || mount.MountPoint == "/lab/recordings", mount.Writable, mount.MountPoint)
+		require.Equal(t, mount.MountPoint == "/lab/recordings", mount.Writable, mount.MountPoint)
 		require.NotContains(t, mount.Location, "~")
 	}
 

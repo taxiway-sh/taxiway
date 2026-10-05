@@ -1183,6 +1183,38 @@ func assertE2EWorkspaceMirrorTrusted(t *testing.T, state *RootState, id string) 
 	require.NoError(t, err)
 	require.Equal(t, 0, res.ExitCode, "read Lab Git safe directories\nstderr:\n%s", stderr.String())
 	require.Contains(t, strings.Split(strings.TrimSpace(stdout.String()), "\n"), workspaceBareRepoPath(ref))
+	assertE2EWorkspaceGitIsolation(t, state, id, ref)
+}
+
+func assertE2EWorkspaceGitIsolation(t *testing.T, state *RootState, id string, ref config.LabRef) {
+	t.Helper()
+	hostMirror := hostWorkspaceBareRepoPath(config.StateDir(state.Flags.StateDir, state.RepoDir), ref)
+	hostConfig, err := os.ReadFile(filepath.Join(hostMirror, "config"))
+	require.NoError(t, err)
+	var stdout, stderr bytes.Buffer
+	source := "/lab/git-source/" + repoBasename(ref.Workspace.Repo) + ".git"
+	fork := workspaceBareRepoPath(ref)
+	script := fmt.Sprintf(`set -eu
+if touch %s/.guest-write-probe 2>/dev/null || sudo touch %s/.guest-write-probe 2>/dev/null; then
+    rm -f %s/.guest-write-probe
+    echo "host source is writable" >&2
+    exit 1
+fi
+printf '\n# guest-only fixture\n' >> %s/config
+git -C %s push %s HEAD:refs/heads/taxiway-isolation-test
+git --git-dir=%s show-ref --verify refs/heads/taxiway-isolation-test
+git --git-dir=%s update-ref -d refs/heads/taxiway-isolation-test
+`, shellQuote(source), shellQuote(source), shellQuote(source), shellQuote(fork), shellQuote(fork), shellQuote(fork), shellQuote(fork), shellQuote(fork))
+	res, err := state.Driver.Exec(context.Background(), id, driver.ExecRequest{
+		Workdir: "/lab", Argv: []string{"bash", "-lc", script}, Stdout: &stdout, Stderr: &stderr,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 0, res.ExitCode, "host source must be read-only and guest fork writable\nstderr:\n%s", stderr.String())
+	current, err := os.ReadFile(filepath.Join(hostMirror, "config"))
+	require.NoError(t, err)
+	require.Equal(t, hostConfig, current, "guest Git metadata must not change host Git configuration")
+	require.NoFileExists(t, filepath.Join(hostMirror, "refs", "heads", "taxiway-isolation-test"))
+	require.NoError(t, prepareWorkspaceRepository(context.Background(), state, &ref), "host refresh must remain usable")
 }
 
 func assertE2EAgentsWorkspaceTrusted(t *testing.T, state *RootState, id, orch, workspacePath string) {

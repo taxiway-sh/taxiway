@@ -47,6 +47,10 @@ func buildUpTestRoot(t *testing.T) (*cobra.Command, *RootState, *driver.MockDriv
 	}
 	require.NoError(t, os.MkdirAll(filepath.Join(tmp, "infra", "workspace"), 0755))
 	require.NoError(t, os.WriteFile(
+		filepath.Join(tmp, "infra", "workspace", "prepare-mirror.sh"),
+		[]byte("#!/bin/bash\necho guest mirror prepared\n"), 0755,
+	))
+	require.NoError(t, os.WriteFile(
 		filepath.Join(tmp, "infra", "workspace", "trust-mirror.sh"),
 		[]byte("#!/bin/bash\necho mirror trusted\n"), 0755,
 	))
@@ -1994,10 +1998,14 @@ func TestUp_TrustsLocalWorkspaceMirrorBeforeWorkspaceScript(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	prepareIdx := indexOf(mock.ExecLog, "prepare-mirror.sh")
 	trustIdx := indexOf(mock.ExecLog, "trust-mirror.sh")
 	workspaceIdx := indexOf(mock.ExecLog, "workspace.sh")
+	require.NotEqual(t, -1, prepareIdx, "the guest fork preparation script must run")
 	require.NotEqual(t, -1, trustIdx, "the shared mirror trust script must run")
 	require.NotEqual(t, -1, workspaceIdx, "the orchestrator workspace script must run")
+	require.Less(t, trustIdx, prepareIdx, "the read-only host source must be trusted before cloning the guest fork")
+	require.Less(t, prepareIdx, workspaceIdx, "the guest fork must exist before the orchestrator consumes it")
 	require.Less(t, trustIdx, workspaceIdx, "the mirror must be trusted before the orchestrator consumes it")
 	require.Equal(t, "file:///lab/git/proj.git", mock.ExecEnvLog[trustIdx]["TAXIWAY_REPO_FORK_URL"])
 }

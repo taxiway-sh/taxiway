@@ -19,12 +19,18 @@ case "$url" in
         ;;
 esac
 
-while IFS= read -r configured; do
-    if [[ "$configured" == "$mirror" ]]; then
-        echo "Git mirror already trusted: $mirror"
-        exit 0
+# Local upload-pack is a separate Git process and needs guest-global trust
+# for the exact read-only source owned by the host. Never trust a wildcard.
+for trusted in "$mirror" "/lab/git-source/$name"; do
+    found=false
+    while IFS= read -r configured; do
+        if [[ "$configured" == "$trusted" ]]; then
+            found=true
+            break
+        fi
+    done < <(git config --global --get-all safe.directory || true)
+    if [[ "$found" == false ]]; then
+        git config --global --add safe.directory "$trusted"
     fi
-done < <(git config --global --get-all safe.directory || true)
-
-git config --global --add safe.directory "$mirror"
-echo "Trusted Taxiway-managed Git mirror: $mirror"
+    echo "Trusted Taxiway-managed Git mirror: $trusted"
+done

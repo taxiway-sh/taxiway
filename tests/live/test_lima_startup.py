@@ -37,12 +37,34 @@ def main():
     failed = False
     try:
         with temporary_lab("claude-code", driver=args.driver, taxiway=args.taxiway,
+                           repo="https://github.com/manufacture-dev/agreement-hub.git",
                            timeout=args.setup_timeout, prepare_only=True) as lab:
             runtime = runtime_id(lab)
             phase = "readiness"
             require(guest(lab, "test -s /run/lima-boot-done && test -w /lab/work && printf READY",
                           timeout=15) == b"READY", "Fresh guest is not ready")
             print("PASS fresh-create guest-execution-and-boot-readiness", flush=True)
+            phase = "git-isolation"
+            host_mirror = Path(os.environ["TAXIWAY_LAB_STATE_DIR"]) / lab / "git/agreement-hub.git"
+            host_config = (host_mirror / "config").read_bytes()
+            guest(lab, """set -eu
+source=/lab/git-source/agreement-hub.git
+fork=/lab/git/agreement-hub.git
+if touch "$source/.guest-write-probe" 2>/dev/null || sudo touch "$source/.guest-write-probe" 2>/dev/null; then
+    rm -f "$source/.guest-write-probe"
+    exit 1
+fi
+printf '\\n# guest-only fixture\\n' >> "$fork/config"
+git -C /lab/work/repo/agreement-hub push "$fork" HEAD:refs/heads/taxiway-isolation-test
+""", timeout=30)
+            require((host_mirror / "config").read_bytes() == host_config,
+                    "Guest metadata changed host Git configuration")
+            require(not (host_mirror / "refs/heads/taxiway-isolation-test").exists(),
+                    "Guest push reached host source")
+            command([args.taxiway, "workspace", lab], timeout=120)
+            require(guest(lab, "git --git-dir=/lab/git/agreement-hub.git show-ref --verify --quiet refs/heads/taxiway-isolation-test && printf PRESERVED",
+                          timeout=15) == b"PRESERVED", "Workspace refresh lost guest-only refs")
+            print("PASS git-isolation host-source-read-only guest-push-and-refresh", flush=True)
             marker = Path(os.environ["TAXIWAY_LAB_STATE_DIR"]) / lab / "phases/create.done"
             marker.unlink()
             phase = "partial-running-retry"
@@ -70,6 +92,8 @@ def main():
                     timeout=args.setup_timeout)
             require(guest(lab, "test -s /run/lima-boot-done && printf READY", timeout=15) == b"READY",
                     "Restarted guest is not ready")
+            require(guest(lab, "git --git-dir=/lab/git/agreement-hub.git show-ref --verify --quiet refs/heads/taxiway-isolation-test && printf PRESERVED",
+                          timeout=15) == b"PRESERVED", "Restart lost guest Git state")
             print("PASS restart guest-execution-and-boot-readiness", flush=True)
     except (RuntimeError, OSError, subprocess.TimeoutExpired):
         failed = True

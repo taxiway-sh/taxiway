@@ -59,7 +59,7 @@ func (l *LimaDriver) Running(ctx context.Context, id string) (bool, error) {
 type LimaTemplateData struct {
 	RepoDir       string // host repo root
 	Orch          string // orchestrator name
-	GitDir        string // host bare git remotes dir (mounted rw at /lab/git)
+	GitDir        string // host bare git remotes dir (mounted read-only at /lab/git-source)
 	RecordingsDir string // host recordings dir (mounted rw at /lab/recordings)
 	LabHost       string // lab-specific host observability hostname
 }

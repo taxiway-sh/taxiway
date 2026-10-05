@@ -46,6 +46,8 @@ TAXIWAY_REPO_FORK_URL='file:///lab/git/agreement-hub.git' bash "$SCRIPT" >/dev/n
 
 configured_count="$(git config --global --get-all safe.directory | grep -Fxc '/lab/git/agreement-hub.git')"
 assert_eq "adds the exact Taxiway mirror once" "$configured_count" "1"
+configured_count="$(git config --global --get-all safe.directory | grep -Fxc '/lab/git-source/agreement-hub.git')"
+assert_eq "trusts the exact read-only source once for upload-pack" "$configured_count" "1"
 
 git config --global --add safe.directory '/lab/git/another.git'
 TAXIWAY_REPO_FORK_URL='file:///lab/git/agreement-hub.git' bash "$SCRIPT" >/dev/null
