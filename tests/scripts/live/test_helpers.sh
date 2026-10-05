@@ -6,6 +6,7 @@ cd "$repo_dir"
 python3 - <<'PYTHON'
 import contextlib
 import io
+import json
 import os
 from pathlib import Path
 import runpy
@@ -91,6 +92,7 @@ with tempfile.TemporaryDirectory(prefix="taxiway-preflight-test-") as root:
 import os, sys
 assert not any(key.startswith('ANTHROPIC_') for key in os.environ)
 assert '--tools' in sys.argv and '--no-session-persistence' in sys.argv
+assert sys.argv[sys.argv.index('--output-format') + 1] == 'json'
 assert sys.argv[sys.argv.index('--mcp-config') + 1] == '{"mcpServers":{}}'
 print(os.environ['FIXTURE_RESPONSE'])
 sys.exit(int(os.environ['FIXTURE_EXIT']))
@@ -103,8 +105,20 @@ sys.exit(int(os.environ['FIXTURE_EXIT']))
                    ANTHROPIC_API_KEY='fixture-secret', ANTHROPIC_BASE_URL='fixture-gateway')
         return subprocess.run(['bash', '-c', script], env=env, capture_output=True, check=True).stdout
     with patch.object(live, 'guest', probe_guest), patch.object(live, 'lab_ref', return_value={'driver': 'lima'}), patch.object(live, 'runtime_id', return_value='fixture-reference'):
-        response, exitcode = 'LIVE_AUTH_OK', 0
+        response, exitcode = json.dumps({'type': 'result', 'subtype': 'success', 'is_error': False,
+                                        'usage': {'output_tokens': 421}, 'result': 'A different answer',
+                                        'modelUsage': {'fixture-model': {'permission': 'metadata-only'}}}), 0
         live.require_claude_auth('reference')
+        # Current native startup/transport failures may precede JSON serialization.
+        for response, category in [('Not logged in fixture-secret', 'native login'),
+                                    ('Network connection timed out fixture-secret', '(network)'),
+                                    ('Unknown option fixture-secret', '(setup)')]:
+            exitcode = 1
+            try: live.require_claude_auth('reference')
+            except RuntimeError as error:
+                assert category in str(error), str(error)
+                assert 'fixture-secret' not in str(error)
+            else: raise AssertionError('native plaintext failure accepted')
         for response, category in [('OAuth token has expired fixture-secret', 'native login'),
                                     ('Network connection timed out fixture-secret', '(network)'),
                                     ('Failed to refresh token: Network connection timed out fixture-secret', '(network)'),
@@ -112,6 +126,8 @@ sys.exit(int(os.environ['FIXTURE_EXIT']))
                                     ('Invalid MCP configuration fixture-secret', '(setup)'),
                                     ('Model not available fixture-secret', '(model)'),
                                     ('Service overloaded fixture-secret', '(provider)')]:
+            response = json.dumps({'type': 'result', 'subtype': 'error_during_execution',
+                                   'is_error': True, 'errors': [response]})
             exitcode = 1
             try: live.require_claude_auth('reference')
             except RuntimeError as error:
@@ -120,6 +136,42 @@ sys.exit(int(os.environ['FIXTURE_EXIT']))
                 assert ('claude auth login' in str(error)) == (category == 'native login')
                 if category == 'native login': assert 'limactl shell fixture-reference' in str(error)
             else: raise AssertionError('native failure accepted')
+        for payload, category, native_exit in [
+            ({'type': 'result', 'subtype': 'error_max_budget_usd', 'is_error': True,
+              'result': 'LIVE_AUTH_OK', 'usage': {'output_tokens': 10}}, '(provider)', 0),
+            ({'type': 'result', 'subtype': 'error_max_turns', 'is_error': True,
+              'errors': ['LIVE_AUTH_OK fixture-secret']}, '(provider)', 0),
+            ({'type': 'result', 'subtype': 'error_during_execution', 'is_error': True,
+              'errors': ['Invalid OAuth token fixture-secret']}, 'native login', 0),
+            ({'type': 'result', 'subtype': 'success', 'is_error': False,
+              'usage': {'output_tokens': 0}, 'result': 'LIVE_AUTH_OK'}, '(provider)', 0),
+            ({'type': 'result', 'subtype': 'success', 'is_error': False,
+              'usage': {'output_tokens': True}, 'result': 'LIVE_AUTH_OK'}, '(provider)', 0),
+            ({'type': 'result', 'subtype': 'success', 'is_error': False,
+              'usage': {'output_tokens': '1'}, 'result': 'LIVE_AUTH_OK'}, '(provider)', 0),
+            ({'type': 'result', 'subtype': 'success', 'is_error': False,
+              'usage': {'output_tokens': 1}, 'result': 'LIVE_AUTH_OK'}, '(provider)', 1),
+            (None, '(provider)', 0),
+            ([], '(provider)', 0),
+        ]:
+            response, exitcode = json.dumps(payload), native_exit
+            try: live.require_claude_auth('reference')
+            except RuntimeError as error:
+                assert category in str(error), str(error)
+                assert 'fixture-secret' not in str(error)
+            else: raise AssertionError('invalid native result accepted')
+        response, exitcode = 'malformed JSON fixture-secret', 0
+        try: live.require_claude_auth('reference')
+        except RuntimeError as error:
+            assert '(provider)' in str(error) and 'fixture-secret' not in str(error)
+        else: raise AssertionError('malformed native output accepted')
+        for response in ('LIVE_AUTH_OK fixture-secret', 'Not logged in fixture-secret'):
+            exitcode = 0
+            try: live.require_claude_auth('reference')
+            except RuntimeError as error:
+                assert '(provider)' in str(error) and 'native login' not in str(error)
+                assert 'fixture-secret' not in str(error)
+            else: raise AssertionError('unstructured successful output accepted')
 print('PASS: native request distinguishes auth/network/model/provider; secrets withheld')
 
 with patch.dict(os.environ, environment), patch.object(live, 'require_claude_auth'), patch.object(live, '_claude_onboarding', side_effect=RuntimeError('Complete onboarding')), patch.object(live, 'propagate_claude_auth'), patch.object(live, 'command', return_value=b'') as commands:
@@ -164,7 +216,8 @@ path = Path.home() / '.claude/.credentials.json'
 credential = json.loads(path.read_text())
 credential['claudeAiOauth']['accessToken'] = 'fixture-refreshed'
 path.write_text(json.dumps(credential))
-print('LIVE_AUTH_OK')
+print(json.dumps({'type': 'result', 'subtype': 'success', 'is_error': False,
+                  'usage': {'output_tokens': 1}, 'result': 'LIVE_AUTH_OK'}))
 ''')
     native.chmod(0o700)
     (homes['source'] / '.claude').mkdir()

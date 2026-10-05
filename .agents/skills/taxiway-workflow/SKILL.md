@@ -31,6 +31,8 @@ Use a dedicated worktree/implementer per subject and a different reviewer.
 Resolve review findings and verify corrections. If delegation is unavailable,
 report the missing review rather than review your own work as independent.
 Follow the documented tests, commits, PR and authorized merge/cleanup procedure.
+For release preparation/publication, use `taxiway-release` and the
+[release recipe](../../../docs/contributing/release-qualification.md).
 Pending publication/merge approval blocks only that action on that subject.
 Keep other already-authorized, independent implementation, tests, reviews and
 status checks moving within capacity. Reconcile assignments before starting
@@ -68,8 +70,9 @@ delegation limitations immediately. No loops survive session termination.
   from gateway timeout/network/model errors. For confirmed auth failure, give
   one exact native reconnection command for the owned reference context, ask
   the user to reconnect, verify a bounded real request, then propagate only to
-  authorized test labs with existing helpers. Until #116 provides preflight,
-  do not claim file-presence checks prove validity or implement token refresh.
+  authorized test labs with existing helpers. Use the existing reference
+  preflight: it runs a bounded native request and permits native OAuth refresh.
+  File presence does not prove validity; do not implement another token refresher.
   Keep unrelated work moving; one pending request per reference blocker.
 - **Triage:** at startup/backlog request and each due time, refresh proposals
   against assignments, priority and capacity. Do not repeat unchanged

@@ -1,24 +1,28 @@
 # Installation
 
-To get started, install Docker and Lima, then install Taxiway.
+To get started, install Docker, then install Taxiway. Add Lima when you want
+VM-backed labs.
 
 ## Prerequisites
 
-- **Docker**, running on your machine, with Docker Compose.
-- **Lima**, to create your lab environments.
+- **Docker**, running on your machine, with Docker Compose, for either driver.
+- **Lima**, when using the Lima driver; Docker-only labs do not require it.
 
-Already have both? Go straight to [Install Taxiway](#install-taxiway).
+Already have the prerequisites for your driver? Go straight to
+[Install Taxiway](#install-taxiway).
 
 ### macOS
 
 Install and open [Docker Desktop](https://docs.docker.com/desktop/setup/install/mac-install/).
-Then follow the [Lima installation guide](https://lima-vm.io/docs/installation/).
+For Lima-backed labs, also follow the
+[Lima installation guide](https://lima-vm.io/docs/installation/).
 
 ### Linux
 
 Follow the [Docker Engine installation guide](https://docs.docker.com/engine/install/)
-for your distribution, including the Compose plugin. Then follow the
-[Lima installation guide](https://lima-vm.io/docs/installation/), including QEMU.
+for your distribution, including the Compose plugin. For Lima-backed labs,
+also follow the [Lima installation guide](https://lima-vm.io/docs/installation/),
+including QEMU.
 
 ### Windows with WSL2
 

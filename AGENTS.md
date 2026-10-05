@@ -47,6 +47,9 @@ Kubernetes and heavyweight infrastructure are out of scope.
   report what passed or could not be run.
 - For authenticated feature tests, reuse `tests/live/taxiway_live.py` and read
   `tests/live/AGENTS.md` plus `docs/contributing/live-tests.md`.
+- For release requests, use the shared `taxiway-release` skill and
+  [release recipe](docs/contributing/release-qualification.md); qualification
+  does not authorize publication, and missing/skipped checks are not validation.
 
 ## GitHub
 

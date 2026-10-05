@@ -66,7 +66,7 @@ def guest(lab, script, *, data=None, timeout=300, workdir="/lab/work"):
 def require_claude_auth(lab):
     """A native bounded request permits native refresh; only categories leave the guest."""
     status = guest(lab, '''python3 - <<'PY'
-import os, pathlib, shutil, subprocess
+import json, os, pathlib, shutil, subprocess
 if not shutil.which('claude'):
     print('setup')
     raise SystemExit
@@ -78,12 +78,37 @@ for key in list(env):
     if key.startswith('ANTHROPIC_') or key in ('CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_USE_FOUNDRY'):
         env.pop(key, None)
 try:
-    result = subprocess.run(['claude', '-p', 'Reply exactly LIVE_AUTH_OK.', '--model', 'claude-haiku-4-5-20251001', '--tools', '', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--no-session-persistence', '--max-turns', '1', '--max-budget-usd', '0.10'], env=env, capture_output=True, timeout=90)
+    result = subprocess.run(['claude', '-p', 'Reply exactly LIVE_AUTH_OK.', '--model', 'claude-haiku-4-5-20251001', '--output-format', 'json', '--tools', '', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--no-session-persistence', '--max-turns', '1', '--max-budget-usd', '0.10'], env=env, capture_output=True, timeout=90)
 except subprocess.TimeoutExpired:
     print('network')
 else:
-    text = (result.stdout + result.stderr).decode(errors='replace').lower()
-    if result.returncode == 0 and 'live_auth_ok' in text:
+    parsed = True
+    try:
+        payload = json.loads(result.stdout)
+    except (ValueError, UnicodeDecodeError):
+        parsed = False
+        payload = None
+    if not isinstance(payload, dict):
+        payload = {}
+    usage = payload.get('usage')
+    output_tokens = usage.get('output_tokens') if isinstance(usage, dict) else None
+    # A real native success proves account access; exact model wording does not.
+    success = (result.returncode == 0 and payload.get('type') == 'result'
+               and payload.get('subtype') == 'success' and payload.get('is_error') is False
+               and type(output_tokens) is int and output_tokens > 0)
+    # Never classify modelUsage/session/account metadata as provider errors.
+    messages = [result.stderr.decode(errors='replace')]
+    # Native startup/transport errors can precede its JSON result. Only failed
+    # unparseable output contributes diagnostics; it can never establish success.
+    if not parsed and result.returncode != 0:
+        messages.append(result.stdout.decode(errors='replace'))
+    if isinstance(payload.get('result'), str):
+        messages.append(payload['result'])
+    errors = payload.get('errors')
+    if isinstance(errors, list):
+        messages.extend(message for message in errors if isinstance(message, str))
+    text = '\\n'.join(messages).lower()
+    if success:
         print('ok')
     elif any(message in text for message in ('not logged in', 'please run /login', 'please run claude auth login', 'oauth token has expired', 'invalid oauth token', 'authentication_error', 'token has been revoked', 'invalid bearer token')):
         print('auth')

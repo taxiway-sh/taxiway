@@ -1,5 +1,7 @@
 .PHONY: build snapshot completion completion-bash completion-fish completion-zsh test test-unit test-e2e test-e2e-only test-e2e-up test-e2e-prepare-run test-e2e-phase-by-phase test-e2e-codex test-e2e-codex-up test-e2e-codex-prepare-run test-e2e-codex-phase-by-phase test-e2e-claude-code test-e2e-claude-code-up test-e2e-claude-code-prepare-run test-e2e-claude-code-phase-by-phase test-e2e-gastown test-e2e-gastown-up test-e2e-gastown-prepare-run test-e2e-gastown-phase-by-phase lint lint-scripts test-scripts
 
+.PHONY: test-release-tools
+
 build:
 	go build ./...
 
@@ -47,6 +49,9 @@ completion-zsh:
 	@echo "wrote $$HOME/.zsh/completions/_taxiway"
 
 test: test-unit
+
+test-release-tools: ## Test the local release qualification helper (no labs/accounts)
+	python3 -m unittest discover -s tests/release -v
 
 test-unit:
 	go test ./...

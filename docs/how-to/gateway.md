@@ -181,13 +181,14 @@ model = "gpt-6.1-sol"
 name = "Taxiway LiteLLM"
 base_url = "http://<lab>.litellm.internal:4000/v1"
 wire_api = "responses"
-requires_openai_auth = true
+requires_openai_auth = false
 env_http_headers = { "x-litellm-api-key" = "TAXIWAY_LITELLM_API_KEY", "x-litellm-agent-id" = "TAXIWAY_LITELLM_AGENT_ID" }
 supports_websockets = false
 ```
 
-Codex supplies the OpenAI/ChatGPT auth. `x-litellm-api-key` authenticates the
-gateway call. Taxiway deliberately does not send `x-litellm-session-id` for
+The gateway uses the ChatGPT authentication cache prepared from the host Codex
+login; the lab client does not need that login file. `x-litellm-api-key`
+authenticates the gateway call. Taxiway deliberately does not send `x-litellm-session-id` for
 Codex because that header would override the native Codex session. LiteLLM maps
 Codex's `x-codex-turn-metadata.session_id` header into the Langfuse session
 when observability is enabled.
