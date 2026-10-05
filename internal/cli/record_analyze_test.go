@@ -22,7 +22,13 @@ func writeRecordAnalysisSessions(t *testing.T, state *RootState, lab string, ses
 	t.Helper()
 	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
 	store := recording.NewStore(stateDir, lab)
+	for i := range sessions {
+		sessions[i].CastPathHost = filepath.Join(store.Dir(), sessions[i].ID+".cast")
+	}
 	require.NoError(t, store.Save(recording.Index{Sessions: sessions}))
+	for _, session := range sessions {
+		require.NoError(t, os.WriteFile(session.CastPathHost, []byte("{\"version\":2,\"width\":80,\"height\":24}\n[0,\"o\",\"harmless recording fixture\"]\n"), 0600))
+	}
 }
 
 func analysisSession(lab, name, state string, started time.Time) recording.Session {
@@ -488,6 +494,45 @@ func TestRecordAnalyzeRunsExplicitRunner(t *testing.T) {
 	require.Len(t, *calls, 1)
 	require.Equal(t, "codex", (*calls)[0].Command)
 	require.Contains(t, (*calls)[0].Stdin, "walkthrough")
+}
+
+func TestRecordAnalyzeRunnerUsesPrivateSnapshot(t *testing.T) {
+	root, state, _, stdout, stderr := buildRecordTestRoot(t)
+	writeRecordAnalysisSessions(t, state, "demo", analysisSession("demo", "safe", recording.StateStopped, time.Now()))
+	store := recording.NewStore(state.Flags.StateDir, "demo")
+	idx, err := store.Load()
+	require.NoError(t, err)
+	cast := idx.Sessions[0].CastPathHost
+	outside := filepath.Join(t.TempDir(), "sentinel.cast")
+	require.NoError(t, os.WriteFile(outside, []byte("harmless outside sentinel"), 0600))
+	old := defaultAnalyzeRunnerExec
+	t.Cleanup(func() { defaultAnalyzeRunnerExec = old })
+	var snapshotDir string
+	defaultAnalyzeRunnerExec = func(execution analyzeRunnerExecution) error {
+		for _, line := range strings.Split(execution.Stdin, "\n") {
+			if strings.HasPrefix(line, "Recordings directory: ") {
+				snapshotDir = strings.TrimPrefix(line, "Recordings directory: ")
+			}
+		}
+		require.NotEqual(t, store.Dir(), snapshotDir)
+		require.NotEmpty(t, snapshotDir)
+		require.NotContains(t, execution.Stdin, cast)
+		require.NoError(t, os.Remove(cast))
+		require.NoError(t, os.Symlink(outside, cast))
+		data, err := os.ReadFile(filepath.Join(snapshotDir, "0.cast"))
+		require.NoError(t, err)
+		require.Contains(t, string(data), "harmless recording fixture")
+		require.NotContains(t, string(data), "harmless outside sentinel")
+		_, err = io.WriteString(execution.Stdout, "snapshot analysis")
+		return err
+	}
+	t.Setenv("PATH", testPathWithCommands(t, "claude"))
+	_, _, err = execRoot(t, root, stdout, stderr, "record", "analyze", "demo", "--runner", "claude-code")
+	require.NoError(t, err)
+	require.NoDirExists(t, snapshotDir)
+	data, err := os.ReadFile(outside)
+	require.NoError(t, err)
+	require.Equal(t, "harmless outside sentinel", string(data))
 }
 
 func TestRecordAnalyzeUsesEnvironmentRunnerWhenFlagAbsent(t *testing.T) {

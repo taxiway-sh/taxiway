@@ -567,7 +567,7 @@ func removeRecording(cmd *cobra.Command, state *RootState, lab, name, recordingI
 			idx.Upsert(session)
 			return err
 		}
-		if err := stopRecordingProcess(context.Background(), d, session.DriverID, session.RecorderSession); err != nil {
+		if err := stopRecordingProcess(context.Background(), d, idName(lab), session.RecorderSession); err != nil {
 			idx.Upsert(session)
 			return err
 		}
@@ -576,7 +576,7 @@ func removeRecording(cmd *cobra.Command, state *RootState, lab, name, recordingI
 		return err
 	}
 	if session.CastPathHost != "" {
-		if err := os.Remove(session.CastPathHost); err != nil && !os.IsNotExist(err) {
+		if err := store.RemoveCast(session); err != nil && !os.IsNotExist(err) {
 			fmt.Fprintf(cmd.ErrOrStderr(), "Warning: recording removed from index, but cast %s could not be deleted: %v\n", session.CastPathHost, err)
 		}
 	}
@@ -607,14 +607,44 @@ func runRecordAnalyze(cmd *cobra.Command, state *RootState, lab, recordName stri
 		return err
 	}
 	progress.Stepf("Selected %d stopped recording(s).", len(sessions))
+	// Read through the anchored store now. The lab may replace a cast with a
+	// symlink at any time; an external runner must not reopen guest-controlled
+	// host paths after validation.
+	casts := make([]string, 0, len(sessions))
+	analysisDir := store.Dir()
+	if !promptOnly {
+		analysisDir, err = os.MkdirTemp("", "taxiway-record-analysis-")
+		if err != nil {
+			return err
+		}
+		defer os.RemoveAll(analysisDir)
+	}
+	sessions = slices.Clone(sessions)
+	for i, session := range sessions {
+		data, err := store.ReadCast(session)
+		if err != nil {
+			return fmt.Errorf("recording: read analysis cast: %w", err)
+		}
+		if promptOnly {
+			casts = append(casts, string(data))
+		} else {
+			path := filepath.Join(analysisDir, fmt.Sprintf("%d.cast", i))
+			if err := os.WriteFile(path, data, 0600); err != nil {
+				return err
+			}
+			sessions[i].CastPathHost = path
+		}
+	}
 	resolvedLanguage, err := resolveAnalysisLanguage(language, os.Getenv)
 	if err != nil {
 		return err
 	}
 	prompt, err := buildRecordAnalysisPrompt(recordAnalysisPromptOptions{
 		Lab:           lab,
-		RecordingsDir: store.Dir(),
+		RecordingsDir: analysisDir,
 		Sessions:      sessions,
+		Casts:         casts,
+		Inline:        promptOnly,
 		DetailLevel:   detailLevel,
 		Language:      resolvedLanguage,
 	})
@@ -760,6 +790,8 @@ type recordAnalysisPromptOptions struct {
 	Lab           string
 	RecordingsDir string
 	Sessions      []recording.Session
+	Casts         []string
+	Inline        bool
 	DetailLevel   string
 	Language      string
 }
@@ -778,6 +810,7 @@ type recordAnalysisPromptData struct {
 	Sessions      []recordAnalysisPromptSession
 	FullDetail    bool
 	Language      string
+	Inline        bool
 }
 
 type recordAnalysisPromptSession struct {
@@ -788,6 +821,7 @@ type recordAnalysisPromptSession struct {
 	StartedAt    string
 	StoppedAt    string
 	ShellCommand string
+	CastData     string
 }
 
 func renderRecordAnalysisPrompt(opts recordAnalysisPromptOptions) (string, error) {
@@ -796,11 +830,16 @@ func renderRecordAnalysisPrompt(opts recordAnalysisPromptOptions) (string, error
 		RecordingsDir: opts.RecordingsDir,
 		FullDetail:    opts.DetailLevel == analysisDetailFull,
 		Language:      opts.Language,
+		Inline:        opts.Inline,
 	}
-	for _, session := range opts.Sessions {
+	for i, session := range opts.Sessions {
 		stopped := "-"
 		if session.StoppedAt != nil {
 			stopped = session.StoppedAt.UTC().Format(time.RFC3339)
+		}
+		castData := ""
+		if i < len(opts.Casts) {
+			castData = opts.Casts[i]
 		}
 		data.Sessions = append(data.Sessions, recordAnalysisPromptSession{
 			Name:         session.Name,
@@ -810,6 +849,7 @@ func renderRecordAnalysisPrompt(opts recordAnalysisPromptOptions) (string, error
 			StartedAt:    session.StartedAt.UTC().Format(time.RFC3339),
 			StoppedAt:    stopped,
 			ShellCommand: session.ShellCommand,
+			CastData:     castData,
 		})
 	}
 	tmpl, err := template.ParseFS(recordPromptTemplates, "prompts/record_analysis.md.tmpl")
@@ -1283,7 +1323,12 @@ func runRecordPlayer(cmd *cobra.Command, state *RootState, lab string, port int,
 		}
 	}
 
-	server := &http.Server{Handler: http.FileServer(http.Dir(store.Dir()))}
+	root, err := store.OpenRoot(false)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	server := &http.Server{Handler: http.FileServer(http.FS(recording.PlayerFiles(root)))}
 	if err := server.Serve(ln); err != nil && err != http.ErrServerClosed {
 		return fmt.Errorf("recording player: serve: %w", err)
 	}

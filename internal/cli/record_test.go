@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -589,13 +590,48 @@ func TestRecordRmSaveFailurePreservesCast(t *testing.T) {
 	cast := filepath.Join(store.Dir(), "safe.cast")
 	require.NoError(t, store.Save(recording.Index{Sessions: []recording.Session{{ID: "one", Name: "safe", State: recording.StateStopped, CastPathHost: cast}}}))
 	require.NoError(t, os.WriteFile(cast, []byte("evidence"), 0600))
-	require.NoError(t, os.Mkdir(filepath.Join(store.Dir(), "recordings.json.tmp"), 0700))
+	require.NoError(t, os.Chmod(store.Dir(), 0500))
+	t.Cleanup(func() { _ = os.Chmod(store.Dir(), 0700) })
 	_, _, err := execRoot(t, root, out, errs, "record", "rm", "demo", "--name", "safe")
 	require.Error(t, err)
 	require.FileExists(t, cast)
 	idx, err := store.Load()
 	require.NoError(t, err)
 	require.Len(t, idx.Sessions, 1)
+}
+
+func TestRecordCommandsRejectOutsideRecordingMetadata(t *testing.T) {
+	for _, mode := range []string{"outside", "symlink"} {
+		t.Run(mode, func(t *testing.T) {
+			root, state, _, out, errs := buildRecordTestRoot(t)
+			store := recording.NewStore(state.Flags.StateDir, "demo")
+			require.NoError(t, store.Save(recording.Index{}))
+			outside := filepath.Join(t.TempDir(), "sentinel.cast")
+			require.NoError(t, os.WriteFile(outside, []byte("harmless outside sentinel"), 0600))
+			cast := outside
+			if mode == "symlink" {
+				cast = filepath.Join(store.Dir(), "unsafe.cast")
+				require.NoError(t, os.Symlink(outside, cast))
+			}
+			idx := recording.Index{Sessions: []recording.Session{{ID: "unsafe", Name: "unsafe", Lab: "demo", State: recording.StateStopped, CastPathHost: cast}}}
+			data, err := json.Marshal(idx)
+			require.NoError(t, err)
+			indexPath := filepath.Join(store.Dir(), "recordings.json")
+			require.NoError(t, os.WriteFile(indexPath, data, 0600))
+			for _, args := range [][]string{{"record", "list", "demo"}, {"record", "rm", "demo", "--name", "unsafe"}, {"record", "analyze", "demo", "--prompt-only"}, {"record", "analyze", "demo", "--runner", "codex"}} {
+				output, _, err := execRoot(t, root, out, errs, args...)
+				require.Error(t, err)
+				require.NotContains(t, output, outside)
+				require.NotContains(t, output, "harmless outside sentinel")
+			}
+			current, err := os.ReadFile(indexPath)
+			require.NoError(t, err)
+			require.Equal(t, data, current)
+			sentinel, err := os.ReadFile(outside)
+			require.NoError(t, err)
+			require.Equal(t, "harmless outside sentinel", string(sentinel))
+		})
+	}
 }
 func TestRecordRmCastDeleteFailureWarnsAfterSave(t *testing.T) {
 	root, state, _, out, errs := buildRecordTestRoot(t)
