@@ -45,6 +45,7 @@ def main():
                           timeout=15) == b"READY", "Fresh guest is not ready")
             print("PASS fresh-create guest-execution-and-boot-readiness", flush=True)
             phase = "git-isolation"
+            command([args.taxiway, "workspace", lab], timeout=120)
             host_mirror = Path(os.environ["TAXIWAY_LAB_STATE_DIR"]) / lab / "git/agreement-hub.git"
             host_config = (host_mirror / "config").read_bytes()
             guest(lab, """set -eu
