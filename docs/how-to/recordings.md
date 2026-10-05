@@ -130,6 +130,12 @@ taxiway record analyze mylab --record delivery-run
 Taxiway generates an analysis prompt and runs it with the configured local
 runner.
 
+Taxiway reads casts within the lab's recordings directory before handing them to
+an agent. Local runners receive private snapshots which are removed when the
+analysis ends; `--prompt-only` includes the captured contents in its output.
+Both modes reject recordings outside that directory and symbolic links. Missing
+casts must be recovered or removed before analysis.
+
 Use interactive mode when you want to keep working with the agent after the
 initial analysis:
 
@@ -159,7 +165,7 @@ Useful options:
 | Option | Description |
 |---|---|
 | `--runner <name>` | Select `codex` or `claude-code` for this run |
-| `--prompt-only` | Print the generated prompt and recording references |
+| `--prompt-only` | Print the generated prompt with captured recording contents |
 | `--interactive` | Open the selected runner in its native interactive UI |
 | `--detail summary\|full` | Control analysis detail |
 | `--language <code>` | Request an output language, such as `en` or `fr` |
