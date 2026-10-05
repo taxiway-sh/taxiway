@@ -30,6 +30,14 @@ Durable E2E assertions enrich the nine existing scenarios in
 create another scenario file, standalone suite, `TestE2E_` entry point, CI job
 or Makefile runner. `e2e_support_test.go` owns setup/cleanup, not a parallel suite.
 
+Keep E2E scenarios chronological: show each attempted command, native interaction
+or injected fixture as a first-level action, with its named guarantees directly
+underneath. Shared helpers must not add agent/model wrappers or nested assertion
+levels. Attach agent, workspace, model, session and gateway observations to the
+action that establishes them; preserve onboarding and readiness ordering.
+Assertions observe: make runtime mutations explicit, restore injected fixtures
+on failure, and keep protocol/model diagnostics precise without a hidden suite.
+
 ## Running tests
 
 ### Local checks
@@ -122,7 +130,7 @@ Remove only owned temporary labs automatically.
 | `test_claude_models.py` | Existing gateway/orchestrator E2Es cover protocol routing, model configuration, permission defaults and restart | Actual alias/full-ID access, inherited/explicit child models, tools/build/HTTPS, OAuth reuse after restart |
 | `test_codex_models.py` | Existing gateway/orchestrator E2Es cover Responses routing, model configuration, permission defaults and restart | Actual principal/child model access, session relationships, gateway tokens and delegated tool effects |
 | `test_gastown.py` | Existing Gas Town E2Es cover workspace/roles, model/alias/gateway environment, self-sling and handoff process/configuration preservation | Actual patrol checks/report/heartbeat progress, fresh startup, progress after Deacon handoff, launcher inference and delegation |
-| `gateway_protocol_e2e_test.go` and its Python runner | Protocol assertions are part of the existing gateway-routed steps, using each lab's actual sidecar and controlled upstream, including its database/telemetry | No real-account claim |
+| `gateway_protocol_e2e_test.go` and its Python runner | Protocol assertions are direct guarantees of the existing lifecycle actions, using each lab's actual sidecar and controlled upstream, including its database/telemetry | No real-account claim |
 
 The real-account column is documented manual validation, not automated regression
 coverage. Removing the fixed scripts does not make those claims pass under a

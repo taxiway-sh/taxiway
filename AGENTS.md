@@ -35,6 +35,10 @@ Kubernetes and heavyweight infrastructure are out of scope.
   suites, scenario files, `TestE2E_` entry points, jobs or Makefile runners.
   `e2e_support_test.go` is setup/cleanup support, not an alternative suite.
   Run the affected existing scenarios and verify they pass before merging; core CI or skipped E2E tests are not sufficient.
+- Keep E2E actions chronological, with named guarantees directly underneath.
+- Helpers add no agent/model wrappers or nested assertion levels; attach checks
+  to the responsible action and preserve onboarding/readiness ordering.
+- Make injected runtime mutations explicit and restore them on failure.
 - Do not add PRDs, ADRs, approval gates, run manifests, or agent workflow docs
   unless explicitly requested.
 - Do not commit working plans, scratch files, local run logs, generated lab

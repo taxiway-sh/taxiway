@@ -32,6 +32,14 @@ Durable E2E assertions enrich the nine existing scenarios in
 create another scenario file, standalone suite, `TestE2E_` entry point, CI job
 or Makefile runner. `e2e_support_test.go` owns setup/cleanup, not a parallel suite.
 
+Keep E2E scenarios chronological: show each attempted command, native interaction
+or injected fixture as a first-level action, with its named guarantees directly
+underneath. Shared helpers must not add agent/model wrappers or nested assertion
+levels. Attach agent, workspace, model, session and gateway observations to the
+action that establishes them; preserve onboarding and readiness ordering.
+Assertions observe: make runtime mutations explicit, restore injected fixtures
+on failure, and keep protocol/model diagnostics precise without a hidden suite.
+
 E2Es prevent regressions in each orchestrator's lifecycle on Docker. Live
 validation lets an agent simply check the feature it is developing on Docker
 or Lima, selected according to that feature. It is a temporary,
