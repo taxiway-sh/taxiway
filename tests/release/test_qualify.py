@@ -62,6 +62,13 @@ class QualificationTests(unittest.TestCase):
                                     "-c", "print('--- SKIP: TestDocker (0.00s)')").returncode, 0)
         self.check_result("NOT_EXECUTED")
 
+    def test_auth_bypass_option_is_not_a_skipped_test(self):
+        self.start()
+        result = self.cli("run", "core", "--", sys.executable, "-c",
+                          "print('taxiway up --skip-auth-check'); print('PASS')")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.check_result("PASS")
+
     def test_timeout_kills_child_even_when_parent_exits_on_term(self):
         self.start()
         pidfile = Path(self.tmp.name) / "child.pid"

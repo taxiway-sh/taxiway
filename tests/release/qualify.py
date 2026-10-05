@@ -20,7 +20,7 @@ CHECKS = {
             "recording", "docs-cli", "package", "isolation-cleanup", "beta-compat", "breaking-changes", "review"),
     "post": ("published-assets", "install-matrix", "mac-install", "installed-smoke"),
 }
-SKIP = re.compile(r"--- SKIP:|\bSKIP(?:PED)?\b|\bskipped[=: ]+[1-9]", re.IGNORECASE)
+SKIP = re.compile(r"^\s*--- SKIP:|^\s*SKIP(?:PED)?(?:\s|:|$)|\b[1-9]\d* skipped\b|\bskipped[=:]\s*[1-9]\d*", re.IGNORECASE | re.MULTILINE)
 
 
 def git(*args):
