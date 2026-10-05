@@ -121,6 +121,32 @@ including skips; save a bounded sanitized summary with run URL. Do not accept
 core CI alone or a green previous commit. Dispatch/push only when authorized by
 the contribution workflow. Do not add a separate job for each recipe assertion.
 
+### Private security review
+
+Before accepting `review`, consult Codex Security Cloud privately for the
+repository. Record the scan date, scanned commit SHA and covered paths/checks
+in private evidence tied to the candidate. Check freshness and coverage: a scan
+of an older SHA does not qualify the candidate unless the intervening changes
+have been explicitly assessed. Missing access, unavailable results, unknown
+coverage or an obsolete scan leave this security review incomplete; they never
+mean that no findings exist.
+
+Triage each finding privately against the candidate, including severity,
+relevance, remediation and verification. An unresolved serious vulnerability
+that affects the release blocks publication. Preserve a private disposition
+for other findings and explain any remaining uncertainty to the user. Do not
+mark `review` PASS until both independent feature review and this security
+review have sufficient evidence.
+
+Never put vulnerability details, reproduction steps, exploit material, finding
+screenshots or raw scanner output in public issues, pull requests, release notes
+or public logs. Keep those details in the private security channel and private
+proof; coordinate any necessary private remediation with the user. Public
+communication contains only an aggregate status, such as security review
+complete, incomplete or blocked, without disclosing findings. Opening Security
+Cloud or receiving an empty/unavailable response is not evidence that findings
+were consulted.
+
 ### Documentation and behavior checklist
 
 - Installation from checkout and archives: paths, runtime resolution, checksums,

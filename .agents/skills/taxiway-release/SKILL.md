@@ -32,6 +32,12 @@ source in Codex and Claude Code; no client-specific workflow engine is needed.
    certification; external/manual records require independent inspection.
    Missing auth, skipped cases, timeouts, old-head E2Es and agent claims never
    count as validation. Leave unknown checks NOT_EXECUTED with pending actions.
+   Consult Security Cloud privately before accepting review: establish scan date,
+   SHA and coverage, assess intervening changes and triage findings. Unavailable
+   or obsolete results leave review incomplete; an unresolved serious relevant
+   vulnerability blocks publication. Keep findings, repros and screenshots out
+   of public issues/PRs/notes/logs; publish only aggregate security status. An
+   opened UI or empty response never proves that findings were reviewed.
 5. Have a different reviewer inspect findings, fixes and proof; rerun affected
    checks on the final candidate. Present release blockers, qualified combinations,
    untested paths and the report, even under deadline pressure. Do not substitute
