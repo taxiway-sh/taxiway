@@ -67,7 +67,7 @@ Typical flow:
 
 - [Development](contributing/development.md)
 - [Testing](contributing/testing.md)
-- [Reusable live tests](contributing/live-tests.md)
+- [Agent-driven live validation](contributing/live-tests.md)
 - [Model gateway tests](contributing/model-gateway-tests.md)
 - [Model catalog updates](contributing/model-catalog.md)
 - [Issues](contributing/issues.md)

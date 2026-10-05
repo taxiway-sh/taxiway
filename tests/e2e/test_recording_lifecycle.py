@@ -1,4 +1,4 @@
-"""Real recording lifecycle and owned cleanup, without provider authentication."""
+"""Native Lima recording and Docker/Lima exceptional owned cleanup E2Es."""
 
 import argparse
 import json
@@ -9,6 +9,8 @@ import subprocess
 import sys
 import tempfile
 import time
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "live"))
 
 from taxiway_live import command, guest, lab_ref, runtime_id, temporary_lab, validate_context
 
@@ -229,7 +231,11 @@ def main():
         return 2
     # Preserve unrelated/reference guests including their current status.
     preserved = {line.split()[0]: line.split()[1:] for line in initial if line.split()}
-    outcomes = ("success", "failure", "timeout") if args.outcome == "all" else (args.outcome,)
+    # Docker recording is covered by the existing Go orchestrator E2Es.
+    require(args.driver != "docker" or args.outcome != "success",
+            "Use the Go orchestrator E2Es for Docker recording")
+    outcomes = (("success", "failure", "timeout") if args.driver == "lima"
+                else ("failure", "timeout")) if args.outcome == "all" else (args.outcome,)
     phase = "setup"
     try:
         for outcome in outcomes:

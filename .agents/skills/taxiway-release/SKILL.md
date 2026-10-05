@@ -16,8 +16,11 @@ source in Codex and Claude Code; no client-specific workflow engine is needed.
    `python3 tests/release/qualify.py --report <directory> init --candidate <SHA>`.
    Resume only the same clean HEAD. Inspect real running processes before retries;
    never duplicate paid calls or infer that silence means a test stopped.
-3. Work through the pre-publication table and documentation/behavior checklist.
-   Reuse existing suites/live helpers. Coordinate one heavy run at a time;
+3. Live qualification uses scoped manual checks with shared helpers, not a fixed
+   committed feature suite. Preserve the real-account evidence requirements;
+   controlled-provider E2Es do not prove real delegation or model availability.
+   Work through the pre-publication table and documentation/behavior checklist.
+   Reuse existing E2Es and live helpers. Coordinate one heavy run at a time;
    bound commands and provider usage. Authentication recovery may need one native
    user reconnection: distinguish auth from model/network failures, continue
    independent checks, and preserve credentials/unrelated labs.

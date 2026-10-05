@@ -141,9 +141,10 @@ assignments. Make commits by intention. Beta features may break older behavior:
 do not add historical migration/compatibility code or tests unless requested.
 Current lifecycle, reset/recovery and idempotency tests remain relevant.
 
-Follow [Testing](testing.md) and [Live Tests](live-tests.md), with real provider
-tests where needed. Enrich affected existing E2Es rather than adding an
-assertion-only layer or separate jobs. Coordinate Docker/Lima runs across
+Follow [Testing](testing.md) and [Live validation](live-tests.md). Durable
+regressions belong in E2Es; real-provider validation is a task-specific manual
+check using shared helpers, with temporary scripts/results outside Git. Enrich
+affected existing E2Es rather than adding an assertion-only layer or separate jobs. Coordinate Docker/Lima runs across
 subjects: default to one heavy run at a time, identify context ownership, and
 defer work if memory, network pools or client capacity are exhausted. Diagnose
 and retry narrowly; never globally prune resources or delete another context.

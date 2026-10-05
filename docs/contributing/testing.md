@@ -16,8 +16,8 @@ The evidence helper is tested with `make test-release-tools` (no labs/accounts).
 |---|---|---|
 | Unit | Go behavior, driver commands, configuration, and phase edge cases | Go; no Docker or Lima |
 | Shell scripts | Installer and runtime script contracts | Local shell tools; no running lab |
-| End-to-end | Orchestrator lifecycle using source-tree runtime assets | Go and a running Docker daemon |
-| Live | Authenticated agent requests and feature-specific scenarios in isolated labs | Python, Docker/Lima and a reusable reference login |
+| End-to-end | Durable product regressions: orchestrator lifecycle, gateway protocols and native driver behavior | Go/Docker; Python and Lima for native checks |
+| Live validation | Task-specific manual checks by an agent using reusable tooling | Python, Docker/Lima; account login when inference is needed |
 | Site | Documentation routing, navigation, rendering, and landing page content | Node.js and the site dependencies |
 
 Unit and shell tests provide quick feedback during development. End-to-end
@@ -93,21 +93,61 @@ Passing core CI does not replace this check: the GitHub E2E workflow runs on a
 schedule or manual dispatch. A skipped or blocked run must be reported and
 resolved before claiming E2E validation.
 
-### Authenticated live scenarios
+### Native driver E2Es
 
-The opt-in scripts under `tests/live/` cover behavior requiring real agent
-requests. The [live testing guide](live-tests.md) explains how to authenticate
-Claude once, propagate that login to automatically created labs, and reuse the
-shared helpers for new features. It also documents the command-line smoke
-runner and cleanup ownership. The [model gateway tests](model-gateway-tests.md)
-provide existing principal/subagent scenarios for Claude and Codex.
+```bash
+make test-e2e-native-docker
+make test-e2e-lima
+```
 
-Live tests consume account usage and run separately from ordinary unit tests,
-offline protocol tests and unattended CI. Their agent instructions are in
-`tests/live/AGENTS.md`. Persistent manual-validation labs use the generic names
-`test-claude`, `test-codex` and `test-gastown` within a worktree context. Keep
-them available for manual checks after automated validation; temporary scenario
-labs are cleaned up separately. Existing labs retain their current names.
+`make test-e2e` remains the Go matrix; native targets run separately.
+These explicit targets build the worktree CLI and use `direnv exec .` to load
+its isolated dev environment. Python 3.11+ and the selected driver are required;
+Lima first-run downloads and provisioning need network access and capacity for
+one 4-CPU/8-GiB VM. They are account-free and not implicitly added to ordinary CI.
+
+`tests/e2e/test_recording_lifecycle.py` checks native Lima guest execution,
+recording mount visibility, actual capture, nondefault tmux prefix, containment,
+stopped-VM recovery and removal. Docker recording already has those assertions
+in the existing Go orchestrator E2Es; the native Docker target only checks the
+unique cleanup paths after guest failure and host timeout. Both drivers verify
+owned resource removal and preserve unrelated guests. Use `--outcome` to narrow
+an outcome, or `--setup-timeout` to bound provisioning; Docker `success` is
+intentionally rejected because its recording regression belongs in the Go suite.
+
+`tests/e2e/test_lima_startup.py` checks fresh readiness, rejection of a Running
+VM with unfinished boot scripts, ready retry and stop/start recovery. It restores
+the boot marker in `finally` and checks owned cleanup. Neither script accesses
+credentials or proves inference. Reports show revision/driver/behavior; failure,
+missing prerequisites or skipped checks do not count as validation.
+
+### Task-specific live validation
+
+An agent uses `tests/live/taxiway_live.py` to verify the feature in a real lab,
+as a person would manually. The [live guide](live-tests.md) explains auth reuse,
+bounded guest commands, temporary labs and cleanup. The
+[model gateway guide](model-gateway-tests.md) describes evidence for real model
+selection, delegation, tools and patrols. Temporary feature scripts and sanitized
+reports stay outside Git; do not grow a committed live regression suite.
+
+Real model requests consume account usage and are explicitly opt-in, outside
+unattended CI. Persistent labs keep generic names `test-claude`, `test-codex`,
+`test-gastown` (or their existing names) and remain available for manual checks.
+Remove only owned temporary labs automatically.
+
+### Disposition of former live scenarios
+
+| Former script | Durable E2E coverage | Task-specific real-account evidence |
+|---|---|---|
+| `test_recording_lifecycle.py` | Existing Go recording scenarios cover Docker capture/prefix/containment/recovery; native `tests/e2e/` retains Lima recording and both drivers' exceptional cleanup | None required |
+| `test_lima_startup.py` | Native `tests/e2e/` retains fresh readiness, boot-marker rejection/retry and restart | None required |
+| `test_claude_models.py` | Existing gateway/orchestrator E2Es cover protocol routing, model configuration, permission defaults and restart | Actual alias/full-ID access, inherited/explicit child models, tools/build/HTTPS, OAuth reuse after restart |
+| `test_codex_models.py` | Existing gateway/orchestrator E2Es cover Responses routing, model configuration, permission defaults and restart | Actual principal/child model access, session relationships, gateway tokens and delegated tool effects |
+| `test_gastown.py` | Existing Gas Town E2Es cover workspace/roles, model/alias/gateway environment, self-sling and handoff process/configuration preservation | Actual patrol checks/report/heartbeat progress, fresh startup, progress after Deacon handoff, launcher inference and delegation |
+
+The real-account column is documented manual validation, not automated regression
+coverage. Removing the fixed scripts does not make those claims pass under a
+controlled provider; choose and execute relevant observations explicitly.
 
 ## Test coverage
 
@@ -153,8 +193,9 @@ For Gas Town, the same scenarios also compare present persistent agent sessions
 with `gt status --json` and inspect the zombie check from `gt doctor` (without
 `--fix`). They inspect the startup doctor log as well, so deleting falsely
 classified zombies during startup cannot turn the check green. These assertions
-do not require Boot or idle agents to be present, and do not yet prove that an
-interactive model request completes.
+do not require Boot or idle agents to be present. Role status alone does not
+prove inference; separate interactive request checks establish completion with
+the controlled upstream, while real-model completion requires live validation.
 
 The Gas Town phase-by-phase scenario also renews the refinery twice and the
 Mayor once with `gt handoff`. It checks that Claude replaces the previous
@@ -170,7 +211,7 @@ settings are covered by the runtime script tests.
 Model expectations come from the catalog and orchestrator manifests of the tested commit.
 Provider requests are simulated locally with fake credentials; no online model discovery is needed.
 Existing scenarios verify model defaults, explicit selections, provider exposure, routing, and restart/handoff propagation.
-Real principal/subagent delegation requires the authenticated [model gateway scenarios](model-gateway-tests.md).
+Real principal/subagent delegation requires task-specific [live observations](model-gateway-tests.md).
 
 Tests use `--skip-auth-check`. They do not run interactive authentication,
 use real API keys, or exercise browser/device login. Authenticated execution
@@ -203,26 +244,27 @@ successful CLI exit, or a gateway health check does not prove model selection,
 configuration propagation, or the effect of an agent action. Assert observable
 configuration or results inside the lab; include restart/handoff paths when the
 behavior must survive session renewal. Keep expected values independent of the
-production code that selects or renders them. Add authenticated live coverage
+production code that selects or renders them. Perform task-specific live validation
 when the behavior requires real provider requests, without replacing the
-credential-free E2E assertions.
+credential-free E2E assertions or committing a feature-specific live suite.
 
 | Change | Where to add coverage |
 |---|---|
 | Go behavior or driver command | Nearest `_test.go` file, with no build tag; verify with `make test-unit` |
 | Shell behavior | A `test_*.sh` file under `tests/scripts/`; verify with `make test-scripts` |
 | Orchestrator lifecycle | A `*_e2e_test.go` file; verify with the relevant end-to-end target |
-| Authenticated agent or feature behavior | A scenario under `tests/live/` using `taxiway_live.py`; run explicitly in a dev/e2e context |
+| Native Lima/owned-cleanup behavior | Enrich existing `tests/e2e/` scenarios; run the explicit native target |
+| Real-account agent or feature behavior | Temporary manual check outside Git using `taxiway_live.py`; run explicitly in a dev/e2e context |
 | Documentation page or site navigation | Existing tests under `site/src/`; run site tests and build |
 
-End-to-end files must start with the following directive and a blank line:
+Go end-to-end files must start with the following directive and a blank line:
 
 ```go
 //go:build e2e
 
 ```
 
-Use the `TestE2E_` prefix for end-to-end functions so the focused targets find
+Use the `TestE2E_` prefix for Go end-to-end functions so the focused targets find
 them. Local Docker availability checks may use `requireDockerOrSkip(t)`.
 
 When adding documentation pages, test routes, links, and navigation rather

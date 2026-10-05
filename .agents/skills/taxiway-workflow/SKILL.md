@@ -27,6 +27,11 @@ assignments. Let the user select work; do not silently relabel or start it.
 
 ## Execution
 
+E2Es own durable regression assertions. Live validation is an agent's temporary,
+task-specific manual check using `tests/live/taxiway_live.py`; do not commit
+feature-specific live suites, scripts or reports. Real-provider checks are
+explicitly opt-in and their actual effects require evidence.
+
 Use a dedicated worktree/implementer per subject and a different reviewer.
 Resolve review findings and verify corrections. If delegation is unavailable,
 report the missing review rather than review your own work as independent.

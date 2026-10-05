@@ -1,12 +1,16 @@
-# Reusable live tests
+# Agent-driven live validation
 
-Live tests exercise an installed agent or a feature in real Taxiway labs. Use
-them when a unit or offline protocol test cannot establish the behavior you
-need, such as tool execution, authentication reuse, delegation or a restart.
-They are opt-in: real model calls use the account's subscription allowance.
+Live validation lets an agent verify the feature it is working on in a real
+Taxiway lab, as a person would manually. Choose bounded actions and observable
+results for that task; keep temporary scripts, logs and sanitized reports outside
+Git. `tests/live/` provides reusable tooling, not a feature regression suite.
+Durable, repeatable product assertions belong in the existing E2Es described in
+[Testing](testing.md). Real model calls are explicitly opt-in and consume the
+account's subscription allowance. Account-free E2Es do not prove real-account
+model access, inference or delegation.
 
 The shared helpers are in `tests/live/taxiway_live.py`. They use Python's
-standard library and are independent of the model-selection scenarios.
+standard library and are usable for any feature.
 Use Python 3.11 or newer on the host, a running Docker daemon for gateways,
 and Docker or Lima for the labs. Run from a dev worktree with its `.envrc`
 loaded through `direnv exec .`; all mutable runtime directories must be
@@ -70,7 +74,7 @@ that before provisioning. Native login alone may not complete it. Open `claude`
 interactively in the reference, finish its first-run prompts, then exit. This is
 a setup step, not another authentication request.
 
-If auth expires during a suite, the failing action is not replayed automatically.
+If auth expires during validation, the failing action is not replayed automatically.
 The next propagation runs another bounded preflight; after confirmed rejection,
 reconnect once and explicitly rerun the failed scenario. There are no infinite
 refresh/login/setup retries, and temporary-lab cleanup preserves the reference.
@@ -174,98 +178,32 @@ loads the common gateway environment for direct Codex commands. Commands that
 operate on the orchestrator itself can omit `--agent`.
 
 This is a smoke runner. A response marker alone is not proof of tool use,
-delegation, or a particular model. Add the relevant assertions in a feature
-scenario, as the [model gateway suites](model-gateway-tests.md) do.
+delegation, or a particular model. Inspect actual effects and traces using the
+[model gateway validation examples](model-gateway-tests.md).
 
-## Gas Town lifecycle and delegation
+## Native driver regression checks
 
-With an authenticated reference lab, run:
+Provider-free recording, mount visibility, exceptional cleanup and Lima boot
+readiness/retry are durable E2Es, not live feature scripts. Run
+`make test-e2e-native-docker` or `make test-e2e-lima` explicitly in the worktree;
+see [Testing](testing.md#native-driver-e2es). They make no model requests.
+For a new Lima feature, enrich those existing E2Es and separately choose an
+ad hoc real-account check if the behavior requires inference. A Running VM or a
+smoke marker alone does not qualify affected product behavior.
 
-```bash
-direnv exec . python3 tests/live/test_gastown.py --auth-lab test-claude
-```
+## Validate a feature
 
-The scenario creates a temporary Docker Gas Town lab with a small public
-repository (`octocat/Hello-World`, override with `--repo`). It verifies the rig
-and crew workspace, checks running Claude roles and their gateway/model/alias
-environment, then verifies that Deacon completes a real patrol and advances
-its heartbeat. A real Deacon handoff must replace the Claude process and
-complete another patrol with new checks. A second fresh lab independently
-verifies autonomous patrol startup; self-sling interruptions fail the scenario
-even if the daemon later recovers. The suite also exercises the Mayor's real
-`gt handoff` restart. It stops
-background patrols before a bounded inference through the Gas Town launcher:
-an Opus principal invokes a Sonnet subagent and writes a proof file using Bash.
-Assertions inspect actual child responses, tool events and the resulting file.
-The temporary lab is removed and reference authentication is preserved.
-
-This is real account usage, including the short period of Gas Town startup
-and handoff before patrols are stopped. It does not validate a full polecat,
-refinery or merge-queue workload.
-
-## Real Lima lifecycle qualification
-
-Changes to Lima execution, mounts, recording or recovery need a real Lima
-scenario in addition to unit and Docker tests. Install Lima, permit its native
-virtualization prerequisites, and keep enough capacity for one 4-CPU/8-GiB VM.
-The first run downloads Ubuntu and installs guest dependencies; network access
-is required. Reuse the isolated worktree environment and rebuild its CLI:
+Create a temporary script outside the checkout (for example under `/tmp`) and
+import the helpers by running from the worktree:
 
 ```bash
-go build -o taxiway ./cmd/taxiway
-direnv exec . python3 tests/live/test_recording_lifecycle.py --driver lima
+PYTHONPATH="$PWD/tests/live" direnv exec . python3 /tmp/taxiway-feature-check.py
 ```
 
-This provider-free scenario prepares owned labs without starting agent roles or
-gateways. It verifies guest execution and recording-mount writability/host
-visibility, captures actual tmux output, stops a real recorder under a nondefault
-prefix, preserves the target session, and reconciles a recording after VM stop.
-Two further owned labs exercise cleanup after an intentional guest failure and
-a host command timeout. It checks that each temporary VM and lab state disappear
-and that unrelated Lima instances retain their prior status. It does not access
-reference credentials or prove model inference, delegation, or every Lima feature.
+Do not commit the temporary script.
+Select assertions for the feature rather than rerunning a fixed account suite.
 
-Choose `--driver docker` to run the same assertions with Docker; there is no
-implicit driver. `--outcome success|failure|timeout` selects one path and
-`--setup-timeout 900` bounds each lab's provisioning (default 900 seconds).
-Guest commands and cleanup are also bounded. Reports include the selected
-driver, Git revision (`+dirty` for tracked changes), executed outcome and verified
-cleanup. Exit 0 means the selected behavior and expected failure/timeout cleanup
-passed; exit 1 means a phase failed; exit 2 means the driver prerequisite could
-not be inspected and the scenario was not executed. Captured guest output and
-credentials are withheld. On setup/cleanup failure, inspect only that context's
-lab state and the reported owned lab name; preserve partial state until targeted
-cleanup can succeed. Never globally stop Lima instances or prune Docker.
-
-Use authenticated existing feature suites and #116 reference preflight when a
-change concerns model calls. A Running VM or a smoke marker alone does not
-qualify affected product behavior; select/enrich the relevant assertions and
-record actual execution or its limitation. General creation stalls remain #99.
-
-## Lima startup and readiness retry
-
-Build the worktree CLI and run the provider-free native scenario explicitly:
-
-```bash
-go build -o taxiway ./cmd/taxiway
-direnv exec . python3 tests/live/test_lima_startup.py --driver lima
-```
-
-One temporary VM checks fresh guest readiness, a Running VM with unfinished boot
-scripts, successful readiness retry, and stop/start recovery. The scenario restores
-the native boot marker in `finally`, checks that failed readiness does not mark
-creation complete, and verifies owned cleanup and unrelated VM preservation.
-Setup is bounded to 300 seconds by default (`--setup-timeout`); guest commands,
-retries and cleanup have separate bounds. It uses the existing live helpers and
-does not access reference credentials or make model calls.
-
-Reports include the Git revision, completed behavior and cleanup. Captured output
-is withheld. A successful run qualifies these behaviors on that host; it does not
-establish the cause or absence of intermittent Lima startup stalls on other hosts.
-
-## Add a scenario
-
-Place a script under `tests/live/` and import these helpers:
+Available helpers:
 
 | Helper | Purpose |
 |---|---|
@@ -277,8 +215,9 @@ Place a script under `tests/live/` and import these helpers:
 | `command(argv, ...)` | Run a bounded host command; capture output without printing it |
 | `runtime_id(lab)` | Resolve the driver identifier from the active context |
 
-For example, this scenario tests persistence across an orchestrator session
-restart, independently of model selection:
+For example, this temporary check verifies filesystem persistence across an
+orchestrator session restart. Credential presence here does not establish that
+authentication works; add a bounded real request if that is the feature:
 
 ```python
 from taxiway_live import command, guest, temporary_lab
@@ -291,12 +230,14 @@ test -s "$HOME/.claude/.credentials.json" &&
 test "$(cat /lab/work/live-fixture)" = fixture && printf RESTART_OK
 ''')
     assert output == b"RESTART_OK"
+    print("PASS filesystem persistence across restart")
 ```
 
 Add the assertions that establish your feature's behavior: inspect a resulting
 file for an edit, client tool events for tool execution, child session metadata
 for delegation, and gateway/Langfuse generations for actual model calls.
-Reuse an existing suite when its assertions already cover your change.
+Reuse existing E2Es for durable regression assertions; real-account observations
+remain task-specific live evidence.
 
 `guest` captures shell stdout, so never print or persist credential-bearing
 output in a scenario. Keep requests small and timeouts explicit. Tests run
@@ -343,9 +284,9 @@ must retain bypass for its automated execution contract. Automatic Review is
 not an unattended execution guarantee.
 
 Permission defaults do not authenticate clients or complete first-run
-onboarding. Tests still verify those independent prerequisites. Live scenarios
-exercise actual file edits, command/build execution and HTTPS access, including
-delegated actions, without supplying their own permission overrides.
+onboarding. Tests still verify those independent prerequisites. For affected permission behavior, choose actual file edits, command/build
+execution and HTTPS access, including delegated actions, without supplying
+extra permission overrides that conceal the shipped defaults.
 
 The orchestrator E2E scenarios also send a unique harmless prompt through the
 real interactive CLI in its actual tmux session. Their controlled upstream

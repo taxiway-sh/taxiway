@@ -1,10 +1,12 @@
-# Live Taxiway tests
+# Agent-driven live validation
 
 Read [the live testing guide](../../docs/contributing/live-tests.md) before
 creating an authenticated scenario.
 
 - Reuse `taxiway_live.py` for guest execution, auth propagation and temporary
-  labs. Keep feature-specific assertions in the scenario that tests the feature.
+  labs. Keep feature-specific scripts and sanitized results outside Git. This
+  directory contains reusable tooling, not committed feature regression suites.
+  Durable assertions belong in existing E2Es, including native `tests/e2e/` checks.
 - Run with the worktree's dev/e2e environment loaded. Use bounded commands and
   short prompts. Real model calls consume account usage and are opt-in.
 - Name persistent manual-validation labs `test-claude`, `test-codex` and
@@ -24,5 +26,5 @@ creating an authenticated scenario.
   and other instances; never use global `destroy` or Docker prune for cleanup.
 - Assert actual effects and client/gateway evidence. An agent's claim that it
   ran a tool or spawned a subagent is insufficient. Report skipped/blocked cases.
-- Run the changed scenario against real labs before claiming live coverage.
+- Execute the task-specific check against real labs before claiming validation.
   Do not add a separate unit-test layer for scenario assertions.
