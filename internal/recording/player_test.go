@@ -1,6 +1,7 @@
 package recording
 
 import (
+	"bytes"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,31 @@ import (
 
 	"github.com/stretchr/testify/require"
 )
+
+func TestPlayerManifestPathsRemainLocal(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("player JavaScript evaluation requires Node.js")
+	}
+	// Execute the actual player helpers, without DOM setup or network requests.
+	cmd := exec.Command(node, "-e", `
+const assert = require('node:assert/strict');
+const fs = require('node:fs'), vm = require('node:vm');
+const html = fs.readFileSync(0, 'utf8');
+const scope = vm.createContext({});
+vm.runInContext(html.slice(html.indexOf('function basename(path)'), html.indexOf('function labelForSession')), scope);
+for (const session of [{cast_path_host:'https:example.invalid.cast',id:'safe'}, {id:'https://example.invalid'}, {id:'../outside'}, {cast_path_host:'%2e%2e.cast'}]) {
+  assert.equal(scope.castFileForSession(session), '');
+}
+for (const session of [{cast_path_host:'/state/demo/recordings/safe_recording.cast'}, {id:'safe_recording'}]) {
+  const file = scope.castFileForSession(session);
+  assert.equal(file, 'safe_recording.cast');
+  assert.equal(new URL(file, 'http://localhost:18735/').origin, 'http://localhost:18735');
+}`)
+	cmd.Stdin = bytes.NewBufferString(playerHTML)
+	output, err := cmd.CombinedOutput()
+	require.NoError(t, err, "%s", output)
+}
 
 func TestPlayerFilesystemRejectsOutsideSymlinks(t *testing.T) {
 	store := NewStore(t.TempDir(), "demo")

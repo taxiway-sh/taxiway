@@ -205,6 +205,9 @@ func (s Store) castName(session Session) (string, error) {
 	if err != nil || name != filepath.Base(name) || name == "." || !strings.HasSuffix(name, ".cast") {
 		return "", fmt.Errorf("recording: cast path is outside the lab recordings directory")
 	}
+	if err := ValidateName(strings.TrimSuffix(name, ".cast")); err != nil {
+		return "", fmt.Errorf("recording: invalid cast filename: %w", err)
+	}
 	if session.CastPath != "" && session.CastPath != "/lab/recordings/"+name {
 		return "", fmt.Errorf("recording: inconsistent lab cast path")
 	}
