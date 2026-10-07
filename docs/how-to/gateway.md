@@ -117,6 +117,14 @@ external networking or provider credentials.
 For live principal/subagent tests with reusable authentication, see
 [testing model gateways](../contributing/model-gateway-tests.md).
 
+LiteLLM prices each call and Langfuse records that cost (see
+[Observability](observability.md#relationship-to-gateways)). At startup, the
+gateway downloads LiteLLM's current price map from GitHub and falls back to the
+map bundled in its image when the download fails. When the gateway starts,
+Taxiway prints a `WARN` line for each exposed model that has no price, for
+example a recent model missing from the bundled map while offline; calls to that
+model show a cost of 0.
+
 New releases and explicit retirement announcements are checked by the daily
 [catalog update workflow](../contributing/model-catalog.md). It prepares a draft
 PR for review, runs compatibility checks, and keeps model defaults unchanged.
