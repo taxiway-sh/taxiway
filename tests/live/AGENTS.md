@@ -23,7 +23,8 @@ creating an authenticated scenario.
   The helper also copies completed first-run setup flags, preserving target
   preferences and workspace trust. Verify interactive readiness: successful
   `claude -p` calls alone do not prove the user can attach without onboarding.
-  Codex authentication is managed by the gateway, not copied into lab clients.
+  Codex authentication is managed by the gateway, not copied into lab clients;
+  run `taxiway credentials codex` in the context before creating a Codex lab.
 - Use `temporary_lab` for resources owned by a scenario. Preserve reference labs
   and other instances; never use global `destroy` or Docker prune for cleanup.
 - Assert actual effects and client/gateway evidence. An agent's claim that it
