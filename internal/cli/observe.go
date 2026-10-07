@@ -272,6 +272,10 @@ func (runtime observabilityRuntime) ComposeEnv(proxy proxyRuntime) []string {
 // modelNow is shared by catalog selection and display; tests can freeze lifecycle time.
 var modelNow = time.Now
 
+func liteLLMChatGPTPricingAssetPath(state *RootState) string {
+	return filepath.Join(state.RepoDir, "infra", "gateway", "litellm", "callbacks", "chatgpt_pricing.py")
+}
+
 func liteLLMAnthropicProtocolAssetPath(state *RootState) string {
 	return filepath.Join(state.RepoDir, "infra", "gateway", "litellm", "callbacks", "anthropic_protocol.py")
 }
@@ -352,6 +356,7 @@ func renderLiteLLMConfig(state *RootState, includeCodexModels bool, enableCodexS
 	var models []liteLLMGeneratedModelEntry
 	var forwardHeaders []string
 	hasAnthropic := false
+	hasChatGPT := false
 	selected := map[string]bool{}
 	for _, name := range selectedModels {
 		if name != "" {
@@ -398,6 +403,7 @@ func renderLiteLLMConfig(state *RootState, includeCodexModels bool, enableCodexS
 		}
 		models = append(models, entry)
 		hasAnthropic = hasAnthropic || model.Provider == "anthropic"
+		hasChatGPT = hasChatGPT || model.Provider == "chatgpt"
 		if model.ForwardClientHeaders {
 			addForwardHeader(model.Name)
 		}
@@ -411,6 +417,9 @@ func renderLiteLLMConfig(state *RootState, includeCodexModels bool, enableCodexS
 	callbacks := []string{"langfuse_otel"}
 	if hasAnthropic {
 		callbacks = append(callbacks, "anthropic_protocol.proxy_handler_instance")
+	}
+	if hasChatGPT {
+		callbacks = append(callbacks, "chatgpt_pricing.proxy_handler_instance")
 	}
 	if enableCodexSessionMapper {
 		callbacks = append([]string{"codex_session_mapper.proxy_handler_instance"}, callbacks...)
