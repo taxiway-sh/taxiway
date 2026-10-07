@@ -177,6 +177,9 @@ func testE2EOrchestratorPrepareRun(t *testing.T, orch string) {
 		runE2EAssert(t, "assert:gateway-started", func(t *testing.T) {
 			assertE2EGatewayRuntimeRunning(t, state, lab, orch)
 		})
+		runE2EAssert(t, "assert:gateway-models-priced", func(t *testing.T) {
+			assertE2EGatewayModelsPriced(t, state, lab, orch)
+		})
 		runE2EAssert(t, "assert:gateway-routed", func(t *testing.T) {
 			assertE2EGatewayRequestRouted(t, state, lab, orch, fakeUpstream)
 		})
@@ -185,6 +188,9 @@ func testE2EOrchestratorPrepareRun(t *testing.T, orch string) {
 		})
 		runE2EAssert(t, "assert:trace-ingested", func(t *testing.T) {
 			assertE2EObservabilityTraceIngested(t, state, lab, orch)
+		})
+		runE2EAssert(t, "assert:generation-cost-provided", func(t *testing.T) {
+			assertE2EGenerationCostProvided(t, state, lab, orch)
 		})
 		runE2EAssert(t, "assert:shell-target-ready", func(t *testing.T) {
 			assertE2EShellCheck(t, root, tb, lab, orch)
@@ -389,6 +395,9 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		runE2EAssert(t, "assert:gateway-started", func(t *testing.T) {
 			assertE2EGatewayRuntimeRunning(t, state, lab, orch)
 		})
+		runE2EAssert(t, "assert:gateway-models-priced", func(t *testing.T) {
+			assertE2EGatewayModelsPriced(t, state, lab, orch)
+		})
 	})
 
 	runE2EScriptDryRunStep(t, "taxiway:workspace[--dry-run]", root, tb, state, stateDir, id, false, dryRunLabels.Workspace, "workspace", lab)
@@ -441,6 +450,9 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		})
 		runE2EAssert(t, "assert:trace-ingested", func(t *testing.T) {
 			assertE2EObservabilityTraceIngested(t, state, lab, orch)
+		})
+		runE2EAssert(t, "assert:generation-cost-provided", func(t *testing.T) {
+			assertE2EGenerationCostProvided(t, state, lab, orch)
 		})
 		runE2EAssert(t, "assert:shell-target-ready", func(t *testing.T) {
 			assertE2EShellCheck(t, root, tb, lab, orch)
@@ -554,6 +566,9 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		runE2ECommand(t, root, tb, "up", lab, "--type", orch, "--skip-auth-check")
 		runE2EAssert(t, "assert:lab-listed", func(t *testing.T) {
 			assertE2EList(t, root, tb, lab, orch, "running", "started")
+		})
+		runE2EAssert(t, "assert:gateway-models-priced", func(t *testing.T) {
+			assertE2EGatewayModelsPriced(t, state, lab, orch)
 		})
 		runE2EAssert(t, "assert:gateway-routed", func(t *testing.T) {
 			assertE2EGatewayRequestRouted(t, state, lab, orch, fakeUpstream)
@@ -729,6 +744,9 @@ func testE2EOrchestratorUp(t *testing.T, orch string) {
 		runE2EAssert(t, "assert:gateway-started", func(t *testing.T) {
 			assertE2EGatewayRuntimeRunning(t, state, lab, orch)
 		})
+		runE2EAssert(t, "assert:gateway-models-priced", func(t *testing.T) {
+			assertE2EGatewayModelsPriced(t, state, lab, orch)
+		})
 		runE2EAssert(t, "assert:gateway-routed", func(t *testing.T) {
 			assertE2EGatewayRequestRouted(t, state, lab, orch, fakeUpstream)
 		})
@@ -737,6 +755,9 @@ func testE2EOrchestratorUp(t *testing.T, orch string) {
 		})
 		runE2EAssert(t, "assert:trace-ingested", func(t *testing.T) {
 			assertE2EObservabilityTraceIngested(t, state, lab, orch)
+		})
+		runE2EAssert(t, "assert:generation-cost-provided", func(t *testing.T) {
+			assertE2EGenerationCostProvided(t, state, lab, orch)
 		})
 		if orch == "codex" {
 			runE2EAssert(t, "assert:shell-target-ready", func(t *testing.T) { assertE2EShellCheck(t, root, tb, lab, orch) })
@@ -3292,6 +3313,106 @@ func assertE2EObservabilityTraceIngested(t *testing.T, state *RootState, lab, or
 		time.Sleep(2 * time.Second)
 	}
 	require.Failf(t, "Langfuse trace not ingested", "project_id=%s last_count=%q", projectID, last)
+}
+
+// LiteLLM prices calls from the cost map it loaded at startup: the one
+// downloaded from GitHub, or the one bundled in the image when that download
+// fails. /model/info reports the prices the running gateway actually uses;
+// ChatGPT routes are priced as their equivalent OpenAI API model.
+func assertE2EGatewayModelsPriced(t *testing.T, state *RootState, lab, orch string) {
+	t.Helper()
+	ref := config.LabRef{Lab: lab, Orch: orch, Driver: state.Driver.Name()}
+	values, err := readLabGatewayEnv(config.StateDir(state.Flags.StateDir, state.RepoDir), ref)
+	require.NoError(t, err)
+	apiKey := values[labLiteLLMAPIKeyEnv]
+	require.NotEmpty(t, apiKey)
+
+	var data []byte
+	deadline := time.Now().Add(90 * time.Second)
+	for {
+		data, err = getE2ELiteLLMModelInfo(state, lab, apiKey)
+		if err == nil || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(2 * time.Second)
+	}
+	require.NoError(t, err)
+	var info struct {
+		Data []struct {
+			ModelName string `json:"model_name"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(data, &info))
+	var exposed []string
+	for _, model := range info.Data {
+		exposed = append(exposed, model.ModelName)
+	}
+	require.Subset(t, exposed, e2eGatewayModelNames(t, orch))
+	unpriced, err := unpricedLiteLLMModels(data)
+	require.NoError(t, err)
+	require.Empty(t, unpriced, "lab gateway has no non-zero input/output price for these models")
+}
+
+func getE2ELiteLLMModelInfo(state *RootState, lab, apiKey string) ([]byte, error) {
+	req, err := http.NewRequest(http.MethodGet, state.proxyRuntime().BaseURL()+"/model/info", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Host = labLiteLLMHost(lab)
+	req.Header.Set("x-litellm-api-key", "Bearer "+apiKey)
+	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("LiteLLM /model/info returned %s: %s", resp.Status, strings.TrimSpace(string(data)))
+	}
+	return data, nil
+}
+
+// LiteLLM exports its computed cost as llm.cost.total. Langfuse must record it
+// as the provided cost rather than infer one from its own model price table.
+func assertE2EGenerationCostProvided(t *testing.T, state *RootState, lab, orch string) {
+	t.Helper()
+	ref := config.LabRef{Lab: lab, Orch: orch, Driver: state.Driver.Name()}
+	values, err := readLabGatewayEnv(config.StateDir(state.Flags.StateDir, state.RepoDir), ref)
+	require.NoError(t, err)
+	projectID := values[labLangfuseProjectIDEnv]
+	require.NotEmpty(t, projectID)
+
+	query := fmt.Sprintf("SELECT DISTINCT provided_model_name FROM observations WHERE project_id = '%s' "+
+		"AND type = 'GENERATION' AND provided_cost_details['total'] > 0 FORMAT TSV", strings.ReplaceAll(projectID, "'", "''"))
+	costed := e2eGatewayModelNames(t, orch)
+	var missing []string
+	var last string
+	deadline := time.Now().Add(90 * time.Second)
+	for {
+		out, err := exec.Command("docker", "exec", state.observabilityRuntime().ClickHouseContainer(), "clickhouse-client", "--query", query).CombinedOutput()
+		last = strings.TrimSpace(string(out))
+		priced := map[string]bool{}
+		if err == nil {
+			for _, name := range strings.Fields(last) {
+				priced[name] = true
+			}
+		}
+		missing = missing[:0]
+		for _, name := range costed {
+			if !priced[name] {
+				missing = append(missing, name)
+			}
+		}
+		if len(missing) == 0 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(2 * time.Second)
+	}
+	sort.Strings(missing)
+	require.Empty(t, missing, "Langfuse generations without a provided non-zero cost; project_id=%s last=%q", projectID, last)
 }
 
 func assertE2EPhase(t *testing.T, stateDir, id string, phase phases.Phase) {
