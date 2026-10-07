@@ -86,9 +86,12 @@ credential-file presence.
 The helper does not synchronize subsequent refreshes between running labs.
 
 Codex works differently: Taxiway prepares ChatGPT authentication in the
-gateway from the existing host Codex login. Do not copy Claude credentials or
-host Codex auth files into Codex clients. API-key mode also uses gateway
-credentials and is not handled by the Claude OAuth-copy helper.
+gateway from the existing host Codex login. Run `taxiway credentials codex`
+once in each dev/e2e context before creating a Codex lab: `taxiway up` does not
+prepare it, and without it the lab's LiteLLM gateway waits for a device login
+until the `gateway` phase times out (tracked in #6). Do not copy Claude
+credentials or host Codex auth files into Codex clients. API-key mode also uses
+gateway credentials and is not handled by the Claude OAuth-copy helper.
 
 ## Authentication responsibilities
 
@@ -125,6 +128,7 @@ After authenticating `test-claude` above, create the other labs when validation
 of the feature needs them:
 
 ```bash
+direnv exec . ./taxiway credentials codex
 direnv exec . ./taxiway up test-codex --driver docker --type codex
 direnv exec . ./taxiway up test-gastown --driver docker --type gastown \
   --repo https://github.com/octocat/Hello-World --prepare-only --skip-auth-check
