@@ -1,8 +1,8 @@
-# Based on Langfuse v3.178.0 docker-compose.yml:
-# https://github.com/langfuse/langfuse/blob/v3.178.0/docker-compose.yml
+# Based on Langfuse v3.225.11 docker-compose.yml:
+# https://github.com/langfuse/langfuse/blob/v3.225.11/docker-compose.yml
 services:
   langfuse-worker:
-    image: langfuse/langfuse-worker:3.178.0
+    image: langfuse/langfuse-worker:3.225.11
     depends_on: &langfuse-depends-on
       postgres:
         condition: service_healthy
@@ -24,6 +24,7 @@ services:
       CLICKHOUSE_USER: clickhouse
       CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-clickhouse}
       CLICKHOUSE_CLUSTER_ENABLED: "false"
+      LANGFUSE_JSON_BAD_UNICODE_ESCAPE: ${LANGFUSE_JSON_BAD_UNICODE_ESCAPE:-}
       LANGFUSE_USE_AZURE_BLOB: "false"
       LANGFUSE_USE_OCI_NATIVE_OBJECT_STORAGE: "false"
       LANGFUSE_OCI_AUTH_TYPE: workload_identity
@@ -55,6 +56,7 @@ services:
       REDIS_HOST: ${TAXIWAY_OBSERVABILITY_REDIS_DNS:-redis}
       REDIS_PORT: 6379
       REDIS_AUTH: ${LANGFUSE_REDIS_AUTH:-myredissecret}
+      LANGFUSE_BULLMQ_SKIP_REDIS_VERSION_CHECK: "false"
       REDIS_TLS_ENABLED: "false"
       REDIS_TLS_CA: /certs/ca.crt
       REDIS_TLS_CERT: /certs/redis.crt
@@ -67,7 +69,7 @@ services:
           - ${TAXIWAY_OBSERVABILITY_LANGFUSE_WORKER_DNS:-langfuse-worker}
 
   langfuse-web:
-    image: langfuse/langfuse:3.178.0
+    image: langfuse/langfuse:3.225.11
     depends_on: *langfuse-depends-on
     environment:
       <<: *langfuse-worker-env

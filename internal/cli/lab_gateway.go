@@ -2,7 +2,9 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -125,6 +127,7 @@ func ensureLabLiteLLMSidecar(ctx context.Context, state *RootState, ref config.L
 	if err := waitForLabLiteLLMSidecarReady(ctx, files.Project, files.Service); err != nil {
 		return err
 	}
+	warnLabLiteLLMUnpricedModels(ctx, os.Stdout, files.Project+"-"+files.Service+"-1")
 	if _, err := ensureProxyConfigForState(state, stateDir, proxyDir); err != nil {
 		return err
 	}
@@ -161,6 +164,50 @@ func waitForLabLiteLLMSidecarReadyWithTimeout(ctx context.Context, project, serv
 		case <-time.After(pollInterval):
 		}
 	}
+}
+
+// LiteLLM downloads its price map at startup and falls back to the map bundled
+// in its image. A model priced in neither is recorded in Langfuse with cost 0.
+func warnLabLiteLLMUnpricedModels(ctx context.Context, w io.Writer, container string) {
+	script := "import os, urllib.request; print(urllib.request.urlopen(urllib.request.Request(" +
+		"'http://127.0.0.1:4000/model/info', headers={'Authorization': 'Bearer ' + os.environ['LITELLM_MASTER_KEY']}), timeout=10).read().decode())"
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "docker", "exec", container, "python", "-c", script).Output()
+	if err == nil {
+		var unpriced []string
+		if unpriced, err = unpricedLiteLLMModels(out); err == nil {
+			for _, name := range unpriced {
+				fmt.Fprintf(w, "  WARN model %s has no LiteLLM price; its Langfuse cost will be 0\n", name)
+			}
+			return
+		}
+	}
+	fmt.Fprintf(w, "  WARN could not read LiteLLM model prices: %v\n", err)
+}
+
+func unpricedLiteLLMModels(modelInfo []byte) ([]string, error) {
+	var info struct {
+		Data []struct {
+			ModelName string `json:"model_name"`
+			ModelInfo struct {
+				InputCostPerToken  *float64 `json:"input_cost_per_token"`
+				OutputCostPerToken *float64 `json:"output_cost_per_token"`
+			} `json:"model_info"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(modelInfo, &info); err != nil {
+		return nil, err
+	}
+	var unpriced []string
+	for _, model := range info.Data {
+		in, out := model.ModelInfo.InputCostPerToken, model.ModelInfo.OutputCostPerToken
+		if in == nil || out == nil || *in <= 0 || *out <= 0 {
+			unpriced = append(unpriced, model.ModelName)
+		}
+	}
+	sort.Strings(unpriced)
+	return unpriced, nil
 }
 
 func labLiteLLMSidecarWaitError(container string, lastErr error) error {
@@ -346,6 +393,7 @@ func prepareLabLiteLLMSidecarFiles(state *RootState, labStateDir, authDir string
       - ./litellm_config.yaml:/app/config.yaml:ro
       - %[5]s:/app/codex_session_mapper.py:ro
       - %[10]s:/app/anthropic_protocol.py:ro
+      - %[11]s:/app/chatgpt_pricing.py:ro
       - %[6]s:/app/chatgpt_token
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     environment:
@@ -364,7 +412,7 @@ volumes:
 networks:
   default:
     name: %[4]s
-`, dbService, service, liteLLMKey, project+"_default", liteLLMCodexSessionMapperAssetPath(state), liteLLMChatGPTTokenStateDir(authDir), langfuseEnv, dbAlias, routeService, liteLLMAnthropicProtocolAssetPath(state))
+`, dbService, service, liteLLMKey, project+"_default", liteLLMCodexSessionMapperAssetPath(state), liteLLMChatGPTTokenStateDir(authDir), langfuseEnv, dbAlias, routeService, liteLLMAnthropicProtocolAssetPath(state), liteLLMChatGPTPricingAssetPath(state))
 
 	if err := os.WriteFile(composePath, []byte(compose), 0o600); err != nil {
 		return labLiteLLMSidecarFiles{}, fmt.Errorf("write lab LiteLLM compose: %w", err)

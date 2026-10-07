@@ -245,6 +245,7 @@ func TestObserveEnsureLiteLLMConfig_GeneratesFromModelCatalog(t *testing.T) {
 	assert.Contains(t, config, "model_name: gpt-5.4")
 	assert.Contains(t, config, "model: chatgpt/gpt-5.4")
 	assert.Contains(t, config, "mode: responses")
+	assert.Contains(t, config, "chatgpt_pricing.proxy_handler_instance")
 	assert.Contains(t, config, "model_name: claude-opus-4-8")
 	assert.Contains(t, config, "model: anthropic/claude-opus-4-8")
 	assert.Contains(t, config, "forward_client_headers_to_llm_api:")
@@ -280,6 +281,7 @@ func TestObserveEnsureLiteLLMConfig_FiltersCodexModelsWhenAuthMissing(t *testing
 	require.NoError(t, err)
 	config := string(data)
 	assert.NotContains(t, config, "model_name: gpt-5.4")
+	assert.NotContains(t, config, "chatgpt_pricing")
 	assert.Contains(t, config, "model_name: claude-opus-4-8")
 }
 

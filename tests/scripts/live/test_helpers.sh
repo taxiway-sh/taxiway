@@ -258,12 +258,13 @@ for name in ("litellm", "litellm.integrations", "litellm.integrations.custom_log
     sys.modules[name] = module
 sys.modules["litellm.integrations.custom_logger"].CustomLogger = type("CustomLogger", (), {})
 sys.modules["litellm.llms.chatgpt.responses.transformation"].ChatGPTResponsesAPIConfig = type("ChatGPTResponsesAPIConfig", (), {})
-for name in ("anthropic_protocol", "codex_session_mapper"):
+for name, check in (("anthropic_protocol", "protocol test"), ("codex_session_mapper", "protocol test"),
+                    ("chatgpt_pricing", "cost test")):
     try:
         runpy.run_path(f"infra/gateway/litellm/callbacks/{name}.py")
     except RuntimeError as error:
         assert "shim incompatible with this LiteLLM version" in str(error)
-        assert "protocol test" in str(error)
+        assert check in str(error)
     else:
         raise AssertionError("missing shim incompatibility diagnostic")
 print("PASS: incompatible LiteLLM internals produce actionable startup errors")
