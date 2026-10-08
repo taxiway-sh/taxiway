@@ -183,3 +183,10 @@ models:
     retirement_date: '2026-11-30'
     replacement: claude-sonnet-5-5
     source: https://platform.claude.com/docs/en/about-claude/model-deprecations
+
+  - provider: anthropic
+    forward_client_headers: true
+    name: claude-haiku-5-5
+    upstream: claude-haiku-5-5
+    status: active
+    source: https://platform.claude.com/docs/en/models/overview
