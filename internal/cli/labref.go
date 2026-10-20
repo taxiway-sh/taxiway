@@ -26,11 +26,11 @@ func addTypeFlag(cmd *cobra.Command, state *RootState, p *string) {
 // It discovers orchestrators from repoDir; on error, returns static help text.
 func buildTypeFlagUsage(repoDir string) string {
 	if repoDir == "" {
-		return "orchestrator type (e.g. claude-code, gastown, codex)"
+		return "orchestrator type (e.g. claude-code, codex, gastown, gascity)"
 	}
 	names, err := discover.Orchestrators(repoDir)
 	if err != nil || len(names) == 0 {
-		return "orchestrator type (e.g. claude-code, gastown, codex)"
+		return "orchestrator type (e.g. claude-code, codex, gastown, gascity)"
 	}
 	return fmt.Sprintf("orchestrator type; available: %s", strings.Join(names, ", "))
 }

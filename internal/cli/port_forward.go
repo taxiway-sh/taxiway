@@ -31,6 +31,12 @@ var orchestratorPortForwards = map[string]portForwardSpec{
 		StateFile: "dashboard.port",
 		GuestPort: 8080,
 	},
+	// The Gas City supervisor serves its API and dashboard on 127.0.0.1:8372.
+	"gascity": {
+		EnvKey:    "TAXIWAY_DASHBOARD_HOST_PORT",
+		StateFile: "dashboard.port",
+		GuestPort: 8372,
+	},
 }
 
 func preparePortForward(ctx context.Context, state *RootState, ref config.LabRef, env map[string]string) error {
