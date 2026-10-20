@@ -45,9 +45,12 @@ the lab needs network access to GitHub when the city is created.
 
 ## Gateway Routing
 
-Taxiway does not edit Gas City's own configuration beyond one
-`include = ["taxiway.toml"]` entry in `city.toml`. On every `taxiway start`, it
-rewrites the private (`0600`) `taxiway.toml` fragment:
+Taxiway edits only two keys of Gas City's own `city.toml`: one
+`include = ["taxiway.toml"]` entry and the `effort` key of the Claude
+provider's `option_defaults` (Gas City reads provider option defaults only from
+`city.toml`). It writes `city.toml` atomically, keeps its permissions and every
+other setting, and refuses an include list it cannot extend safely. On every
+`taxiway start`, it also rewrites the private (`0600`) `taxiway.toml` fragment:
 
 - `[upstreams.taxiway-litellm]` points `ANTHROPIC_BASE_URL` at the lab gateway
   and sends the gateway key in `ANTHROPIC_CUSTOM_HEADERS`;
@@ -58,7 +61,8 @@ rewrites the private (`0600`) `taxiway.toml` fragment:
 
 The fragment references the key as `$TAXIWAY_LITELLM_API_KEY`; Gas City expands
 it from the supervisor environment when it launches a session, so the key is not
-written into city configuration. Rewriting the whole fragment keeps restarts
+written into city configuration (see [Gateway key exposure](#gateway-key-exposure)
+for where it does appear). Rewriting the whole fragment keeps restarts
 idempotent and applies to every session Gas City creates later, including
 restarts (`gc session reset`) and new sessions (`gc session new`).
 
@@ -78,11 +82,26 @@ and opens the `gascity` tmux session used by `taxiway shell` and
 
 Docker labs have no systemd user manager, so `gc start` runs the supervisor as
 a detached `gc supervisor run` process that inherits the start environment. On
-a Lima lab with a systemd user manager, Gas City installs a user unit instead
-and only copies allow-listed variables into it. Taxiway sets
+a Lima lab with a systemd user manager, Gas City installs and enables a user
+unit instead and only copies allow-listed variables into it. Taxiway sets
 `GC_SUPERVISOR_ENV="TAXIWAY_LITELLM_API_KEY TAXIWAY_LITELLM_BASE_URL"` during
-`gc start` so the fragment references resolve in both modes; in the systemd
-case, Gas City writes those values into its user unit file inside the lab.
+`gc start` so the fragment references resolve in both modes. This difference in
+how the guest runs and reaps long-lived services is tracked in #179.
+
+### Gateway key exposure
+
+On a Lima lab with systemd, Gas City writes its supervisor environment into
+the enabled user unit `~/.local/share/systemd/user/gascity-supervisor.service`
+(mode `0600`). The unit stores `TAXIWAY_LITELLM_API_KEY`,
+`TAXIWAY_LITELLM_BASE_URL` and every `ANTHROPIC_*` variable of the start
+environment, including `ANTHROPIC_AUTH_TOKEN` (the gateway key) in
+`auth_mode=api-key` and the `ANTHROPIC_DEFAULT_*_MODEL` aliases. The unit
+persists across `taxiway reset` until the lab is removed.
+
+On every driver, Gas City starts each session with `tmux new-session -e
+NAME=value`, so the session environment, including the gateway key header and
+token, briefly appears in the guest's process arguments. Keeping the gateway key
+in a single guest location is tracked in #180.
 
 Agent sessions run on the city's own tmux socket (`tmux -L gc`), with names
 such as `gastown__mayor`, `gastown__deacon` and `<rig>--gastown__witness`.
@@ -108,21 +127,26 @@ The adapter exposes these settings through `--set`:
 | `version` | Exact Gas City release, verified against its published checksums | `1.5.0` |
 | `beads-version` | [Beads](https://github.com/gastownhall/beads) (`bd`) release override; omitted uses the Gas City compatibility matrix | Adapter default (`1.3.1`) |
 | `dolt-version` | [Dolt](https://github.com/dolthub/dolt) release override; omitted uses the Gas City compatibility matrix | Adapter default (`2.2.0`) |
-| `template` | Template for a new city: `gastown`, `minimal`, or another `gc init` template | `gastown` |
+| `template` | Template for a new city: `gastown` or `minimal` (both define always-on sessions, which start waits for) | `gastown` |
 | `claude-code-version` | Claude Code CLI release used by Gas City agents: `latest` or an exact release; distinct from `version` | `latest` |
 | `model` | Claude Code model name passed with `--model` to every agent through LiteLLM | `claude-opus-5-5` |
+| `effort` | Claude Code effort passed with `--effort` to every agent: `low`, `medium`, `high`, `xhigh`, or `max` | `max` (Gas City's default) |
 | `tool-search` | Load MCP tool definitions on demand: `true`, `false`, `auto`, or `auto:N` | `true` |
 | `claudeai-mcp-servers` | Import Claude.ai connectors: `true` or `false` | `false` |
 
 Releases are exact, so a lab is reproducible: `latest` is not accepted for
-`version`. The compatibility matrix follows Gas City's own CI pins; a Gas City
+`version`. Unsupported `template` or `effort` values fail before the city is
+created or changed. The compatibility matrix follows Gas City's own CI pins; a Gas City
 release without a mapping requires both `beads-version` and `dolt-version`.
 Gas City and Beads archives are verified against their published checksums, and
 the default Dolt archive against a pinned digest.
 
 Settings persist with the lab; `--clear-set` restores the default. Gateway,
-model and MCP settings apply at the next `taxiway start`, which restarts the
-city.
+model, effort and MCP settings apply at the next `taxiway start`, which
+restarts the city.
+
+The install phase also disables Beads anonymous usage metrics
+(`bd metrics off`, stored in `~/.config/bd`) in Gas City labs.
 
 Example:
 
@@ -157,19 +181,18 @@ publish it.
 
 - Gas City 1.5.0 drops the builtin Claude upstream binding for providers based
   on `builtin:claude`, so the fragment names `base_url_env` and
-  `auth_token_env` explicitly. Remove this workaround once a release containing
-  [gastownhall/gascity#5985](https://github.com/gastownhall/gascity/pull/5985)
-  is pinned.
+  `auth_token_env` explicitly. Removing this workaround once a release
+  containing [gastownhall/gascity#5985](https://github.com/gastownhall/gascity/pull/5985)
+  is pinned is tracked in #178.
+- On Lima, the gateway key is also stored in Gas City's supervisor unit, and
+  sessions receive it through `tmux -e` arguments; see
+  [Gateway key exposure](#gateway-key-exposure) (tracked in #180).
 - A full `gastown` city uses about 2.2 GiB of memory and more than 200
   processes; size the lab accordingly. Starting or restarting the city takes
   one to two minutes.
 - Docker labs run `sleep infinity` as PID 1, which does not reap orphaned
   children: defunct `dolt`, `bd` and `gc` processes accumulate until the lab
-  restarts. They hold no memory or files.
-- Gas City's Claude provider defaults to `--effort max`; Taxiway does not
-  change it.
-- Beads enables anonymous usage metrics by default; run `bd metrics off` in the
-  lab to disable them.
+  restarts. They hold no memory or files. This is tracked in #179.
 
 ## Inspect the Adapter
 
