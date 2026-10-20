@@ -541,14 +541,26 @@ func newResetCmd(state *RootState) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// The adapter stops its own services; reset.sh only clears the workspace.
+			stopScript, hasStop := config.StopScript(state.RepoDir, ref.Orch)
 			if state.Flags.DryRun {
 				plan := newDryRunPlan(cmd.OutOrStdout(), "operation", "reset", ref.Lab)
+				if hasStop {
+					if err := execPlannableScriptToWithRef(ctx, state, ref, stopScript, cmd.OutOrStdout(), cmd.ErrOrStderr(), nil); err != nil {
+						return err
+					}
+				}
 				if err := execPlannableScriptToWithRef(ctx, state, ref, config.ResetScript(state.RepoDir), cmd.OutOrStdout(), cmd.ErrOrStderr(), nil); err != nil {
 					return err
 				}
 				plan.Step("reset", "Clearing lifecycle phase markers")
 				plan.Finish()
 				return nil
+			}
+			if hasStop {
+				if err := execScriptWithRef(ctx, state, ref, stopScript, nil); err != nil {
+					return err
+				}
 			}
 			if err := execScriptWithRef(ctx, state, ref, config.ResetScript(state.RepoDir), map[string]string{"LAB_RESET_YES": "1"}); err != nil {
 				return err

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared Gas City helpers for the workspace and start phases.
+# Shared Gas City helpers for the workspace, start and stop phases.
 #
 # The city lives at $GASCITY_CITY_DIR (default /lab/work/gc). Its workspace
 # repository, when configured, is a rig rooted at the repository clone.
@@ -58,6 +58,30 @@ gascity_ensure_city() {
     gc init "$GASCITY_CITY_DIR" --template "$GASCITY_TEMPLATE" \
         --default-provider claude --providers claude \
         --yes --no-start --skip-provider-readiness
+}
+
+# gascity_stop_city stops the city, the machine-wide supervisor and the
+# deferred-nudge pollers, which outlive the city and keep its files open.
+# Without a running supervisor there is nothing to stop: `gc stop` would only
+# wait. A supervisor that survives one bounded retry is an error in both guest
+# kinds.
+gascity_stop_city() {
+    local stop_error=""
+    if gc supervisor status >/dev/null 2>&1; then
+        if [[ -f "$GASCITY_CITY_DIR/city.toml" ]]; then
+            (cd "$GASCITY_CITY_DIR" && timeout 180 gc stop "$GASCITY_CITY_DIR") >/dev/null 2>&1 || true
+        fi
+        stop_error="$(timeout 120 gc supervisor stop --wait 2>&1 >/dev/null)" || true
+        if gc supervisor status >/dev/null 2>&1; then
+            echo "Gas City supervisor still running; retrying the stop once" >&2
+            stop_error="$(timeout 120 gc supervisor stop --wait 2>&1 >/dev/null)" || true
+            if gc supervisor status >/dev/null 2>&1; then
+                printf 'ERROR: could not stop the running Gas City supervisor\n%s\n' "$stop_error" >&2
+                return 1
+            fi
+        fi
+    fi
+    pkill -u "$(id -u)" -f 'gc nudge poll' 2>/dev/null || true
 }
 
 # gascity_rig_path <name> prints the registered path of a rig, if any.

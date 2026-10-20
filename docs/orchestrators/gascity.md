@@ -184,8 +184,10 @@ publish it.
 
 ## Reset
 
-`taxiway reset` stops the city, the supervisor and the remaining
-`gc nudge poll` processes before clearing `/lab/work`.
+`taxiway reset` runs the adapter's `stop.sh`, which stops the city, the
+supervisor and the remaining `gc nudge poll` processes, before clearing
+`/lab/work`. If the supervisor does not stop after one bounded retry, reset
+fails without deleting anything.
 
 ## Limitations
 

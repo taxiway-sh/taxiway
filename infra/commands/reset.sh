@@ -16,9 +16,6 @@ target="${LAB_RESET_TARGET:-/lab/work}"
 log() { printf '\n\033[1;34m[reset]\033[0m %s\n' "$*"; }
 
 if taxiway_is_plan; then
-  log "Stopping workspace services"
-  taxiway_plan_detail "Gas Town services when present"
-  taxiway_plan_detail "Gas City city, supervisor and nudge pollers when present"
   log "Clearing $target contents"
   taxiway_plan_detail "preserving .gitkeep and .taxiway-* markers"
   exit 0
@@ -35,23 +32,9 @@ if [ "${LAB_RESET_YES:-}" != "1" ]; then
 fi
 
 mkdir -p "$target"
-export PATH="$HOME/.local/bin:$PATH"
 
-gastown_hq="$target/gt"
-if [ -d "$gastown_hq" ] && command -v gt >/dev/null 2>&1; then
-  (cd "$gastown_hq" && gt down --all) || true
-fi
-
-gascity_city="$target/gc"
-if [ -f "$gascity_city/city.toml" ] && command -v gc >/dev/null 2>&1; then
-  if gc supervisor status >/dev/null 2>&1; then
-    (cd "$gascity_city" && timeout 180 gc stop "$gascity_city") || true
-    timeout 120 gc supervisor stop --wait || true
-  fi
-  # Deferred-nudge pollers outlive the city and keep its files open.
-  pkill -u "$(id -u)" -f 'gc nudge poll' || true
-fi
-
+# `taxiway reset` stops orchestrator services beforehand through the adapter's
+# optional stop.sh hook.
 # Remove everything inside, preserving .taxiway-* markers and .gitkeep stubs.
 find "$target" -mindepth 1 -maxdepth 1 ! -name '.gitkeep' ! -name '.taxiway-*' -exec rm -rf {} +
 

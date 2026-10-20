@@ -181,8 +181,17 @@ if [[ "$gascity_container_plan" == *"vm guest:"* || "$gascity_vm_plan" == *"cont
 fi
 
 output="$(run_plan "$ROOT_DIR/infra/commands/reset.sh")"
-assert_contains "$output" "Stopping workspace services"
-assert_contains "$output" "Gas City city, supervisor and nudge pollers when present"
 assert_contains "$output" "Clearing /lab/work contents"
+for orch in gastown gascity; do
+  if grep -q -- "$orch" "$ROOT_DIR/infra/commands/reset.sh"; then
+    printf 'reset.sh must not know orchestrator %s\n' "$orch" >&2
+    exit 1
+  fi
+done
+
+output="$(run_plan "$ROOT_DIR/orchestrators/gastown/stop.sh")"
+assert_contains "$output" "Stopping Gas Town services when present"
+output="$(run_plan "$ROOT_DIR/orchestrators/gascity/stop.sh")"
+assert_contains "$output" "Stopping the Gas City city, supervisor and nudge pollers when present"
 
 printf 'dry-run plan scripts: OK\n'

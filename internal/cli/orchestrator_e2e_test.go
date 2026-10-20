@@ -54,6 +54,11 @@ type e2eOrchestratorExpectations struct {
 	// settingsFile means Claude reads its bypass-warning setting from a
 	// --settings file written by the orchestrator instead of inline JSON.
 	settingsFile bool
+	// resetStopLabel is the step the adapter's stop.sh hook plans before reset
+	// clears the workspace; empty when the adapter has no stop hook.
+	resetStopLabel string
+	// assertServicesStopped observes that reset stopped the adapter's services.
+	assertServicesStopped func(*testing.T, *RootState, string)
 }
 
 type e2eFixtureWorkspace struct {
@@ -85,6 +90,7 @@ func e2eExpectations(t *testing.T, orch string) e2eOrchestratorExpectations {
 			// Gastown approves each working directory when its agent launches.
 			workspaceTrustedBeforeStart: false, assertSessions: assertE2EGastownSessions,
 			checkHandoff: runE2EGastownHandoff, readinessActions: runE2EGastownReadinessActions,
+			resetStopLabel: "Stopping Gas Town services when present",
 		}
 	case "gascity":
 		return e2eOrchestratorExpectations{
@@ -94,6 +100,8 @@ func e2eExpectations(t *testing.T, orch string) e2eOrchestratorExpectations {
 			workspaceTrustedBeforeStart: true, assertSessions: assertE2EGascitySessions,
 			checkHandoff: runE2EGascityHandoff, readinessActions: runE2EGascityReadinessActions,
 			upSettings: []string{"effort=high"}, settingsFile: true,
+			resetStopLabel:        "Stopping the Gas City city, supervisor and nudge pollers when present",
+			assertServicesStopped: assertE2EGascityStopped,
 		}
 	default:
 		t.Fatalf("unsupported E2E orchestrator %q", orch)
@@ -680,7 +688,12 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 
 		phaseStateBefore := captureE2EPhaseState(stateDir, id)
 		output := runE2EDryRunCommand(t, root, tb, state, resetFrozen, "reset", "--yes", lab)
-		require.Contains(t, output, "Stopping workspace services")
+		if expectations.resetStopLabel != "" {
+			require.Contains(t, output, expectations.resetStopLabel)
+			require.Less(t, strings.Index(output, expectations.resetStopLabel), strings.Index(output, "Clearing /lab/work contents"),
+				"the adapter stops its services before reset clears the workspace")
+		}
+		require.Contains(t, output, "Clearing /lab/work contents")
 		require.Contains(t, output, "Clearing lifecycle phase markers")
 		require.Equal(t, 1, strings.Count(output, "No changes were made."))
 		runE2EAssert(t, "assert:phase-markers-preserved", func(t *testing.T) { require.Equal(t, phaseStateBefore, captureE2EPhaseState(stateDir, id)) })
@@ -692,6 +705,11 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		runE2ECommand(t, root, tb, "reset", "--yes", lab)
 		_, err := os.Stat(phases.Dir(stateDir, id))
 		require.True(t, os.IsNotExist(err), "successful reset clears lifecycle markers")
+		if expectations.assertServicesStopped != nil {
+			runE2EAssert(t, "assert:orchestrator-services-stopped", func(t *testing.T) {
+				expectations.assertServicesStopped(t, state, id)
+			})
+		}
 		runE2EAssert(t, "assert:lab-listed", func(t *testing.T) {
 			assertE2EList(t, root, tb, lab, orch, "degraded", "-")
 		})
@@ -2209,6 +2227,19 @@ while True:
     assert time.monotonic() < deadline, 'the init left orphan zombies: %s' % orphans
     time.sleep(0.5)
 `)
+}
+
+// After reset, the stop hook left no Gas City supervisor or deferred-nudge
+// poller running in the guest.
+func assertE2EGascityStopped(t *testing.T, state *RootState, id string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	var stdout, stderr bytes.Buffer
+	res, err := state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: []string{"bash", "-c",
+		`pgrep -f '^[^ ]*gc (supervisor run|nudge poll)' && exit 1 || exit 0`}, Stdout: &stdout, Stderr: &stderr})
+	require.NoError(t, err)
+	require.Zero(t, res.ExitCode, "Gas City processes still running after reset: %s", stdout.String())
 }
 
 // Gas City names its tmux socket after the city directory (/lab/work/gc).

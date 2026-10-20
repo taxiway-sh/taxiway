@@ -77,62 +77,6 @@ for reply in default no eof; do
 done
 
 echo ""
-echo "=== reset.sh gastown shutdown ==="
-
-rm -rf "$target"
-fake_bin="$tmp/bin"
-gt_log="$tmp/gt.log"
-mkdir -p "$fake_bin" "$target/gt"
-cat >"$fake_bin/gt" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-printf 'cwd=%s gt %s\n' "$PWD" "$*" >> "$GT_LOG"
-exit 0
-EOF
-chmod +x "$fake_bin/gt"
-
-PATH="$fake_bin:$PATH" GT_LOG="$gt_log" LAB_RESET_TARGET="$target" LAB_RESET_YES=1 bash "$RESET_SH" >/dev/null
-
-_assert_contains "gastown reset stops runtime before cleanup" "$(cat "$gt_log")" "cwd=$target/gt gt down --all"
-_assert_missing "gastown directory removed after shutdown" "$target/gt"
-
-echo ""
-echo "=== reset.sh gascity shutdown ==="
-
-cat >"$fake_bin/gc" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-printf 'cwd=%s gc %s\n' "$PWD" "$*" >> "$GC_LOG"
-if [[ "$1 ${2:-}" == "supervisor status" ]]; then
-  [[ "$GC_SUPERVISOR_RUNNING" == yes ]]
-fi
-EOF
-cat >"$fake_bin/pkill" <<'EOF'
-#!/usr/bin/env bash
-printf 'pkill %s\n' "$*" >> "$GC_LOG"
-EOF
-chmod +x "$fake_bin/gc" "$fake_bin/pkill"
-
-for running in yes no; do
-  rm -rf "$target"
-  gc_log="$tmp/gc-$running.log"
-  mkdir -p "$target/gc"
-  touch "$target/gc/city.toml"
-  PATH="$fake_bin:$PATH" GC_LOG="$gc_log" GC_SUPERVISOR_RUNNING="$running" \
-    LAB_RESET_TARGET="$target" LAB_RESET_YES=1 bash "$RESET_SH" >/dev/null
-  if [[ "$running" == yes ]]; then
-    _assert_contains "gascity reset stops the running city" "$(cat "$gc_log")" "cwd=$target/gc gc stop $target/gc"
-    _assert_contains "gascity reset stops the supervisor" "$(cat "$gc_log")" "gc supervisor stop --wait"
-  elif grep -q "gc stop" "$gc_log"; then
-    _fail "gascity reset skips stopping a city that is not running" "$(cat "$gc_log")"
-  else
-    _pass "gascity reset skips stopping a city that is not running"
-  fi
-  _assert_contains "gascity reset stops nudge pollers ($running)" "$(cat "$gc_log")" "pkill -u $(id -u) -f gc nudge poll"
-  _assert_missing "gascity city removed after shutdown ($running)" "$target/gc"
-done
-
-echo ""
 echo "=== reset.sh wipe contract ==="
 
 rm -rf "$target"

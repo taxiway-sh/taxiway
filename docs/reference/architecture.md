@@ -165,8 +165,11 @@ flowchart LR
 ```
 
 Taxiway owns the lab lifecycle and calls the adapter at known phase boundaries.
-The adapter owns the details of installing, verifying, configuring, and starting
-the specific orchestrator.
+The adapter owns the details of installing, verifying, configuring, starting and
+stopping the specific orchestrator. Before `taxiway reset` clears `/lab/work`,
+Taxiway runs the adapter's optional `stop.sh`, which stops the services it
+started; `infra/commands/reset.sh` only clears the workspace and knows no
+orchestrator. A failing `stop.sh` aborts the reset before anything is deleted.
 
 Every script Taxiway runs in a lab (phase scripts, agent hooks and
 `reset.sh`) receives `TAXIWAY_GUEST_KIND`, declared by the lab's driver:
@@ -205,7 +208,7 @@ phase events.
 
 | Extension | Files to add or change |
 |---|---|
-| New orchestrator adapter | `orchestrators/<type>/manifest.yaml` and phase scripts |
+| New orchestrator adapter | `orchestrators/<type>/manifest.yaml`, phase scripts and optional `stop.sh` |
 | New supported agent CLI | `agents/<agent>/install.sh`, `verify.sh`, `auth.sh`, `doctor.sh`, and optional `trust-workspace.sh` |
 | New driver | Implementation of `internal/driver.Driver` and driver selection wiring |
 | New phase behavior | `internal/phases`, corresponding CLI command, and driver/adapter calls |
