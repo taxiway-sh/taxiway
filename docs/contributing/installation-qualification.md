@@ -23,7 +23,7 @@ a check of the most recent release.
 The workflow installs the published release selected by the `release` input,
 including its binary and runtime assets. It does not build Taxiway from source.
 
-The workflow also runs nightly at 03:00 UTC against `latest`, using the workflow
+The workflow also runs nightly at 22:47 UTC against `latest`, using the workflow
 on the default branch. After GoReleaser successfully publishes a release, the
 `Release` workflow calls it with the exact published tag.
 
