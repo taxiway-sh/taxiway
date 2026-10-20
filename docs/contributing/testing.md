@@ -209,7 +209,7 @@ depends on external accounts and interactive state and is outside this suite.
 | Workflow | Trigger | Coverage |
 |---|---|---|
 | `ci.yml` | Push, pull request, or manual | Build, Go unit tests, shell tests, and lints |
-| `e2e.yml` | Daily schedule or manual | Source-tree orchestrator lifecycles through Docker |
+| `e2e.yml` | Daily at 22:17 UTC, or manual | Source-tree orchestrator lifecycles through Docker |
 
 End-to-end tests run separately from the fast core checks. Their matrix uses
 `fail-fast: false`, so one failure does not cancel the other orchestrators.
