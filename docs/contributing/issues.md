@@ -1,6 +1,9 @@
 # Issues
 
-How work is tracked in this repository.
+How work is tracked in this repository. Agents apply these rules through the
+[`taxiway-intake`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-intake/SKILL.md)
+and [`taxiway-triage`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-triage/SKILL.md)
+skills.
 
 ## An issue is a report; the PR is the unit of work
 
