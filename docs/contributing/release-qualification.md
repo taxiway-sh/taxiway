@@ -88,10 +88,11 @@ promise. Do not turn untested supported paths into PASS or hide them.
 | `core` | `make lint build test-unit`; helper tests: `make test-release-tools` | Build/lint/unit results, counts, actual candidate; no unexpected skips. |
 | `scripts` | `make test-scripts` | Installer, settings, versions, previews, confirmations and runtime contracts pass. No dry-run mutation. |
 | `site` | In `site/`: `npm ci`, `npm test`, `npm run build` | Routes/navigation/build pass; manually inspect changed pages, links and examples. |
-| `gateway` | Gateway-routed assertions in the existing orchestrator lifecycle targets (`make test-e2e-claude-code`, `make test-e2e-codex`, `make test-e2e-gastown`) | Actual lab gateway routing, streaming, tool replay and provider errors survive configured/start/restart lifecycle stages using controlled providers; no real-account claim or separate protocol runner. |
+| `gateway` | Gateway-routed assertions in the existing orchestrator lifecycle targets (`make test-e2e-claude-code`, `make test-e2e-codex`, `make test-e2e-gastown`, `make test-e2e-gascity`) | Actual lab gateway routing, streaming, tool replay and provider errors survive configured/start/restart lifecycle stages using controlled providers; no real-account claim or separate protocol runner. |
 | `e2e-codex` | `make test-e2e-codex` | Up, prepare/run and phase-by-phase all pass, including models, autonomous permissions, exact versions and restart. |
 | `e2e-claude-code` | `make test-e2e-claude-code` | All three scenarios pass, model/config propagation, trust/onboarding and restart checked. |
 | `e2e-gastown` | `make test-e2e-gastown` | All three scenarios pass, deacon/startup sessions and doctor health, renewal/handoff configuration checked. |
+| `e2e-gascity` | `make test-e2e-gascity` | All three scenarios pass, city/rig sessions, gateway fragment and trust, fresh sessions and session reset configuration checked. |
 | `live-codex` | Task-specific bounded check with `taxiway_live.py`; see [model gateway validation](model-gateway-tests.md) | Real principal/child relationships, requested/observed models and gateway calls with output tokens. Verify relevant tool effects and actual interactive tmux completion. Keep scripts/results temporary. |
 | `live-claude` | Task-specific bounded check with a verified Claude reference; see [model gateway validation](model-gateway-tests.md) | Real principal/delegation and auth reuse/restart. Verify relevant tool effects and interactive completion without onboarding. Keep scripts/results temporary. |
 | `live-gastown` | Task-specific bounded Gas Town observations; see [model gateway validation](model-gateway-tests.md) | Actual Deacon patrol progress, relevant handoffs and principal/subagent requests. Attach to Mayor and verify bounded real work without auth/permission/onboarding loops; does not qualify a full refinery workload. |
@@ -104,7 +105,7 @@ promise. Do not turn untested supported paths into PASS or hide them.
 | `breaking-changes` | Review behavior and diff since the last published release, not only commit labels | Release notes identify each breaking change with before/after, impact and user action (recreate lab, change setting, etc.). Breaking changes are allowed; no migration mechanism is implied. |
 | `review` | Different agent reviews candidate diff, findings, fixes and actual proof | Independent review and correction evidence; no self-review presented as independent. |
 
-Durable assertions enrich only the nine existing scenarios and helpers in
+Durable assertions enrich only the twelve existing scenarios and helpers in
 `internal/cli/orchestrator_e2e_test.go`; do not add parallel scenario files,
 suites, entry points, jobs or Makefile runners. Run temporary live scripts through `direnv exec . python3` with
 `PYTHONPATH="$PWD/tests/live"` from the worktree. Follow
@@ -118,7 +119,7 @@ validity from credential file presence or copy Codex client auth into guests.
 Continue independent checks while authentication is pending.
 
 The existing `e2e.yml` workflow may replace local orchestrator E2Es when run on
-the exact candidate. Verify all nine scenarios, job conclusions and head SHA,
+the exact candidate. Verify all twelve scenarios, job conclusions and head SHA,
 including skips; save a bounded sanitized summary with run URL. Do not accept
 core CI alone or a green previous commit. Dispatch/push only when authorized by
 the contribution workflow. Do not add a separate job for each recipe assertion.

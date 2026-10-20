@@ -59,8 +59,8 @@ make test-e2e
 ```
 
 Use `make test-e2e-only` to run only end-to-end tests.
-Use `make test-e2e-claude-code`, `make test-e2e-codex`, or
-`make test-e2e-gastown` to run one orchestrator integration.
+Use `make test-e2e-claude-code`, `make test-e2e-codex`, `make test-e2e-gastown`, or
+`make test-e2e-gascity` to run one orchestrator integration.
 Use the `*-up` variants, followed by the `*-prepare-run` variants, before the
 `*-phase-by-phase` variants when debugging the scheduled orchestrator end-to-end
 sequence locally.
@@ -145,7 +145,7 @@ Follow [Testing](testing.md) and [Live validation](live-tests.md). E2Es prevent
 regressions in each orchestrator's lifecycle on Docker. Live validation lets an
 agent simply test its current feature on Docker or Lima with shared helpers;
 keep temporary scripts/results outside Git. Enrich
-nine existing scenarios in `internal/cli/orchestrator_e2e_test.go`, with
+twelve existing scenarios in `internal/cli/orchestrator_e2e_test.go`, with
 helpers in that file. Do not add another scenario file, parallel suite,
 `TestE2E_` entry point, CI job or Makefile runner; `e2e_support_test.go` remains
 setup/cleanup support. Coordinate Docker/Lima runs across

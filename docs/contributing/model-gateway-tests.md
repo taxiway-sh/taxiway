@@ -1,7 +1,7 @@
 # Model gateway validation
 
 Gateway assertions protect each orchestrator's lifecycle: configured, started,
-routed and restarted. They enrich the nine existing scenarios and
+routed and restarted. They enrich the twelve existing scenarios and
 helpers in `internal/cli/orchestrator_e2e_test.go`. Do not add a standalone
 protocol runner, another E2E suite/file, entry point, job or Makefile runner. Agents validate real
 account/model behavior as temporary manual checks using the shared tooling in

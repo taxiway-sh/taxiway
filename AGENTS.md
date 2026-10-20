@@ -30,7 +30,7 @@ Kubernetes and heavyweight infrastructure are out of scope.
 - E2Es prevent regressions in each orchestrator's lifecycle on Docker.
   Live validation lets an agent simply test its feature on Docker or Lima.
 - When a feature changes provisioned or runtime behavior, enrich the affected
-  scenarios among the nine existing scenarios in `internal/cli/orchestrator_e2e_test.go` with
+  scenarios among the twelve existing scenarios in `internal/cli/orchestrator_e2e_test.go` with
   assertions of that behavior and helpers in that file. Do not add parallel E2E
   suites, scenario files, `TestE2E_` entry points, jobs or Makefile runners.
   `e2e_support_test.go` is setup/cleanup support, not an alternative suite.

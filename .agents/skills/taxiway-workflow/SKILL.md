@@ -27,7 +27,7 @@ assignments. Let the user select work; do not silently relabel or start it.
 
 ## Execution
 
-Durable E2E assertions enrich the nine existing scenarios in
+Durable E2E assertions enrich the twelve existing scenarios in
 `internal/cli/orchestrator_e2e_test.go`. Add helpers to that same file; do not
 create another scenario file, standalone suite, `TestE2E_` entry point, CI job
 or Makefile runner. `e2e_support_test.go` owns setup/cleanup, not a parallel suite.
@@ -93,7 +93,7 @@ fixtures in `finally`, remove only the owned lab and compare unrelated VM status
 Keep reference labs intact. Report selected outcomes, driver/revision, observed
 effects, verified cleanup and blocked/unexecuted paths. Do not convert recipes
 into committed feature scripts or a second E2E runner. Durable Docker assertions
-stay in the nine current Go scenarios; account-free results never prove real
+stay in the twelve current Go scenarios; account-free results never prove real
 account behavior.
 
 ## Active-session loops
