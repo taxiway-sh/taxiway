@@ -12,14 +12,13 @@
 /.observability/
 /.context-id
 
+# Local issue worktrees (one per issue, see the taxiway-issue skill)
+/.worktrees/
+
 # Local editor/agent/vault state
-.claude/
-!.claude/
+# Track .claude/skills/<name> discovery symlinks; ignore other .claude state.
 .claude/*
 !.claude/skills/
-.claude/skills/*
-!.claude/skills/taxiway-workflow
-!.claude/skills/taxiway-release
 __pycache__/
 .idea/
 .obsidian/

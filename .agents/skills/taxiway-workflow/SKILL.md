@@ -1,139 +1,132 @@
 ---
 name: taxiway-workflow
-description: Use when starting or resuming a Taxiway contribution session, choosing repository issues, or coordinating implementation, live tests and independent review.
+description: Use when starting, resuming or finishing a Taxiway contribution session, routing a need to its owner, or coordinating agents, capacity, approvals and status.
 ---
 
 # Taxiway contribution workflow
 
-Read `AGENTS.md`, then the [contribution workflow](../../../docs/contributing/development.md#contribution-workflow)
-from the repository root. Those sources own policy and procedures; this skill
-coordinates them in either client. Paths in commands are relative to the checkout.
+This skill is the session entry point and the single owner of the contribution
+workflow procedure. Read [`AGENTS.md`](../../../AGENTS.md) first: it holds the
+invariants and routes each need to the skill or document that owns it. Paths in
+commands are relative to the checkout; humans start sessions as described in
+[Start a session](../../../docs/contributing/development.md#start-a-session).
 
 ## Intake and reconciliation
 
-Ask first: **new need/problem, or suggestions from the backlog?** A request to
-resume a named subject already answers this choice; reconcile it directly.
-Read-only inspection needs no new approval. Inspect worktrees, branches, issues,
-PRs, check results and available local handoffs. Check ownership and whether
-tests/agents are still running before assigning or rerunning work. Unknown past
-results remain unknown, and old-head results do not validate a new commit.
-Do not claim drafts, diagnoses, tests or state writes exist without evidence.
+Ask first: **new need/problem, or suggestions from the backlog?** Selecting or
+resuming a named subject answers this question; reconcile it directly. It does
+not authorize publishing, merging or starting additional subjects.
 
-For new needs, analyze evidence, check duplicates, propose issue scope and
-acceptance criteria using `docs/contributing/issues.md`; create when authorized.
-For backlog, propose a short list using explicit priority first, project value,
-dependencies, readiness and capacity. Identify missing priorities and existing
-assignments. Let the user select work; do not silently relabel or start it.
+Reconcile before assigning anything. Inspect `git worktree list`, branches,
+issues, PRs, check results and available local handoffs, using `gh` with
+bounded fields and results (see the [invariants](../../../AGENTS.md#invariants)). Check
+ownership and whether agents or tests are still running before assigning or
+rerunning work. Historical notes do not prove a process is running or a check
+passed; old-head results do not validate a new commit; unknown past results
+remain unknown. Do not claim drafts, diagnoses, tests or state writes exist
+without an actual artifact, process or result.
+
+- **New need:** follow [`taxiway-intake`](../taxiway-intake/SKILL.md).
+- **Backlog:** follow [`taxiway-triage`](../taxiway-triage/SKILL.md); the user
+  selects the work.
+
+## Approvals
+
+| Needs explicit user approval | Needs no new approval |
+|---|---|
+| Creating an issue, unless already authorized | Read-only inspection and reconciliation |
+| Starting a subject the user has not selected | Implementation, tests and review within a selected subject |
+| Pushing a branch or publishing a PR | Proposing issues, PR text or upstream reports without publishing them |
+| Merging a PR | [Post-merge cleanup](../taxiway-issue/SKILL.md#post-merge-cleanup) after an authorized merge |
+| Force-pushing | Cleaning resources owned by a scenario with existing helpers |
+| Applying, removing or creating labels; comments, closures, reopenings and reviews on issues and PRs, unless already authorized | Recording in the issue a decision the maintainer has just given |
+| Releases: follow [`taxiway-release`](../taxiway-release/SKILL.md) | |
+| Upstream issues, PRs, comments, pushes or forks ([procedure](../../../docs/contributing/development.md#upstream-dependency-bugs)) | |
+| Real-provider (paid) live checks | |
+| Discarding commits, user edits or persistent labs | |
+
+Authorization for Taxiway work never authorizes upstream publication. A pending
+approval blocks only that action on that subject: keep other authorized,
+independent implementation, tests and reviews moving within capacity. An
+approval wait alone is not a reason to end the session. If every remaining
+action is blocked, report the pending decisions and whether the client can stay
+active; do not invent a background runner or promise future turns.
+
+Before a new or changed agent or skill writes to GitHub for the first time,
+exercise it with a dry run that writes nothing and show the result to the
+maintainer.
 
 ## Execution
 
-Durable E2E assertions enrich the twelve existing scenarios in
-`internal/cli/orchestrator_e2e_test.go`. Add helpers to that same file; do not
-create another scenario file, standalone suite, `TestE2E_` entry point, CI job
-or Makefile runner. `e2e_support_test.go` owns setup/cleanup, not a parallel suite.
+- **Routing.** A selected issue follows
+  [`taxiway-issue`](../taxiway-issue/SKILL.md) with one implementation agent;
+  its review follows [`taxiway-review`](../taxiway-review/SKILL.md) and its PR
+  follow-up [`steward`](../steward/SKILL.md).
+- **Capacity.** Respect the launcher's `--max-agents` and `--max-heavy-tests`
+  hints; without the launcher, use its defaults
+  (`scripts/contribution-workflow.sh --help`). Reduce them further to actual
+  capacity. Identify context ownership, defer work when memory, network pools
+  or client capacity are exhausted, and do not duplicate agents or tests.
+  Diagnose and retry narrowly; never globally prune resources or delete another
+  context. Prefer asynchronous execution for long-running tools.
+- **Scope.** Acceptance-critical fixes stay in the subject. Unrelated
+  discoveries and suspected dependency bugs go through
+  [`taxiway-intake`](../taxiway-intake/SKILL.md). Preserve unrelated work and
+  credentials.
+- **Studies and plans** stay out of Git
+  ([invariants](../../../AGENTS.md#invariants)): the maintainer first reviews
+  them in a private page or a file outside the repository; once approved, they
+  are posted in English as an issue comment.
 
-Keep E2E scenarios chronological: show each attempted command, native interaction
-or injected fixture as a first-level action, with its named guarantees directly
-underneath. Shared helpers must not add agent/model wrappers or nested assertion
-levels. Attach agent, workspace, model, session and gateway observations to the
-action that establishes them; preserve onboarding and readiness ordering.
-Assertions observe: make runtime mutations explicit, restore injected fixtures
-on failure, and keep protocol/model diagnostics precise without a hidden suite.
+## Interaction
 
-E2Es prevent regressions in each orchestrator's lifecycle on Docker. Live
-validation lets an agent simply check the feature it is developing on Docker
-or Lima, selected according to that feature. It is a temporary,
-task-specific manual check using `tests/live/taxiway_live.py`; do not commit
-feature-specific live suites, scripts or reports. Real-provider checks are
-explicitly opt-in and their actual effects require evidence.
+- Ask questions through the client's interactive question tool when one is
+  available. Re-ask a question that went unanswered; silence is not an answer.
+- Converse in the user's language. Repository artifacts (issues, PRs, commits,
+  code and docs) stay in English.
+- When a term looks distorted by voice dictation (an unknown name, an odd
+  command or label), confirm it before acting on it.
 
-Use a dedicated worktree/implementer per subject and a different reviewer.
-Resolve review findings and verify corrections. If delegation is unavailable,
-report the missing review rather than review your own work as independent.
-Follow the documented tests, commits, PR and authorized merge/cleanup procedure.
-For release preparation/publication, use `taxiway-release` and the
-[release recipe](../../../docs/contributing/release-qualification.md).
-Pending publication/merge approval blocks only that action on that subject.
-Keep other already-authorized, independent implementation, tests, reviews and
-status checks moving within capacity. Reconcile assignments before starting
-another subject; do not duplicate agents/tests or cross an unapproved action.
-An approval wait alone is not a reason to end the session. If every remaining
-action is blocked, report the pending decisions and the client’s ability to
-stay active; do not invent a background runner or promise future turns.
+## Decisions
 
-Preserve unrelated work and credentials. Necessary acceptance fixes stay in
-scope; unrelated discoveries become sanitized, deduplicated issue proposals.
-Ask whether to create them unless already authorized.
-For suspected dependency bugs, follow the [upstream contribution procedure](../../../docs/contributing/development.md#upstream-dependency-bugs):
-verify the installed/current supported version, integration boundary and correct
-public reporting channel; prepare a sanitized reproduction or narrow tested
-patch in isolation, with independent review. Authorization for Taxiway work
-does not authorize upstream issue/PR publication, comments, pushes or forks.
+Record a maintainer decision in the rule it creates, in the skill or document
+that owns that rule (see the routing table in `AGENTS.md`), with a link to the
+issue or PR where it was taken. Do not write ADRs or separate decision logs, and
+do not restate the rule elsewhere: link to its owner.
 
-## Task-specific live validation
+When the user corrects you, or answers a question that applies beyond the
+current task, propose on the spot to record it this way.
 
-When an agent needs to verify its current feature like a manual tester, select
-Docker or Lima according to the affected feature, then read
-[the live guide](../../../docs/contributing/live-tests.md) and `tests/live/AGENTS.md`.
-Choose the relevant observations, create any script outside Git and use
-`tests/live/taxiway_live.py` for isolated contexts, bounded commands, authentication
-reuse, guest execution and owned cleanup. A smoke marker or process status alone
-is insufficient: inspect actual files, tool/client events, sessions and gateway
-results relevant to the feature. Real model calls are opt-in; do not add them to CI.
+## Status on demand
 
-For Lima driver/readiness/mount/recording/recovery work, use the
-[driver/recording recipes](../../../docs/contributing/live-tests.md#lima-driver-and-recording-recipes)
-(the mount/recording/cleanup observations also apply to Docker).
-Choose fresh boot readiness, unfinished-boot retry, stop/start, writable mounts,
-actual recording capture/containment or exceptional cleanup as needed. Use
-`temporary_lab(..., driver="lima", prepare_only=True)` for provider-free checks;
-it starts no agent roles or gateway and cannot establish inference or delegation.
-Bound initial provisioning and every guest action; restore injected boot/index
-fixtures in `finally`, remove only the owned lab and compare unrelated VM status.
-Keep reference labs intact. Report selected outcomes, driver/revision, observed
-effects, verified cleanup and blocked/unexecuted paths. Do not convert recipes
-into committed feature scripts or a second E2E runner. Durable Docker assertions
-stay in the twelve current Go scenarios; account-free results never prove real
-account behavior.
+When the user asks, and promptly at milestones or blockers, report each
+subject's stage, evidence, changes, waits, pending user action and next step,
+including unchanged-but-running work. Coalesce overlapping reports, keep one
+actionable request per blocker, and never invent percentages or finish dates.
 
-## Active-session loops
+## Pause, resume and finish
 
-The coordinator owns these independent checks; use client tools already
-available, not a provider-specific workflow runtime. Default intervals: overall
-status 300 seconds, backlog 900 seconds; defaults: two agents including the
-coordinator, one heavy Docker/Lima run. Explicit startup settings override them
-within actual capacity. Record next due times, inspect at bounded task/wait
-boundaries, and keep waits shorter than the status interval. Avoid blocking
-long-running tools; use asynchronous execution when available. Report timer or
-delegation limitations immediately. No loops survive session termination.
-
-- **Status:** give an initial report and next expected update; at each due time
-  report every subject's stage, evidence, changes, waits, pending user action
-  and next step, even if unchanged. Report milestones/blockers promptly and
-  coalesce overlapping reports. Never invent percentages or finish dates.
-- **Authentication:** on a live-test auth failure, inspect only sanitized
-  native errors and existing helper results. Distinguish missing/rejected auth
-  from gateway timeout/network/model errors. For confirmed auth failure, give
-  one exact native reconnection command for the owned reference context, ask
-  the user to reconnect, verify a bounded real request, then propagate only to
-  authorized test labs with existing helpers. Use the existing reference
-  preflight: it runs a bounded native request and permits native OAuth refresh.
-  File presence does not prove validity; do not implement another token refresher.
-  Keep unrelated work moving; one pending request per reference blocker.
-- **Triage:** at startup/backlog request and each due time, refresh proposals
-  against assignments, priority and capacity. Do not repeat unchanged
-  recommendations unnecessarily or start unselected work.
-
-Before ending a session, explicitly say that monitoring stops, list each
-subject’s remaining work, pending decisions and any still-running tests with
-their owners, and give the resume action. Do not promise automatic updates after
-termination. On resume, read the canonical skill and reconcile worktrees,
-commits, current-head results, agents and live processes before restarting
-loops or assigning work. A stale handoff or absent message is not proof that a
-test stopped; preserve uncertain work until ownership/state is established.
-
-Pause stops scheduling and preserves work; stop monitoring ends loops. Cancel
-stops that subject's scheduling, coordinates in-flight tests and owned cleanup,
-and requires authorization to discard persistent work. On resume, reconcile
-state before restarting loops. End with links, actual checks, limitations and
-distinct implementation/review/PR/merged/cleanup states.
+- **Pause** stops new scheduling and preserves work. Coordinate in-flight tests
+  and their owned temporary cleanup; state what remains running.
+- **Cancel <subject>** stops its scheduling and coordinates its running work;
+  discarding commits, user edits or persistent labs needs explicit approval.
+  Interrupting a client does not guarantee remote jobs or child tests stopped;
+  reconcile them before restarting or cleaning.
+- **Resume:** read this skill again and reconcile worktrees, commits, issues,
+  PRs, current-head results, live agents and processes before assigning work.
+  Use the prior conversation or an uncommitted local handoff for decisions not
+  represented there; never commit private run state, auth or logs. A stale
+  handoff or absent message is not proof that a test stopped; preserve
+  uncertain work until ownership and state are established, and do not launch
+  duplicate agents or tests.
+- **Finish:** state that nothing continues after the session ends. List each
+  subject's remaining work and pending decisions, any still-running tests with
+  their owners, and the resume action. The final report links issues and PRs,
+  states delivered behavior, actual checks and remaining limits, and
+  distinguishes code-ready, independently reviewed, PR-open, merged and
+  cleaned-up states.
+- **Frictions observed and rules to record:** end with this short list for the
+  user: missing, ambiguous or contradictory rules, workarounds used, checks
+  that could not run and refused tools. Propose each as a change to its owner
+  ([Decisions](#decisions)) or an issue through
+  [`taxiway-intake`](../taxiway-intake/SKILL.md).

@@ -5,10 +5,8 @@ Docker or Lima Taxiway lab, selected according to the implemented feature, as
 a person would manually. Choose bounded actions and observable
 results for that task; keep temporary scripts, logs and sanitized reports outside
 Git. `tests/live/` provides reusable tooling, not a feature regression suite.
-Orchestrator lifecycle nonregression assertions enrich the twelve existing scenarios and
-helpers in `internal/cli/orchestrator_e2e_test.go`; do not add parallel suites,
-files, entry points, jobs or Makefile runners. See
-[Testing](testing.md). Real model calls are explicitly opt-in and consume the
+Orchestrator lifecycle nonregression assertions follow the
+[E2E scenario rule](https://github.com/taxiway-sh/taxiway/blob/main/AGENTS.md#e2e-scenarios); see [Testing](testing.md). Real model calls are explicitly opt-in and consume the
 account's subscription allowance. Account-free E2Es do not prove real-account
 model access, inference or delegation.
 
@@ -92,6 +90,40 @@ prepare it, and without it the lab's LiteLLM gateway waits for a device login
 until the `gateway` phase times out (tracked in #6). Do not copy Claude
 credentials or host Codex auth files into Codex clients. API-key mode also uses
 gateway credentials and is not handled by the Claude OAuth-copy helper.
+
+## When authentication fails
+
+Check authentication before authenticated scenarios and handle a native
+rejection when it occurs; do not poll.
+
+- Inspect only sanitized native errors and existing helper results. Confirm a
+  rejection from sanitized native output: missing or rejected authentication
+  differs from gateway timeout, network and model errors, which need their own
+  diagnosis.
+- File presence alone does not prove a usable token. Reuse the reference
+  preflight above, which runs a bounded native request and permits native OAuth
+  refresh; do not implement another token refresher or OAuth client.
+- For a confirmed failure, give the user one exact native reconnection command
+  for the owned reference lab, in the affected context and for its driver. Keep
+  one pending request per reference blocker, and keep unrelated work moving
+  while it waits. After reconnection, verify a bounded real request, then
+  propagate only to authorized test labs with the existing helpers.
+- Never print tokens or alter host authentication.
+
+For an existing Docker Claude reference lab, the reconnect command is the
+native client login, with its **verified container name** substituted:
+
+```bash
+docker exec -it -u taxiway -e HOME=/home/taxiway -w /lab/work <reference-container> claude auth login --claudeai
+```
+
+`./taxiway auth <lab> claude-code` may only confirm that an existing credential
+file is present; do not repeat it as a promise of renewing expired credentials.
+For Lima, derive the native guest command from the actual reference driver and
+lab ownership. For a confirmed expired host Codex subscription login, ask the
+user to run the native `codex login`, then recheck the owned gateway path;
+never execute host login, copy its credential files yourself, or copy Codex
+client auth into guests.
 
 ## Authentication responsibilities
 
@@ -190,7 +222,7 @@ delegation, or a particular model. Inspect actual effects and traces using the
 
 ## Lima driver and recording recipes
 
-The twelve automated E2E scenarios use Docker. Lima validation is a task-specific
+The automated lifecycle E2E scenarios use Docker. Lima validation is a task-specific
 manual check by an agent, selected here through the existing
 [workflow skill](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-workflow/SKILL.md).
 These recipes preserve the useful observations of the former native scripts;

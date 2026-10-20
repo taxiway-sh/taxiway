@@ -45,9 +45,7 @@ For a manual release workflow run, select a version tag, or a commit carrying
 one. The workflow resolves that tag before publication and passes it explicitly
 to installation qualification.
 
-GoReleaser builds release notes from Conventional Commit-style messages. Use
-`feat:` for user-facing capabilities, `fix:` for bug fixes, and cleanup-style
-messages such as `cleanup:` for simplification or removal work. See
+GoReleaser builds release notes from commit subjects; follow
 [Development](development.md#commit-messages).
 
 ## Supported Platforms

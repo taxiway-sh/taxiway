@@ -39,3 +39,6 @@ jobs:
 
       - name: Lint scripts
         run: make lint-scripts
+
+      - name: Lint agent docs
+        run: make lint-agent-docs

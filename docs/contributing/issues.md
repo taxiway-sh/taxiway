@@ -1,6 +1,9 @@
 # Issues
 
-How work is tracked in this repository.
+How work is tracked in this repository. Agents apply these rules through the
+[`taxiway-intake`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-intake/SKILL.md)
+and [`taxiway-triage`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-triage/SKILL.md)
+skills.
 
 ## An issue is a report; the PR is the unit of work
 
@@ -50,7 +53,7 @@ details for security-sensitive reports — describe what to harden and the impac
 | **type** | `bug` \| `enhancement` \| `documentation` | reporter (via template), confirmed at triage |
 | **priority** | `priority:p0` \| `priority:p1` \| `priority:p2` | maintainer at triage |
 | **area** | `capability:*`, `driver:*`, `orchestrator:*`, `agent:*` | maintainer at triage |
-| **intake** | `needs-triage` | applied automatically, removed at triage |
+| **intake** | `needs-triage` | applied by the templates; removal per [conventions](#label-conventions) |
 | **onboarding** | `good first issue` | maintainer |
 
 Type means:
@@ -64,14 +67,27 @@ Type means:
 Priority means: **p0** incorrect behavior or data loss · **p1** inconsistency,
 fragility, near-term · **p2** cleanliness or later.
 
-The label set is intentionally small. Please do not introduce new label axes; a
-distinction can almost always be expressed with type × priority × area.
+### Label conventions
+
+- The type is the label: the repository does not use GitHub issue types.
+- The label set is intentionally small. Please do not introduce new label axes;
+  a distinction can almost always be expressed with type × priority × area.
+  Each issue carries one type, one priority and only the area labels that
+  locate the change.
+- Adding an orchestrator creates its `orchestrator:<name>` label: it extends an
+  existing axis rather than adding one.
+- `needs-triage` is removed at triage, or as soon as work on the issue starts.
+- GitHub's default `duplicate`, `invalid`, `question`, `wontfix` and
+  `help wanted` labels are accepted as resolution and onboarding markers, like
+  `good first issue`; they are not area axes.
+- `Security` marks a security-sensitive issue, in addition to its type,
+  priority and area labels; write it as described in [Issue format](#issue-format).
 
 ## What happens after you open an issue
 
-New issues arrive with `needs-triage`. A maintainer then confirms the type, sets
-a priority and area, links or closes duplicates, and either accepts it, asks for
-more information, or closes it. Reporters' issues are triaged and linked, not
+A maintainer triages each new issue: confirms the type, sets a priority and
+area, links or closes duplicates, and either accepts it, asks for more
+information, or closes it. Reporters' issues are triaged and linked, not
 rewritten.
 
 Larger efforts are organized with milestones (release waves) and sub-issues
