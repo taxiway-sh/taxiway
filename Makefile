@@ -5,9 +5,13 @@
 build:
 	go build ./...
 
+# Go test timeouts: one scenario, one Gas City scenario (a full city restarts
+# several times; PhaseByPhase takes about 30 minutes), and the aggregate
+# targets that run several orchestrators in sequence (all twelve scenarios
+# take about 2.5 hours).
 E2E_TIMEOUT ?= 1200s
-# A full Gas City city restarts several times per scenario.
 E2E_GASCITY_TIMEOUT ?= 3600s
+E2E_SUITE_TIMEOUT ?= 4h
 
 snapshot:
 	go run github.com/goreleaser/goreleaser/v2@latest release --snapshot --clean
@@ -61,27 +65,27 @@ test-unit:
 ## test-e2e: run end-to-end tests (requires a running Docker daemon)
 ## Usage: make test-e2e
 test-e2e:
-	go test -v -tags=e2e -count=1 -timeout=$(E2E_TIMEOUT) ./...
+	go test -v -tags=e2e -count=1 -timeout=$(E2E_SUITE_TIMEOUT) ./...
 
 ## test-e2e-only: run only end-to-end tests (requires relevant local services)
 ## Usage: make test-e2e-only
 test-e2e-only:
-	go test -v -tags=e2e -count=1 -timeout=$(E2E_TIMEOUT) -run '^TestE2E_' ./...
+	go test -v -tags=e2e -count=1 -timeout=$(E2E_SUITE_TIMEOUT) -run '^TestE2E_' ./...
 
 ## test-e2e-up: run only up end-to-end tests
 ## Usage: make test-e2e-up
 test-e2e-up:
-	go test -v -tags=e2e -count=1 -timeout=$(E2E_TIMEOUT) -run '^TestE2E_Orchestrator.*_Up$$' ./internal/cli
+	go test -v -tags=e2e -count=1 -timeout=$(E2E_SUITE_TIMEOUT) -run '^TestE2E_Orchestrator.*_Up$$' ./internal/cli
 
 ## test-e2e-prepare-run: run only prepare+run end-to-end tests
 ## Usage: make test-e2e-prepare-run
 test-e2e-prepare-run:
-	go test -v -tags=e2e -count=1 -timeout=$(E2E_TIMEOUT) -run '^TestE2E_Orchestrator.*_PrepareRun$$' ./internal/cli
+	go test -v -tags=e2e -count=1 -timeout=$(E2E_SUITE_TIMEOUT) -run '^TestE2E_Orchestrator.*_PrepareRun$$' ./internal/cli
 
 ## test-e2e-phase-by-phase: run only phase-by-phase end-to-end tests
 ## Usage: make test-e2e-phase-by-phase
 test-e2e-phase-by-phase:
-	go test -v -tags=e2e -count=1 -timeout=$(E2E_TIMEOUT) -run '^TestE2E_Orchestrator.*_PhaseByPhase$$' ./internal/cli
+	go test -v -tags=e2e -count=1 -timeout=$(E2E_SUITE_TIMEOUT) -run '^TestE2E_Orchestrator.*_PhaseByPhase$$' ./internal/cli
 
 ## test-e2e-codex: run Codex orchestrator end-to-end tests
 ## Usage: make test-e2e-codex
