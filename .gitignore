@@ -12,6 +12,9 @@
 /.observability/
 /.context-id
 
+# Local issue worktrees (one per issue, see the taxiway-issue skill)
+/.worktrees/
+
 # Local editor/agent/vault state
 # Track .claude/skills/<name> discovery symlinks; ignore other .claude state.
 .claude/*
