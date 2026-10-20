@@ -87,6 +87,10 @@ tree="$(fixture blob-anchor)"
 printf 'See [rule](https://github.com/taxiway-sh/taxiway/blob/main/AGENTS.md#nowhere).\n' >> "$tree/docs/contributing/testing.md"
 expect_fail 'GitHub blob link to a missing anchor' "$tree" 'missing anchor https://github.com/taxiway-sh/taxiway/blob/main/AGENTS.md#nowhere'
 
+tree="$(fixture docs-relative-outside)"
+printf 'See [agents](../../AGENTS.md).\n' >> "$tree/docs/contributing/testing.md"
+expect_fail 'relative link from docs/ to a file outside docs/' "$tree" 'docs/contributing/testing.md: relative link ../../AGENTS.md leaves docs/'
+
 tree="$(fixture duplicate)"
 printf 'Do not add parallel\nsuites here either.\n' >> "$tree/tests/live/AGENTS.md"
 expect_fail 'duplicated normative phrase' "$tree" "tests/live/AGENTS.md: restates 'parallel suite'"

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Check agent and contributor docs: skill frontmatter and discovery symlinks,
-# relative Markdown links, and normative phrases that must stay in their owner.
+# Check agent docs and docs/ pages: skill frontmatter and discovery symlinks,
+# relative Markdown links (pages under docs/ reach other files through blob
+# URLs), and normative phrases that must stay in their owner.
 # Usage: scripts/check-agent-docs.sh [repository-root]
 set -euo pipefail
 root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
@@ -28,7 +29,7 @@ errors = []
 def docs():
     files = [root / "AGENTS.md", root / "CONTRIBUTING.md", root / "tests/live/AGENTS.md"]
     files += sorted((root / ".agents").rglob("*.md"))
-    files += sorted((root / "docs/contributing").glob("*.md"))
+    files += sorted((root / "docs").rglob("*.md"))
     return [f for f in files if f.is_file()]
 
 
@@ -120,6 +121,10 @@ def check_skills():
             errors.append(f".claude/skills/{entry.name}: no matching .agents/skills/{entry.name}")
 
 
+def in_docs(path):
+    return path.resolve().is_relative_to(root / "docs")
+
+
 def check_links(path):
     text = strip_code(path.read_text())
     for target in re.findall(r"\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)", text):
@@ -133,7 +138,9 @@ def check_links(path):
         if not file_part and not anchor:
             continue
         dest = path if not file_part else (base / file_part).resolve()
-        if not dest.exists():
+        if base is not root and in_docs(path) and not in_docs(dest):
+            errors.append(f"{rel(path)}: relative link {target} leaves docs/; use {BLOB}<path>")
+        elif not dest.exists():
             errors.append(f"{rel(path)}: dead link {target}")
         elif anchor and dest.suffix == ".md" and anchor not in anchors(dest):
             errors.append(f"{rel(path)}: missing anchor {target}")
