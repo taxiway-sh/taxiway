@@ -50,7 +50,7 @@ taxiway up mylab --type <type> --repo https://github.com/org/repo
 taxiway shell mylab
 ```
 
-Use `codex`, `claude-code`, or `gastown` as `<type>`. See
+Use `codex`, `claude-code`, `gastown`, or `gascity` as `<type>`. See
 [docs/README.md#orchestrators](docs/README.md#orchestrators) for setup and
 authentication notes.
 

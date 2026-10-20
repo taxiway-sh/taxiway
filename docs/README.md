@@ -42,6 +42,7 @@ started inside a lab.
 | `claude-code` | Anthropic Claude Code CLI | Claude Code | [Claude Code](orchestrators/claude-code.md) |
 | `codex` | OpenAI Codex CLI | Codex | [Codex](orchestrators/codex.md) |
 | `gastown` | Gas Town HQ and workspace shell | Claude Code | [Gas Town](orchestrators/gastown.md) |
+| `gascity` | Gas City city, rig and workspace shell | Claude Code | [Gas City](orchestrators/gascity.md) |
 
 Inspect what an adapter provides for a given type:
 
