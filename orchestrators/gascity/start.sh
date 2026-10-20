@@ -36,6 +36,10 @@ FRAGMENT="taxiway.toml"
 GASCITY_MODEL="${TAXIWAY_SET_MODEL:?Missing model: start this orchestrator through Taxiway}"
 TAXIWAY_LITELLM_BASE_URL="${TAXIWAY_LITELLM_BASE_URL:-http://${TAXIWAY_LAB:-lab}.litellm.internal:4000}"
 READY_TIMEOUT="${TAXIWAY_GASCITY_READY_TIMEOUT_SECONDS:-240}"
+# Gas City's official runtime differs by environment: its container images run
+# the supervisor in the foreground under an init, while `gc start` installs a
+# systemd user unit on a VM. A container guest has no user manager.
+GUEST_KIND="${TAXIWAY_GUEST_KIND:-vm}"
 
 RIG_ROOT=""
 if [[ -n "${TAXIWAY_REPO_URL:-}" && -n "${TAXIWAY_WORKSPACE_DIR:-}" ]]; then
@@ -64,6 +68,11 @@ if taxiway_is_plan; then
     taxiway_plan_detail "fragment: $GASCITY_CITY_DIR/$FRAGMENT"
     log "Trusting the Gas City city for Claude Code"
     log "Restarting the Gas City supervisor"
+    if [[ "$GUEST_KIND" == container ]]; then
+        taxiway_plan_detail "container guest: detached gc supervisor start, then gc start"
+    else
+        taxiway_plan_detail "vm guest: gc start with its systemd user unit"
+    fi
     log "Waiting for Gas City agent sessions"
     if taxiway_can_inspect && tmux has-session -t "$SESSION" 2>/dev/null; then
         log "Stopping existing tmux session '$SESSION'"
@@ -278,14 +287,22 @@ done
 
 log "Restarting the Gas City supervisor"
 stop_city
-# Fork mode inherits this environment. A systemd-managed supervisor (Lima)
-# only receives allow-listed variables, so opt the gateway variables in for
-# the $TAXIWAY_LITELLM_API_KEY references in the fragment.
-export GC_SUPERVISOR_ENV="TAXIWAY_LITELLM_API_KEY TAXIWAY_LITELLM_BASE_URL"
-if ! (cd "$GASCITY_CITY_DIR" && timeout 300 gc start "$GASCITY_CITY_DIR"); then
+supervisor_failed() {
     tail -n 40 "$HOME/.gc/supervisor.log" >&2 2>/dev/null || true
     exit 1
+}
+if [[ "$GUEST_KIND" == container ]]; then
+    # Detached `gc supervisor run` inherits this environment (the fragment's
+    # $TAXIWAY_LITELLM_API_KEY references); no service unit is installed.
+    echo "Starting the Gas City supervisor detached (container guest)"
+    timeout 120 gc supervisor start || supervisor_failed
+else
+    # `gc start` installs and starts Gas City's systemd user unit, which only
+    # receives allow-listed variables: opt the gateway variables in for the
+    # $TAXIWAY_LITELLM_API_KEY references in the fragment.
+    export GC_SUPERVISOR_ENV="TAXIWAY_LITELLM_API_KEY TAXIWAY_LITELLM_BASE_URL"
 fi
+(cd "$GASCITY_CITY_DIR" && timeout 300 gc start "$GASCITY_CITY_DIR") || supervisor_failed
 
 # wait_for_sessions waits until the city reports active agent sessions and no
 # session is still pending creation.
