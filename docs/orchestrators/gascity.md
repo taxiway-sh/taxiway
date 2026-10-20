@@ -74,29 +74,36 @@ login, as with the other Claude Code adapters.
 ## Supervisor and Startup
 
 `taxiway start` stops a running city and the machine-wide Gas City supervisor,
-then starts them again with `gc start`, so the supervisor carries the current
+then starts them again with Gas City's official method for the lab's
+environment type (`TAXIWAY_GUEST_KIND`), so the supervisor carries the current
 lab environment and fragment. It then waits (bounded, 240 seconds by default)
 until the city reports active agent sessions and none is still being created,
 and opens the `gascity` tmux session used by `taxiway shell` and
 `taxiway record`.
 
-Docker labs have no systemd user manager, so `gc start` runs the supervisor as
-a detached `gc supervisor run` process that inherits the start environment. On
-a Lima lab with a systemd user manager, Gas City installs and enables a user
-unit instead and only copies allow-listed variables into it. Taxiway sets
+| Lab | Guest | Supervisor |
+|---|---|---|
+| Docker | `container` | `gc supervisor start` runs the canonical `gc supervisor run` loop detached, as Gas City's own container images run it under an init; then `gc start` registers the city. No service unit is installed. |
+| Lima | `vm` | `gc start` installs, enables and starts Gas City's systemd user unit. |
+
+In a Docker lab the detached supervisor inherits the start environment, and
+Docker's init (PID 1) reaps the processes the city leaves behind. The
+container has no systemd user manager, so Gas City never installs a unit
+there. A Lima unit only receives allow-listed variables: Taxiway sets
 `GC_SUPERVISOR_ENV="TAXIWAY_LITELLM_API_KEY TAXIWAY_LITELLM_BASE_URL"` during
-`gc start` so the fragment references resolve in both modes. This difference in
-how the guest runs and reaps long-lived services is tracked in #179.
+`gc start` so the fragment references resolve. The per-environment runtime
+contract is tracked in #179.
 
 ### Gateway key exposure
 
-On a Lima lab with systemd, Gas City writes its supervisor environment into
+On a Lima lab, Gas City writes its supervisor environment into
 the enabled user unit `~/.local/share/systemd/user/gascity-supervisor.service`
 (mode `0600`). The unit stores `TAXIWAY_LITELLM_API_KEY`,
 `TAXIWAY_LITELLM_BASE_URL` and every `ANTHROPIC_*` variable of the start
 environment, including `ANTHROPIC_AUTH_TOKEN` (the gateway key) in
 `auth_mode=api-key` and the `ANTHROPIC_DEFAULT_*_MODEL` aliases. The unit
-persists across `taxiway reset` until the lab is removed.
+persists across `taxiway reset` until the lab is removed. Docker labs have no
+such unit.
 
 On every driver, Gas City starts each session with `tmux new-session -e
 NAME=value`, so the session environment, including the gateway key header and
@@ -190,9 +197,9 @@ publish it.
 - A full `gastown` city uses about 2.2 GiB of memory and more than 200
   processes; size the lab accordingly. Starting or restarting the city takes
   one to two minutes.
-- Docker labs run `sleep infinity` as PID 1, which does not reap orphaned
-  children: defunct `dolt`, `bd` and `gc` processes accumulate until the lab
-  restarts. They hold no memory or files. This is tracked in #179.
+- Docker labs created before Taxiway added `--init` keep `sleep infinity` as
+  PID 1, which does not reap Gas City's orphaned `dolt`, `bd` and `gc`
+  processes; recreate them.
 
 ## Inspect the Adapter
 
