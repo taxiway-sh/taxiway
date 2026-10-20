@@ -98,12 +98,23 @@ claude_code_load_env
 # Stop the city and the machine-wide supervisor so the restarted supervisor
 # carries the environment and gateway configuration loaded above. Without a
 # running supervisor there is nothing to stop: `gc stop` would only wait.
+# A supervisor that survives one bounded retry fails the start in both guest
+# kinds: reusing it would keep a stale environment and configuration.
 stop_city() {
+    local stop_error=""
     if gc supervisor status >/dev/null 2>&1; then
         if [[ -f "$GASCITY_CITY_DIR/city.toml" ]]; then
             (cd "$GASCITY_CITY_DIR" && timeout 180 gc stop "$GASCITY_CITY_DIR") >/dev/null 2>&1 || true
         fi
-        timeout 120 gc supervisor stop --wait >/dev/null 2>&1 || true
+        stop_error="$(timeout 120 gc supervisor stop --wait 2>&1 >/dev/null)" || true
+        if gc supervisor status >/dev/null 2>&1; then
+            echo "Gas City supervisor still running; retrying the stop once" >&2
+            stop_error="$(timeout 120 gc supervisor stop --wait 2>&1 >/dev/null)" || true
+            if gc supervisor status >/dev/null 2>&1; then
+                printf 'ERROR: could not stop the running Gas City supervisor\n%s\n' "$stop_error" >&2
+                exit 1
+            fi
+        fi
     fi
     pkill -u "$(id -u)" -f 'gc nudge poll' 2>/dev/null || true
 }
@@ -296,6 +307,8 @@ if [[ "$GUEST_KIND" == container ]]; then
     # $TAXIWAY_LITELLM_API_KEY references); no service unit is installed.
     echo "Starting the Gas City supervisor detached (container guest)"
     timeout 120 gc supervisor start || supervisor_failed
+    echo "gc start may report that a per-user systemd instance is not available:" \
+        "expected in a container guest, which uses the detached supervisor above"
 else
     # `gc start` installs and starts Gas City's systemd user unit, which only
     # receives allow-listed variables: opt the gateway variables in for the
