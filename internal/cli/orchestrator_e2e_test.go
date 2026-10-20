@@ -350,6 +350,9 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		runE2EAssert(t, "assert:lab-listed", func(t *testing.T) {
 			assertE2EList(t, root, tb, lab, orch, "degraded", "created")
 		})
+		runE2EAssert(t, "assert:container-guest-contract", func(t *testing.T) {
+			assertE2EContainerGuest(t, state, id)
+		})
 		runE2EAssert(t, "assert:driver-inspection-errors-preserved", func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
@@ -1448,6 +1451,11 @@ func assertE2EStartedAgents(t *testing.T, state *RootState, id, orch string) {
 			require.Zero(t, res.ExitCode, "Codex autonomous contract: %s", stderr.String())
 		})
 	}
+	if orch == "gascity" {
+		runE2EAssert(t, "assert:gascity-container-supervisor", func(t *testing.T) {
+			assertE2EGascityContainerSupervisor(t, state, id)
+		})
+	}
 	runE2EAssert(t, "assert:lab-work-trusted", func(t *testing.T) {
 		assertE2EAgentsWorkspaceTrusted(t, state, id, orch, LabWorkRoot)
 	})
@@ -2142,6 +2150,62 @@ assert args[args.index(b'--model') + 1] == sys.argv[2].encode(), 'handoff change
 			})
 		})
 	}
+}
+
+// Docker labs are container guests: an init reaps orphans as PID 1, phase
+// scripts are told the guest kind, and no systemd user manager is faked.
+func assertE2EContainerGuest(t *testing.T, state *RootState, id string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	var stdout, stderr bytes.Buffer
+	res, err := state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: []string{"bash", "-c", `set -u
+test "$(cat /proc/1/comm)" = docker-init || { echo "PID 1 is $(cat /proc/1/comm)" >&2; exit 1; }
+if out=$(systemctl --user show-environment 2>/dev/null); then echo "systemctl --user pretends a user manager exists" >&2; exit 1; fi
+test -z "$out" || { echo "systemctl --user wrote to stdout" >&2; exit 1; }`}, Stdout: &stdout, Stderr: &stderr})
+	require.NoError(t, err)
+	require.Zero(t, res.ExitCode, "container guest contract: %s", stderr.String())
+	ref, ok, err := state.Driver.ReadLabRef(context.Background(), id)
+	require.NoError(t, err)
+	require.True(t, ok)
+	env, err := buildBaseEnv(state.RepoDir, ref)
+	require.NoError(t, err)
+	require.Equal(t, driver.GuestKindContainer, env["TAXIWAY_GUEST_KIND"])
+}
+
+// In a container guest, Gas City's supervisor is the detached canonical loop
+// reparented to the init, no systemd unit is installed, and the init leaves no
+// zombie behind after the city's stop/start cycles.
+func assertE2EGascityContainerSupervisor(t *testing.T, state *RootState, id string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	runE2EGascity(t, ctx, state, id, "python3", "-c", `import pathlib, time
+def processes():
+    rows = []
+    for stat in pathlib.Path('/proc').glob('[0-9]*/stat'):
+        try:
+            fields = stat.read_text().rsplit(')', 1)[1].split()
+            args = (stat.parent / 'cmdline').read_bytes().split(b'\0')
+        except OSError:
+            continue
+        rows.append((int(stat.parent.name), int(fields[1]), fields[0], [a.decode(errors='replace') for a in args if a]))
+    return rows
+supervisors = [(pid, ppid) for pid, ppid, state, args in processes()
+               if args[1:3] == ['supervisor', 'run'] and args[0].endswith('/gc')]
+assert len(supervisors) == 1, 'expected one gc supervisor run process, got %s' % supervisors
+assert supervisors[0][1] == 1, 'supervisor must be detached under the init, parent %d' % supervisors[0][1]
+for unit_dir in ('.local/share/systemd/user', '.config/systemd/user'):
+    units = list((pathlib.Path.home() / unit_dir).glob('gascity*'))
+    assert not units, 'container guest must not install a Gas City unit: %s' % units
+deadline = time.monotonic() + 20
+while True:
+    zombies = [(pid, ppid, args) for pid, ppid, state, args in processes() if state == 'Z']
+    if not zombies:
+        break
+    assert time.monotonic() < deadline, 'zombie processes remain: %s' % zombies
+    time.sleep(1)
+`)
 }
 
 // Gas City names its tmux socket after the city directory (/lab/work/gc).
