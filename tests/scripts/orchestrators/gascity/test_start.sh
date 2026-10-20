@@ -118,6 +118,10 @@ for arg in "$@"; do
   printf ' %q' "$arg" >> "$TMUX_LOG"
 done
 printf '\n' >> "$TMUX_LOG"
+# Interleave session closes with gc calls to check their relative order.
+if [[ "${1:-}" == kill-session ]]; then
+  printf 'tmux kill-session\n' >> "${GC_LOG:-/dev/null}"
+fi
 [[ "${1:-}" != has-session ]]
 EOF
   chmod +x "$fake_bin/tmux"
@@ -162,6 +166,7 @@ _assert_line "opts the gateway variables into the supervisor environment" "$gc_c
 _assert_contains "api-key mode exports the native gateway credential" "$gc_calls" "ANTHROPIC_AUTH_TOKEN=set"
 _assert_contains "waits for agent sessions" "$out" "Gas City agent sessions are active"
 _assert_contains "opens the workspace shell session" "$(cat "$tmp/tmux.log")" "tmux new-session -d -s gascity -c $rig"
+_assert_order "closes the previous shell session before starting the city" "$gc_calls" "tmux kill-session" "gc start $city"
 if python3 - "$city" "$home" "$rig" <<'PY'
 import json, pathlib, stat, sys, tomllib
 city, home, rig = map(pathlib.Path, sys.argv[1:])

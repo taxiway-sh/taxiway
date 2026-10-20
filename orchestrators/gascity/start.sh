@@ -297,6 +297,9 @@ for root in "$GASCITY_CITY_DIR" ${RIG_ROOT:+"$RIG_ROOT"}; do
 done
 
 log "Restarting the Gas City supervisor"
+# Close the shell session early: killing the default server's last session
+# right before creating a new one races its exit ("server exited unexpectedly").
+tmux kill-session -t "$SESSION" 2>/dev/null || true
 stop_city
 supervisor_failed() {
     tail -n 40 "$HOME/.gc/supervisor.log" >&2 2>/dev/null || true
@@ -349,7 +352,6 @@ if [[ -n "${TAXIWAY_DASHBOARD_HOST_PORT:-}" ]]; then
     echo "Dashboard: http://127.0.0.1:${TAXIWAY_DASHBOARD_HOST_PORT} (forwarded on Lima labs)"
 fi
 
-tmux kill-session -t "$SESSION" 2>/dev/null || true
 start_dir="$GASCITY_CITY_DIR"
 if [[ -n "$RIG_ROOT" && -d "$RIG_ROOT" ]]; then
     start_dir="$RIG_ROOT"
