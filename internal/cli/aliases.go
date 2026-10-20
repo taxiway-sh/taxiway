@@ -460,10 +460,16 @@ func newBootstrapCmd(state *RootState) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// Same environment as the bootstrap phase of `taxiway up`, including
+			// the driver's guest kind.
+			env, err := buildBaseEnv(state.RepoDir, ref)
+			if err != nil {
+				return err
+			}
 			if state.Flags.DryRun {
 				fmt.Fprintf(cmd.OutOrStdout(), "Dry-run for phase %q on lab %q\n", phases.PhaseBootstrap, ref.Lab)
 			}
-			if err := execPlannableScriptToWithRef(ctx, state, ref, config.BootstrapScript(state.RepoDir), cmd.OutOrStdout(), cmd.ErrOrStderr(), nil); err != nil {
+			if err := execPlannableScriptToWithRef(ctx, state, ref, config.BootstrapScript(state.RepoDir), cmd.OutOrStdout(), cmd.ErrOrStderr(), env); err != nil {
 				return err
 			}
 			if state.Flags.DryRun {

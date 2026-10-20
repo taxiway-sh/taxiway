@@ -50,7 +50,8 @@ assert_contains() {
   fi
 }
 
-output="$(run_plan "$ROOT_DIR/infra/commands/bootstrap.sh")"
+output="$(run_plan "$ROOT_DIR/infra/commands/bootstrap.sh" env TAXIWAY_GUEST_KIND=container)"
+assert_contains "$output" "Guest environment: container"
 assert_contains "$output" "Installing Docker"
 assert_contains "$output" "Installing Node.js 22"
 assert_contains "$output" "Enabling Corepack"

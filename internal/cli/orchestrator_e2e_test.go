@@ -270,7 +270,7 @@ type e2eDryRunLabels struct {
 }
 
 func e2eSemanticDryRunLabels(orch string) e2eDryRunLabels {
-	labels := e2eDryRunLabels{Bootstrap: []string{"Updating apt cache", "Enabling Corepack"}}
+	labels := e2eDryRunLabels{Bootstrap: []string{"Guest environment: container", "Updating apt cache", "Enabling Corepack"}}
 	switch orch {
 	case "codex":
 		labels.Install = []string{"Installing @openai/codex@"}

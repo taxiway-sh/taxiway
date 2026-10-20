@@ -545,6 +545,7 @@ func TestBootstrapDryRunPrintsSemanticSteps(t *testing.T) {
 		}
 	}
 	require.Equal(t, []string{
+		"Guest environment: container",
 		"Updating apt cache",
 		"Installing base packages",
 		"Installing Docker",
