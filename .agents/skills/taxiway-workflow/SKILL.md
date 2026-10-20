@@ -80,6 +80,9 @@ maintainer.
 
 ## Interaction
 
+- A question or a request for an opinion is not a request to act: answer it
+  and propose the action; act only when asked, within the
+  [approvals](#approvals).
 - Ask questions through the client's interactive question tool when one is
   available. Re-ask a question that went unanswered; silence is not an answer.
 - Converse in the user's language. Repository artifacts (issues, PRs, commits,
