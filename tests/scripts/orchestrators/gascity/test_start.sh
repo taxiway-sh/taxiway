@@ -1,0 +1,247 @@
+#!/usr/bin/env bash
+# tests/scripts/orchestrators/gascity/test_start.sh - contract tests for the Gas City start phase.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+START_SH="$SCRIPT_DIR/../../../../orchestrators/gascity/start.sh"
+
+pass=0
+fail=0
+
+_pass() {
+  echo "  PASS: $1"
+  ((pass++)) || true
+}
+
+_fail() {
+  echo "  FAIL: $1"
+  shift
+  for line in "$@"; do
+    echo "        $line"
+  done
+  ((fail++)) || true
+}
+
+_assert_contains() {
+  local test_name="$1" output="$2" expected="$3"
+  if grep -qF -- "$expected" <<<"$output"; then
+    _pass "$test_name"
+  else
+    _fail "$test_name" "expected to find: $expected" "in output: $output"
+  fi
+}
+
+_assert_not_contains() {
+  local test_name="$1" output="$2" unexpected="$3"
+  if grep -qF -- "$unexpected" <<<"$output"; then
+    _fail "$test_name" "did not expect to find: $unexpected" "in output: $output"
+  else
+    _pass "$test_name"
+  fi
+}
+
+_assert_order() {
+  local test_name="$1" output="$2" first="$3" second="$4"
+  local first_line second_line
+  first_line="$(grep -nF -- "$first" <<<"$output" | head -n1 | cut -d: -f1)"
+  second_line="$(grep -nF -- "$second" <<<"$output" | tail -n1 | cut -d: -f1)"
+  if [[ -n "$first_line" && -n "$second_line" && "$first_line" -lt "$second_line" ]]; then
+    _pass "$test_name"
+  else
+    _fail "$test_name" "expected '$first' before '$second'" "in output: $output"
+  fi
+}
+
+_write_fakes() {
+  local fake_bin="$1"
+  mkdir -p "$fake_bin"
+
+  # Fake gc: the supervisor runs once `gc start` was called; session state
+  # comes from $GC_SESSION_STATE.
+  cat > "$fake_bin/gc" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'gc' >> "$GC_LOG"
+for arg in "$@"; do
+  printf ' %q' "$arg" >> "$GC_LOG"
+done
+printf '\n' >> "$GC_LOG"
+case "$1 ${2:-}" in
+  "init "*)
+    mkdir -p "$2"
+    printf '[workspace]\nprovider = "claude"\n' > "$2/city.toml"
+    ;;
+  "supervisor status")
+    [[ -f "$GC_RUNNING" ]]
+    ;;
+  "supervisor stop")
+    rm -f "$GC_RUNNING"
+    ;;
+  "start "*)
+    printf 'GC_SUPERVISOR_ENV=%s\n' "${GC_SUPERVISOR_ENV:-}" >> "$GC_LOG"
+    printf 'ANTHROPIC_AUTH_TOKEN=%s\n' "${ANTHROPIC_AUTH_TOKEN:+set}" >> "$GC_LOG"
+    touch "$GC_RUNNING"
+    ;;
+  "session list")
+    printf '{"ok":true,"sessions":[{"state":"%s","session_name":"gastown__mayor"}]}\n' "${GC_SESSION_STATE:-active}"
+    ;;
+  "rig list")
+    printf '{"ok":true,"rigs":[{"name":"demo","path":"%s"}]}\n' "${GC_RIG_PATH:-}"
+    ;;
+esac
+EOF
+  chmod +x "$fake_bin/gc"
+
+  cat > "$fake_bin/tmux" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'tmux' >> "$TMUX_LOG"
+for arg in "$@"; do
+  printf ' %q' "$arg" >> "$TMUX_LOG"
+done
+printf '\n' >> "$TMUX_LOG"
+[[ "${1:-}" != has-session ]]
+EOF
+  chmod +x "$fake_bin/tmux"
+
+  cat > "$fake_bin/pkill" <<'EOF'
+#!/usr/bin/env bash
+printf 'pkill %s\n' "$*" >> "$GC_LOG"
+exit 1
+EOF
+  chmod +x "$fake_bin/pkill"
+}
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+fake_bin="$tmp/bin"
+_write_fakes "$fake_bin"
+home="$tmp/home"
+city="$tmp/work/gc"
+rig="$tmp/work/demo"
+mkdir -p "$home/.config/taxiway" "$rig/.git"
+printf "TAXIWAY_LITELLM_BASE_URL='http://demo.litellm.internal:4000/'\nTAXIWAY_LITELLM_API_KEY='sk-test-gateway'\n" > "$home/.config/taxiway/env"
+
+run_start() {
+  PATH="$fake_bin:$PATH" HOME="$home" \
+  GC_LOG="$tmp/gc.log" GC_RUNNING="$tmp/running" TMUX_LOG="$tmp/tmux.log" \
+  TAXIWAY_CITY_DIR="$city" TAXIWAY_LAB=demo \
+  TAXIWAY_REPO_URL=https://github.com/example/demo.git TAXIWAY_WORKSPACE_DIR="$rig" \
+  TAXIWAY_SET_MODEL=test-selected-claude-model \
+  ANTHROPIC_DEFAULT_OPUS_MODEL=test-opus \
+  TAXIWAY_GASCITY_READY_TIMEOUT_SECONDS=4 \
+  "$@" bash "$START_SH" 2>&1
+}
+
+echo "=== gascity start configures the gateway and starts the city ==="
+out="$(run_start env GC_RIG_PATH= TAXIWAY_SET_AUTH_MODE=api-key)"
+gc_calls="$(cat "$tmp/gc.log")"
+_assert_contains "creates the missing city" "$gc_calls" "gc init $city --template gastown"
+_assert_contains "registers the workspace rig" "$gc_calls" "gc rig add $rig --name demo"
+_assert_not_contains "does not stop a supervisor that is not running" "$gc_calls" "gc stop"
+_assert_contains "opts the gateway variables into the supervisor environment" "$gc_calls" \
+  "GC_SUPERVISOR_ENV=TAXIWAY_LITELLM_API_KEY TAXIWAY_LITELLM_BASE_URL"
+_assert_contains "api-key mode exports the native gateway credential" "$gc_calls" "ANTHROPIC_AUTH_TOKEN=set"
+_assert_contains "waits for agent sessions" "$out" "Gas City agent sessions are active"
+_assert_contains "opens the workspace shell session" "$(cat "$tmp/tmux.log")" "tmux new-session -d -s gascity -c $rig"
+if python3 - "$city" "$home" "$rig" <<'PY'
+import json, pathlib, stat, sys, tomllib
+city, home, rig = map(pathlib.Path, sys.argv[1:])
+fragment = city / "taxiway.toml"
+assert stat.S_IMODE(fragment.stat().st_mode) == 0o600
+text = fragment.read_text()
+assert "sk-test-gateway" not in text, "gateway key must stay a $VAR reference"
+data = tomllib.loads(text)
+upstream = data["upstreams"]["taxiway-litellm"]
+assert upstream["base_url"] == "http://demo.litellm.internal:4000"
+assert upstream["base_url_env"] == "ANTHROPIC_BASE_URL"
+assert upstream["auth_token"] == "$TAXIWAY_LITELLM_API_KEY"
+assert upstream["auth_token_env"] == "ANTHROPIC_AUTH_TOKEN"
+assert upstream["env"]["ANTHROPIC_CUSTOM_HEADERS"] == "x-litellm-api-key: Bearer $TAXIWAY_LITELLM_API_KEY"
+assert data["agent_defaults"]["upstream"] == "taxiway-litellm"
+claude = data["providers"]["claude"]
+assert claude["args"] == ["--model", "test-selected-claude-model"]
+assert claude["env"]["ENABLE_TOOL_SEARCH"] == "true"
+assert claude["env"]["ENABLE_CLAUDEAI_MCP_SERVERS"] == "false"
+assert claude["env"]["ANTHROPIC_DEFAULT_OPUS_MODEL"] == "test-opus"
+assert tomllib.loads((city / "city.toml").read_text())["include"] == ["taxiway.toml"]
+projects = json.loads((home / ".claude.json").read_text())["projects"]
+for root in (city, rig):
+    assert projects[str(root)]["hasTrustDialogAccepted"] is True
+PY
+then
+  _pass "fragment routes Claude through the gateway with the selected model, city and rig trusted"
+else
+  _fail "fragment routes Claude through the gateway with the selected model, city and rig trusted"
+fi
+
+echo ""
+echo "=== gascity restart is idempotent and applies subscription mode ==="
+: > "$tmp/gc.log"
+printf 'include = ["other.toml"]\n%s\n' "$(sed '1d' "$city/city.toml")" > "$city/city.toml"
+out="$(run_start env GC_RIG_PATH="$rig" TAXIWAY_SET_AUTH_MODE=subscription ANTHROPIC_AUTH_TOKEN=stale TAXIWAY_SET_TOOL_SEARCH=false)"
+gc_calls="$(cat "$tmp/gc.log")"
+_assert_not_contains "reuses the existing city" "$gc_calls" "gc init"
+_assert_not_contains "reuses the registered rig" "$gc_calls" "rig add"
+_assert_order "stops the running city before restarting the supervisor" "$gc_calls" "gc stop $city" "gc start $city"
+_assert_order "stops the supervisor before starting it again" "$gc_calls" "gc supervisor stop --wait" "gc start $city"
+_assert_contains "subscription mode clears an inherited native credential" "$gc_calls" "ANTHROPIC_AUTH_TOKEN="
+_assert_not_contains "subscription mode never forwards the gateway key as a token" "$gc_calls" "ANTHROPIC_AUTH_TOKEN=set"
+if python3 - "$city" <<'PY'
+import pathlib, sys, tomllib
+city = pathlib.Path(sys.argv[1])
+data = tomllib.loads((city / "taxiway.toml").read_text())
+upstream = data["upstreams"]["taxiway-litellm"]
+assert "auth_token" not in upstream and "auth_token_env" not in upstream
+assert data["providers"]["claude"]["env"]["ENABLE_TOOL_SEARCH"] == "false"
+assert tomllib.loads((city / "city.toml").read_text())["include"] == ["other.toml", "taxiway.toml"]
+PY
+then
+  _pass "restart rewrites the fragment and keeps a single include"
+else
+  _fail "restart rewrites the fragment and keeps a single include"
+fi
+
+echo ""
+echo "=== gascity start fails when sessions never become active ==="
+set +e
+out="$(run_start env GC_RIG_PATH="$rig" GC_SESSION_STATE=creating)"
+status=$?
+set -e
+if [[ "$status" != 0 ]]; then
+  _pass "returns non-zero after the bounded readiness timeout"
+else
+  _fail "returns non-zero after the bounded readiness timeout"
+fi
+_assert_contains "reports the readiness timeout" "$out" "timed out after 4s waiting for Gas City agent sessions"
+
+echo ""
+echo "=== gascity start rejects values Gas City would expand ==="
+set +e
+out="$(run_start env GC_RIG_PATH="$rig" 'TAXIWAY_SET_MODEL=claude-$HOME')"
+status=$?
+set -e
+if [[ "$status" != 0 ]]; then
+  _pass "model containing a \$ reference is rejected"
+else
+  _fail "model containing a \$ reference is rejected" "$out"
+fi
+
+echo ""
+echo "=== gascity start requires the gateway ==="
+set +e
+out="$(PATH="$fake_bin:$PATH" HOME="$tmp/empty-home" GC_LOG="$tmp/gc.log" GC_RUNNING="$tmp/running" TMUX_LOG="$tmp/tmux.log" \
+  TAXIWAY_CITY_DIR="$city" TAXIWAY_SET_MODEL=m bash "$START_SH" 2>&1)"
+status=$?
+set -e
+if [[ "$status" != 0 ]]; then
+  _pass "missing gateway key fails"
+else
+  _fail "missing gateway key fails"
+fi
+_assert_contains "points to taxiway gateway" "$out" "taxiway gateway"
+
+echo ""
+echo "Results: $pass passed, $fail failed"
+[[ $fail -eq 0 ]]
