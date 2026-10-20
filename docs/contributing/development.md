@@ -75,9 +75,12 @@ See [Testing](testing.md) and [Drivers](../README.md#drivers).
 
 The portable [Agent Skills](https://agentskills.io/) skill
 [`taxiway-workflow`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-workflow/SKILL.md)
-is the session entry point and owns the contribution procedure: intake, backlog, approvals, coordination, independent
-review, status, pause, resume and finish. This section only explains how to
-start it. Codex discovers it in `.agents/skills/`; `.claude/skills/taxiway-workflow`
+is the session entry point and owns the contribution procedure: routing, approvals, coordination, independent
+review, status, pause, resume and finish. It routes new needs to
+[`taxiway-intake`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-intake/SKILL.md)
+and backlog suggestions to
+[`taxiway-triage`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-triage/SKILL.md).
+This section only explains how to start it. Codex discovers it in `.agents/skills/`; `.claude/skills/taxiway-workflow`
 is a relative symlink to that same directory for Claude Code discovery. There
 are no separate workflow implementations, Dynamic Workflow dependencies, or
 client-specific schedulers.
@@ -155,9 +158,9 @@ external contribution scope. Do not silently publish or modify upstream labels.
 Authorized upstream `gh` commands must use the verified
 `--repo <owner>/<repository>` explicitly, never the current-directory default or
 Taxiway's target by mistake (see the [invariants](https://github.com/taxiway-sh/taxiway/blob/main/AGENTS.md#invariants)).
-Track approved upstream links and status in the related Taxiway issue/PR, along
-with any local workaround and the version/verification criteria for removing
-it. Reuse an existing upstream report rather than opening duplicates.
+Reuse an existing upstream report rather than opening duplicates. Track
+upstream links, any local workaround and its removal criteria as described in
+[`taxiway-intake`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-intake/SKILL.md#upstream-dependency-fixes).
 
 ## Post-Merge Cleanup
 

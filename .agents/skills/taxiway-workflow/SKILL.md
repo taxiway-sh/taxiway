@@ -1,6 +1,6 @@
 ---
 name: taxiway-workflow
-description: Use when starting or resuming a Taxiway contribution session, choosing repository issues, routing a need to its owner, or coordinating implementation, live tests, independent review, approvals and status.
+description: Use when starting or resuming a Taxiway contribution session, routing a need to its owner, or coordinating implementation, live tests, independent review, approvals and status.
 ---
 
 # Taxiway contribution workflow
@@ -26,14 +26,9 @@ passed; old-head results do not validate a new commit; unknown past results
 remain unknown. Do not claim drafts, diagnoses, tests or state writes exist
 without an actual artifact, process or result.
 
-- **New need:** analyze evidence, check duplicates, and propose issue scope and
-  acceptance criteria following [Issues](../../../docs/contributing/issues.md).
-- **Backlog:** propose a short, justified list ranked by explicit
-  `priority:p0/p1/p2`, then project value (correctness, reproducibility,
-  observability, resettability), dependencies, readiness and capacity. Identify
-  missing priorities and existing assignments without rewriting labels. Let the
-  user select work; do not silently relabel or start it. Refresh the list when
-  asked, without repeating unchanged recommendations.
+- **New need:** follow [`taxiway-intake`](../taxiway-intake/SKILL.md).
+- **Backlog:** follow [`taxiway-triage`](../taxiway-triage/SKILL.md); the user
+  selects the work.
 
 ## Approvals
 
@@ -44,6 +39,7 @@ without an actual artifact, process or result.
 | Pushing a branch or publishing a PR | Proposing issues, PR text or upstream reports without publishing them |
 | Merging a PR | [Post-merge cleanup](../../../docs/contributing/development.md#post-merge-cleanup) after an authorized merge |
 | Force-pushing | Cleaning resources owned by a scenario with existing helpers |
+| Applying, removing or creating labels; comments, closures, reopenings and reviews on issues and PRs, unless already authorized | Recording in the issue a decision the maintainer has just given |
 | Releases: follow [`taxiway-release`](../taxiway-release/SKILL.md) | |
 | Upstream issues, PRs, comments, pushes or forks ([procedure](../../../docs/contributing/development.md#upstream-dependency-bugs)) | |
 | Real-provider (paid) live checks | |
@@ -85,10 +81,8 @@ active; do not invent a background runner or promise future turns.
   [When authentication fails](../../../docs/contributing/live-tests.md#when-authentication-fails)
   and keep unrelated work moving.
 - **Scope.** Acceptance-critical fixes stay in the subject. Unrelated
-  discoveries become sanitized, deduplicated issue proposals with evidence,
-  impact and suggested scope; ask before creating them unless already
-  authorized. For suspected dependency bugs, follow the
-  [upstream procedure](../../../docs/contributing/development.md#upstream-dependency-bugs).
+  discoveries and suspected dependency bugs go through
+  [`taxiway-intake`](../taxiway-intake/SKILL.md).
 - **PR and merge.** Prepare the PR as described in
   [Pull Requests](../../../docs/contributing/development.md#pull-requests);
   publication and merge follow the approvals above. Preserve unrelated work and

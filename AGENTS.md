@@ -35,12 +35,12 @@ suites, scenario files, `TestE2E_` entry points, jobs or runners;
 
 | Need | Owner |
 |---|---|
-| Start or resume a session, intake, backlog, approvals, coordination | [`taxiway-workflow` skill](.agents/skills/taxiway-workflow/SKILL.md) |
-| Issue format, scope and labels | [Issues](docs/contributing/issues.md) |
+| Start or resume a session, approvals, coordination | [`taxiway-workflow` skill](.agents/skills/taxiway-workflow/SKILL.md) |
+| New need, bug report, creating an issue; issue format, scope and labels | [`taxiway-intake` skill](.agents/skills/taxiway-intake/SKILL.md), [Issues](docs/contributing/issues.md) |
+| Backlog ranking, label hygiene, external and bot PRs | [`taxiway-triage` skill](.agents/skills/taxiway-triage/SKILL.md) |
 | Choosing and writing tests, E2E style, CI | [Testing](docs/contributing/testing.md) |
 | Live validation on Docker or Lima, live authentication | [Live validation](docs/contributing/live-tests.md), [`tests/live/AGENTS.md`](tests/live/AGENTS.md), [model gateway](docs/contributing/model-gateway-tests.md) |
-| Build, worktrees, PRs, commit messages, upstream dependency bugs | [Development](docs/contributing/development.md) |
-| After an authorized merge | [Post-merge cleanup](docs/contributing/development.md#post-merge-cleanup) |
+| Build, worktrees, PRs, commit messages, upstream dependency bugs, cleanup after an authorized merge | [Development](docs/contributing/development.md), [Post-merge cleanup](docs/contributing/development.md#post-merge-cleanup) |
 | Releases and release qualification | [`taxiway-release` skill](.agents/skills/taxiway-release/SKILL.md) |
 | Model catalog, installation qualification | [Model catalog](docs/contributing/model-catalog.md), [Installation qualification](docs/contributing/installation-qualification.md) |
 | Where documentation lives | User docs in `docs/`, contributor docs in [`docs/contributing/`](docs/contributing/README.md) |
