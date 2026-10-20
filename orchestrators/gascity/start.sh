@@ -117,9 +117,11 @@ write_gateway_fragment() {
     GASCITY_FRAGMENT="$FRAGMENT" \
     TAXIWAY_LITELLM_BASE_URL="$TAXIWAY_LITELLM_BASE_URL" \
     python3 - "$GASCITY_CITY_DIR" <<'PY'
+import copy
 import json
 import os
 import re
+import stat
 import sys
 import tempfile
 import tomllib
@@ -163,7 +165,7 @@ lines = [
     f"base_url = {literal('base_url', os.environ['TAXIWAY_LITELLM_BASE_URL'].rstrip('/'))}",
     # Gas City 1.5.0 drops the builtin claude upstream_env binding for
     # base = "builtin:claude" providers; name the variables explicitly until a
-    # release with gastownhall/gascity#5985 is pinned.
+    # release with gastownhall/gascity#5985 is pinned (tracked in #178).
     'base_url_env = "ANTHROPIC_BASE_URL"',
 ]
 if api_key_mode:
@@ -188,30 +190,46 @@ lines += [f"{name} = {literal(name, value)}" for name, value in sorted(claude_en
 content = "\n".join(lines) + "\n"
 tomllib.loads(content)
 
-fragment = city / fragment_name
-fd, tmp = tempfile.mkstemp(prefix=".taxiway-", dir=city)
-try:
-    with os.fdopen(fd, "w") as out:
-        out.write(content)
-    os.chmod(tmp, 0o600)
-    os.replace(tmp, fragment)
-finally:
-    if os.path.exists(tmp):
-        os.unlink(tmp)
+
+
+def write_atomically(path, text, mode):
+    fd, tmp = tempfile.mkstemp(prefix=".taxiway-", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w") as out:
+            out.write(text)
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+
+write_atomically(city / fragment_name, content, 0o600)
 
 config_path = city / "city.toml"
-text = config_path.read_text()
-includes = tomllib.loads(text).get("include", [])
-if fragment_name not in includes:
-    pattern = re.compile(r"(?m)^include\s*=\s*\[(.*)\]\s*$")
-    if "include" not in tomllib.loads(text):
+original = config_path.read_text()
+data = tomllib.loads(original)
+expected = copy.deepcopy(data)
+text = original
+
+# Include the fragment once.
+if fragment_name not in data.get("include", []):
+    if "include" not in data:
         text = f"include = [{q(fragment_name)}]\n" + text
-    elif pattern.search(text):
-        text = pattern.sub(lambda m: f"include = [{m.group(1).rstrip().rstrip(',')}{', ' if m.group(1).strip() else ''}{q(fragment_name)}]", text, count=1)
     else:
-        raise SystemExit("city.toml has a multi-line include list; add \"%s\" to it" % fragment_name)
-    tomllib.loads(text)
-    config_path.write_text(text)
+        match = re.search(r"(?m)^include\s*=\s*\[([^\]\n]*)\]([ \t]*#[^\n]*)?[ \t]*$", text)
+        if not match:
+            raise SystemExit(f"city.toml: include is not a single-line array; add {q(fragment_name)} to it")
+        items = match.group(1).strip().rstrip(",").strip()
+        text = (text[:match.start()] + f"include = [{items + ', ' if items else ''}{q(fragment_name)}]"
+                + (match.group(2) or "") + text[match.end():])
+    expected["include"] = [*data.get("include", []), fragment_name]
+
+# Never write a config that changes anything but the include.
+if tomllib.loads(text) != expected:
+    raise SystemExit("city.toml: refusing an edit that would change other settings")
+if text != original:
+    write_atomically(config_path, text, stat.S_IMODE(config_path.stat().st_mode))
 PY
 }
 
@@ -242,7 +260,7 @@ fi
 wait_for_sessions() {
     local deadline=$((SECONDS + READY_TIMEOUT)) report=""
     while (( SECONDS < deadline )); do
-        if report="$(cd "$GASCITY_CITY_DIR" && gc session list --json 2>/dev/null)" \
+        if report="$(cd "$GASCITY_CITY_DIR" && timeout 30 gc session list --json 2>/dev/null)" \
             && GASCITY_SESSIONS="$report" python3 - <<'PY'
 import json, os, sys
 sessions = json.loads(os.environ["GASCITY_SESSIONS"]).get("sessions") or []
@@ -252,13 +270,13 @@ sys.exit(0 if "active" in states and not pending.intersection(states) else 1)
 PY
         then
             echo "Gas City agent sessions are active"
-            (cd "$GASCITY_CITY_DIR" && gc session list) || true
+            (cd "$GASCITY_CITY_DIR" && timeout 30 gc session list) || true
             return 0
         fi
         sleep 3
     done
     echo "ERROR: timed out after ${READY_TIMEOUT}s waiting for Gas City agent sessions" >&2
-    (cd "$GASCITY_CITY_DIR" && gc session list) >&2 || true
+    (cd "$GASCITY_CITY_DIR" && timeout 30 gc session list) >&2 || true
     tail -n 40 "$HOME/.gc/supervisor.log" >&2 2>/dev/null || true
     return 1
 }

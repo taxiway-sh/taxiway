@@ -45,8 +45,8 @@ fi
 gascity_city="$target/gc"
 if [ -f "$gascity_city/city.toml" ] && command -v gc >/dev/null 2>&1; then
   if gc supervisor status >/dev/null 2>&1; then
-    (cd "$gascity_city" && gc stop "$gascity_city") || true
-    gc supervisor stop --wait || true
+    (cd "$gascity_city" && timeout 180 gc stop "$gascity_city") || true
+    timeout 120 gc supervisor stop --wait || true
   fi
   # Deferred-nudge pollers outlive the city and keep its files open.
   pkill -u "$(id -u)" -f 'gc nudge poll' || true

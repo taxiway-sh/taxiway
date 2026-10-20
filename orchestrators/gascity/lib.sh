@@ -7,6 +7,14 @@
 GASCITY_CITY_DIR="${TAXIWAY_CITY_DIR:-/lab/work/gc}"
 GASCITY_TEMPLATE="${TAXIWAY_SET_TEMPLATE:-gastown}"
 
+# Both templates define always-on sessions, which start readiness relies on.
+case "$GASCITY_TEMPLATE" in
+    gastown|minimal) ;;
+    *)
+        printf 'ERROR: unsupported Gas City template %q; use gastown or minimal\n' "$GASCITY_TEMPLATE" >&2
+        exit 1 ;;
+esac
+
 # gascity_rig_root prints the repository clone used as the rig root. Gas City
 # rigs are whole repositories, so --repo-path does not move the rig.
 gascity_rig_root() {
@@ -46,7 +54,7 @@ gascity_ensure_city() {
 
 # gascity_rig_path <name> prints the registered path of a rig, if any.
 gascity_rig_path() {
-    (cd "$GASCITY_CITY_DIR" && gc rig list --json 2>/dev/null) \
+    (cd "$GASCITY_CITY_DIR" && timeout 30 gc rig list --json 2>/dev/null) \
         | jq -r --arg name "$1" '(.rigs // .)[]? | select(.name == $name) | .path // empty' 2>/dev/null \
         | head -n 1
 }

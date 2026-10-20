@@ -24,7 +24,7 @@ settings:
     phases:
       - install
   - name: template
-    description: Gas City template used when the city is first created (gc init --template)
+    description: Gas City template used when the city is first created (gc init --template); gastown or minimal
     default: gastown
     examples:
       - gastown

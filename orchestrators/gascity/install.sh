@@ -113,6 +113,10 @@ verify_published_checksum() {
 
 ARCH="$(release_arch)"
 
+# Downloads go to one work directory, removed on every exit path.
+WORK_DIR="$(mktemp -d)"
+trap 'rm -rf "$WORK_DIR"' EXIT
+
 install_apt_deps() {
   if command -v lsof >/dev/null 2>&1 && command -v pgrep >/dev/null 2>&1 \
     && command -v flock >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
@@ -131,7 +135,7 @@ install_dolt() {
   fi
   log "Installing Dolt $DOLT_VERSION"
   local tmp archive expected=""
-  tmp="$(mktemp -d)"
+  tmp="$(mktemp -d "$WORK_DIR/dolt.XXXXXX")"
   archive="$tmp/dolt.tar.gz"
   download "https://github.com/dolthub/dolt/releases/download/v${DOLT_VERSION}/dolt-linux-${ARCH}.tar.gz" "$archive"
   # Dolt publishes no checksum file; the default release digest is pinned here.
@@ -159,7 +163,7 @@ install_goreleaser_binary() {
   fi
   log "Installing $label $version"
   local tmp asset base
-  tmp="$(mktemp -d)"
+  tmp="$(mktemp -d "$WORK_DIR/$binary.XXXXXX")"
   asset="${prefix}_${version}_linux_${ARCH}.tar.gz"
   base="https://github.com/gastownhall/${repo}/releases/download/v${version}"
   download "$base/$asset" "$tmp/$asset"
