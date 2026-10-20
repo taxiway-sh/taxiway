@@ -96,6 +96,7 @@ function Hero() {
                 { label: 'Claude Code', to: '/docs/orchestrators/claude-code' },
                 { label: 'Codex', to: '/docs/orchestrators/codex' },
                 { label: 'Gas Town', to: '/docs/orchestrators/gastown' },
+                { label: 'Gas City', to: '/docs/orchestrators/gascity' },
               ].map(o => (
                 <Link key={o.label} to={o.to} className="tw-orch-link">{o.label}</Link>
               ))}

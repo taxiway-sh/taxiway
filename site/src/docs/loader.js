@@ -67,7 +67,7 @@ const PAGE_ORDER = [
   'README',
   'reference/concepts', 'reference/installation', 'reference/commands', 'reference/configuration', 'reference/architecture',
   'drivers/lima', 'drivers/docker',
-  'orchestrators/claude-code', 'orchestrators/codex', 'orchestrators/gastown',
+  'orchestrators/claude-code', 'orchestrators/codex', 'orchestrators/gastown', 'orchestrators/gascity',
   'how-to/gateway', 'how-to/observability', 'how-to/recordings',
   'contributing/development', 'contributing/testing', 'contributing/issues', 'contributing/release',
   'contributing/release-qualification',
