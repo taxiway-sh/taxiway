@@ -154,7 +154,7 @@ assert_contains "$output" "Starting crew workspace"
 assert_contains "$output" "Starting tmux session 'gastown'"
 
 output="$(run_plan "$ROOT_DIR/orchestrators/gascity/start.sh" env \
-  TAXIWAY_LAB=demo \
+  TAXIWAY_LAB=demo TAXIWAY_GUEST_KIND=container \
   TAXIWAY_LITELLM_API_KEY=test TAXIWAY_SET_MODEL=test-model \
   TAXIWAY_REPO_URL=https://github.com/acme/project.git \
   TAXIWAY_WORKSPACE_DIR=/lab/work/project)"
@@ -164,6 +164,10 @@ assert_contains "$output" "Configuring Gas City for the Taxiway LiteLLM gateway"
 assert_contains "$output" "model: test-model"
 assert_contains "$output" "effort: max"
 assert_contains "$output" "Restarting the Gas City supervisor"
+assert_contains "$output" "container guest: detached gc supervisor start, then gc start"
+output="$(run_plan "$ROOT_DIR/orchestrators/gascity/start.sh" env \
+  TAXIWAY_LAB=demo TAXIWAY_GUEST_KIND=vm TAXIWAY_LITELLM_API_KEY=test TAXIWAY_SET_MODEL=test-model)"
+assert_contains "$output" "vm guest: gc start with its systemd user unit"
 assert_contains "$output" "Waiting for Gas City agent sessions"
 assert_contains "$output" "Starting tmux session 'gascity'"
 

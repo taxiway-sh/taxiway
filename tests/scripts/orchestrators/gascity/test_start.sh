@@ -78,6 +78,10 @@ case "$1 ${2:-}" in
   "supervisor stop")
     rm -f "$GC_RUNNING"
     ;;
+  "supervisor start")
+    printf 'detached GC_SUPERVISOR_ENV=%s\n' "${GC_SUPERVISOR_ENV:-}" >> "$GC_LOG"
+    touch "$GC_RUNNING"
+    ;;
   "start "*)
     printf 'GC_SUPERVISOR_ENV=%s\n' "${GC_SUPERVISOR_ENV:-}" >> "$GC_LOG"
     printf 'ANTHROPIC_AUTH_TOKEN=%s\n' "${ANTHROPIC_AUTH_TOKEN:+set}" >> "$GC_LOG"
@@ -260,6 +264,25 @@ for setting in TAXIWAY_SET_TEMPLATE=custom TAXIWAY_SET_EFFORT=extreme; do
     _fail "rejects $setting" "status=$status" "$out"
   fi
 done
+
+echo ""
+echo "=== gascity start runs the supervisor detached in a container guest ==="
+: > "$tmp/gc.log"
+out="$(run_start env GC_RIG_PATH="$rig" TAXIWAY_GUEST_KIND=container)"
+gc_calls="$(cat "$tmp/gc.log")"
+_assert_order "stops the running supervisor before starting it detached" "$gc_calls" "gc supervisor stop --wait" "gc supervisor start"
+_assert_order "starts the detached supervisor before the city" "$gc_calls" "gc supervisor start" "gc start $city"
+_assert_contains "the detached supervisor needs no service environment opt-in" "$gc_calls" "detached GC_SUPERVISOR_ENV="
+_assert_not_contains "no service environment opt-in for the city start" "$gc_calls" "GC_SUPERVISOR_ENV=TAXIWAY_LITELLM_API_KEY"
+_assert_contains "reports the container runtime" "$out" "Starting the Gas City supervisor detached (container guest)"
+
+echo ""
+echo "=== gascity start uses gc start alone in a VM guest ==="
+: > "$tmp/gc.log"
+out="$(run_start env GC_RIG_PATH="$rig" TAXIWAY_GUEST_KIND=vm)"
+gc_calls="$(cat "$tmp/gc.log")"
+_assert_not_contains "does not start a detached supervisor" "$gc_calls" "gc supervisor start"
+_assert_contains "opts the gateway variables into the service unit" "$gc_calls" "GC_SUPERVISOR_ENV=TAXIWAY_LITELLM_API_KEY TAXIWAY_LITELLM_BASE_URL"
 
 echo ""
 echo "=== gascity start fails when sessions never become active ==="
