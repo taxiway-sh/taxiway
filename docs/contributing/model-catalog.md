@@ -1,6 +1,6 @@
 # Model catalog updates
 
-The daily and manually dispatched **Prepare model catalog update** workflow prepares one draft pull request on `automation/model-catalog`. It never merges changes or updates a running lab. Repository settings must allow GitHub Actions to create pull requests. No provider credentials are needed.
+The daily (23:37 UTC) and manually dispatched **Prepare model catalog update** workflow prepares one draft pull request on `automation/model-catalog`. It never merges changes or updates a running lab. Repository settings must allow GitHub Actions to create pull requests. No provider credentials are needed.
 
 Run the same preparation locally:
 

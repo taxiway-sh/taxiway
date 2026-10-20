@@ -2,7 +2,9 @@ name: Install integration
 
 on:
   schedule:
-    - cron: "0 3 * * *"
+    # UTC, staggered and off the hour: GitHub delays scheduled runs at the top of
+    # the hour, and results must be ready before the morning scheduled agents.
+    - cron: "47 22 * * *"
   workflow_call:
     inputs:
       release:

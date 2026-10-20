@@ -2,7 +2,9 @@ name: Prepare model catalog update
 
 on:
   schedule:
-    - cron: '23 7 * * *'
+    # UTC, staggered and off the hour: GitHub delays scheduled runs at the top of
+    # the hour, and results must be ready before the morning scheduled agents.
+    - cron: '37 23 * * *'
   workflow_dispatch:
 
 permissions:
