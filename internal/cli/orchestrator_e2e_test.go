@@ -831,12 +831,19 @@ func testE2EOrchestratorUp(t *testing.T, orch string) {
 			}
 			if orch == "gascity" {
 				// Native stop keeps the city and its durable sessions.
-				script = `export PATH="$HOME/.local/bin:$PATH"; cd /lab/work/gc && gc stop --force /lab/work/gc && gc supervisor stop --wait`
+				// gc stop can time out on its bead store's proxy lock while a
+				// patrol holds it; one bounded retry keeps the first error on stderr.
+				script = `export PATH="$HOME/.local/bin:$PATH"; cd /lab/work/gc &&
+{ timeout 180 gc stop --force /lab/work/gc || { echo "retrying gc stop once" >&2; sleep 5; timeout 180 gc stop --force /lab/work/gc; }; } &&
+timeout 120 gc supervisor stop --wait`
 			}
 			var stderr bytes.Buffer
 			res, err := state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: []string{"bash", "-lc", script}, Stderr: &stderr})
 			require.NoError(t, err)
 			require.Zero(t, res.ExitCode, redactE2EDiagnosticSecrets(stderr.String()))
+			if strings.Contains(stderr.String(), "retrying gc stop once") {
+				t.Logf("gc stop needed its retry; first attempt: %s", redactE2EDiagnosticSecrets(stderr.String()))
+			}
 		})
 		runE2EStep(t, "fixture:complete-native-onboarding", func(t *testing.T) {
 			configureE2ECompletedClaudeOnboarding(t, state, id, orch)
@@ -2152,8 +2159,9 @@ assert args[args.index(b'--model') + 1] == sys.argv[2].encode(), 'handoff change
 	}
 }
 
-// Docker labs are container guests: an init reaps orphans as PID 1, phase
-// scripts are told the guest kind, and no systemd user manager is faked.
+// Docker labs are container guests: an init reaps orphans as PID 1 and no
+// systemd user manager is faked. The guest kind phase scripts receive is
+// observed through the bootstrap preview (`Guest environment: container`).
 func assertE2EContainerGuest(t *testing.T, state *RootState, id string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -2165,17 +2173,12 @@ if out=$(systemctl --user show-environment 2>/dev/null); then echo "systemctl --
 test -z "$out" || { echo "systemctl --user wrote to stdout" >&2; exit 1; }`}, Stdout: &stdout, Stderr: &stderr})
 	require.NoError(t, err)
 	require.Zero(t, res.ExitCode, "container guest contract: %s", stderr.String())
-	ref, ok, err := state.Driver.ReadLabRef(context.Background(), id)
-	require.NoError(t, err)
-	require.True(t, ok)
-	env, err := buildBaseEnv(state.RepoDir, ref)
-	require.NoError(t, err)
-	require.Equal(t, driver.GuestKindContainer, env["TAXIWAY_GUEST_KIND"])
 }
 
 // In a container guest, Gas City's supervisor is the detached canonical loop
-// reparented to the init, no systemd unit is installed, and the init leaves no
-// zombie behind after the city's stop/start cycles.
+// reparented to the init, no systemd unit is installed, and no orphan (a
+// process reparented to the init) is left as a zombie after the city's
+// stop/start cycles. Zombies of live parents are their parents' to reap.
 func assertE2EGascityContainerSupervisor(t *testing.T, state *RootState, id string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -2198,13 +2201,13 @@ assert supervisors[0][1] == 1, 'supervisor must be detached under the init, pare
 for unit_dir in ('.local/share/systemd/user', '.config/systemd/user'):
     units = list((pathlib.Path.home() / unit_dir).glob('gascity*'))
     assert not units, 'container guest must not install a Gas City unit: %s' % units
-deadline = time.monotonic() + 20
+deadline = time.monotonic() + 5
 while True:
-    zombies = [(pid, ppid, args) for pid, ppid, state, args in processes() if state == 'Z']
-    if not zombies:
+    orphans = [pid for pid, ppid, state, args in processes() if state == 'Z' and ppid == 1]
+    if not orphans:
         break
-    assert time.monotonic() < deadline, 'zombie processes remain: %s' % zombies
-    time.sleep(1)
+    assert time.monotonic() < deadline, 'the init left orphan zombies: %s' % orphans
+    time.sleep(0.5)
 `)
 }
 
