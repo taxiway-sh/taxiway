@@ -1,4 +1,4 @@
-.PHONY: build snapshot completion completion-bash completion-fish completion-zsh test test-unit test-e2e test-e2e-only test-e2e-up test-e2e-prepare-run test-e2e-phase-by-phase test-e2e-codex test-e2e-codex-up test-e2e-codex-prepare-run test-e2e-codex-phase-by-phase test-e2e-claude-code test-e2e-claude-code-up test-e2e-claude-code-prepare-run test-e2e-claude-code-phase-by-phase test-e2e-gastown test-e2e-gastown-up test-e2e-gastown-prepare-run test-e2e-gastown-phase-by-phase lint lint-scripts test-scripts
+.PHONY: build snapshot completion completion-bash completion-fish completion-zsh test test-unit test-e2e test-e2e-only test-e2e-up test-e2e-prepare-run test-e2e-phase-by-phase test-e2e-codex test-e2e-codex-up test-e2e-codex-prepare-run test-e2e-codex-phase-by-phase test-e2e-claude-code test-e2e-claude-code-up test-e2e-claude-code-prepare-run test-e2e-claude-code-phase-by-phase test-e2e-gastown test-e2e-gastown-up test-e2e-gastown-prepare-run test-e2e-gastown-phase-by-phase lint lint-scripts lint-agent-docs test-scripts
 
 .PHONY: test-release-tools
 
@@ -138,7 +138,7 @@ test-e2e-gastown-prepare-run:
 test-e2e-gastown-phase-by-phase:
 	go test -v -tags=e2e -count=1 -timeout=$(E2E_TIMEOUT) -run '^TestE2E_OrchestratorGastown_PhaseByPhase$$' ./internal/cli
 
-lint: lint-scripts
+lint: lint-scripts lint-agent-docs
 	@out=$$(find . -name '*.go' -not -path './vendor/*' \
 		| xargs gofmt -l); \
 	if [ -n "$$out" ]; then \
@@ -158,6 +158,9 @@ lint-scripts:
 		exit 1; \
 	fi
 	@echo "lint-scripts: OK"
+
+lint-agent-docs: ## Check skill frontmatter, agent doc links and single-owner rules
+	@bash scripts/check-agent-docs.sh
 
 test-scripts: ## Run shell script tests
 	@set -e; \

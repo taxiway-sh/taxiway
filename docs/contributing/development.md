@@ -65,6 +65,9 @@ Use the `*-up` variants, followed by the `*-prepare-run` variants, before the
 `*-phase-by-phase` variants when debugging the scheduled orchestrator end-to-end
 sequence locally.
 Use `make test-scripts` to run shell script tests.
+`make lint` also runs `scripts/check-agent-docs.sh`, which validates skill
+frontmatter and discovery symlinks, relative links in agent and contributor
+docs, and that each normative phrase it lists appears only in its owner file.
 
 See [Testing](testing.md) and [Drivers](../README.md#drivers).
 
