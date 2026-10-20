@@ -110,12 +110,9 @@ Run temporary live scripts through `direnv exec . python3` with
 `PYTHONPATH="$PWD/tests/live"` from the worktree. Follow
 [model gateway validation](model-gateway-tests.md) and the live guide for setup
 and preflight; do not reinvent authentication plumbing.
-Build the candidate binary before testing. For missing/rejected authentication,
-give the user the exact native reconnection command for the owned reference lab,
-then verify a bounded real request. Reuse `taxiway_live.py` for authorized labs.
-Distinguish expired/rejected auth from network/model/gateway failure. Never infer
-validity from credential file presence or copy Codex client auth into guests.
-Continue independent checks while authentication is pending.
+Build the candidate binary before testing. Handle missing or rejected
+authentication with [the live guide's procedure](live-tests.md#when-authentication-fails)
+and continue independent checks while authentication is pending.
 
 The existing `e2e.yml` workflow may replace local orchestrator E2Es when run on
 the exact candidate. Verify all lifecycle scenarios of every orchestrator, job
