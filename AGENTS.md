@@ -22,14 +22,12 @@ Each rule has one owner; link to it instead of restating it.
 
 ## E2E scenarios
 
-Each orchestrator has three lifecycle E2E scenarios on Docker (Up, PrepareRun,
-PhaseByPhase) in `internal/cli/orchestrator_e2e_test.go`. When a change affects
-provisioned or runtime behavior, enrich the affected scenarios with assertions
-and helpers in that file. Run them and verify they pass before merging; core
-CI or skipped runs do not count. Adding an orchestrator adds its three
-scenarios, Makefile targets and CI matrix entries. Do not add other parallel
-suites, scenario files, `TestE2E_` entry points, jobs or runners;
-`e2e_support_test.go` is setup/cleanup only.
+Each orchestrator has three lifecycle E2E scenarios on Docker (Up, PrepareRun, PhaseByPhase) in
+`internal/cli/orchestrator_e2e_test.go`. When a change affects provisioned or runtime behavior,
+enrich the affected scenarios with assertions and helpers in that file. Run them and verify they
+pass before merging; core CI or skipped runs do not count. Adding an orchestrator adds its three
+scenarios, Makefile targets and CI matrix entries. Do not add other parallel suites, scenario files,
+`TestE2E_` entry points, jobs or runners; `e2e_support_test.go` is setup/cleanup only.
 
 ## Need → read
 
@@ -40,7 +38,9 @@ suites, scenario files, `TestE2E_` entry points, jobs or runners;
 | Backlog ranking, label hygiene, external and bot PRs | [`taxiway-triage` skill](.agents/skills/taxiway-triage/SKILL.md) |
 | Choosing and writing tests, E2E style, CI | [Testing](docs/contributing/testing.md) |
 | Live validation on Docker or Lima, live authentication | [Live validation](docs/contributing/live-tests.md), [`tests/live/AGENTS.md`](tests/live/AGENTS.md), [model gateway](docs/contributing/model-gateway-tests.md) |
-| Build, worktrees, PRs, commit messages, upstream dependency bugs, cleanup after an authorized merge | [Development](docs/contributing/development.md), [Post-merge cleanup](docs/contributing/development.md#post-merge-cleanup) |
-| Releases and release qualification | [`taxiway-release` skill](.agents/skills/taxiway-release/SKILL.md) |
-| Model catalog, installation qualification | [Model catalog](docs/contributing/model-catalog.md), [Installation qualification](docs/contributing/installation-qualification.md) |
+| Working a selected issue: worktree, branch, commits, checks, PR, merge, post-merge cleanup | [`taxiway-issue` skill](.agents/skills/taxiway-issue/SKILL.md) |
+| Independent review of a change, review findings | [`taxiway-review` skill](.agents/skills/taxiway-review/SKILL.md) |
+| PR follow-up: CI, E2E results, conflicts, stacked PRs; PR template | [`steward` skill](.agents/skills/steward/SKILL.md), [PR template](.github/pull_request_template.md) |
+| Build, commit messages, upstream dependency bugs | [Development](docs/contributing/development.md) |
+| Releases, release and installation qualification, model catalog | [`taxiway-release` skill](.agents/skills/taxiway-release/SKILL.md), [Installation qualification](docs/contributing/installation-qualification.md), [Model catalog](docs/contributing/model-catalog.md) |
 | Where documentation lives | User docs in `docs/`, contributor docs in [`docs/contributing/`](docs/contributing/README.md) |

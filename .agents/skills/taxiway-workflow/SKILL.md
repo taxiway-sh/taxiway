@@ -1,6 +1,6 @@
 ---
 name: taxiway-workflow
-description: Use when starting or resuming a Taxiway contribution session, routing a need to its owner, or coordinating implementation, live tests, independent review, approvals and status.
+description: Use when starting, resuming or finishing a Taxiway contribution session, routing a need to its owner, or coordinating agents, capacity, approvals and status.
 ---
 
 # Taxiway contribution workflow
@@ -37,7 +37,7 @@ without an actual artifact, process or result.
 | Creating an issue, unless already authorized | Read-only inspection and reconciliation |
 | Starting a subject the user has not selected | Implementation, tests and review within a selected subject |
 | Pushing a branch or publishing a PR | Proposing issues, PR text or upstream reports without publishing them |
-| Merging a PR | [Post-merge cleanup](../../../docs/contributing/development.md#post-merge-cleanup) after an authorized merge |
+| Merging a PR | [Post-merge cleanup](../taxiway-issue/SKILL.md#post-merge-cleanup) after an authorized merge |
 | Force-pushing | Cleaning resources owned by a scenario with existing helpers |
 | Applying, removing or creating labels; comments, closures, reopenings and reviews on issues and PRs, unless already authorized | Recording in the issue a decision the maintainer has just given |
 | Releases: follow [`taxiway-release`](../taxiway-release/SKILL.md) | |
@@ -52,41 +52,31 @@ approval wait alone is not a reason to end the session. If every remaining
 action is blocked, report the pending decisions and whether the client can stay
 active; do not invent a background runner or promise future turns.
 
+Before a new or changed agent or skill writes to GitHub for the first time,
+exercise it with a dry run that writes nothing and show the result to the
+maintainer.
+
 ## Execution
 
-- **Implementation and independent review.** Each subject has its own worktree
-  and branch ([Worktrees and Branches](../../../docs/contributing/development.md#worktrees-and-branches))
-  and one implementation agent. To meet the review
-  [invariant](../../../AGENTS.md#invariants), arrange a separate reviewer
-  (subagent or child session) and give it the exact commit or diff. Resolve
-  findings, verify corrections and re-review materially changed code. If
-  delegation is unavailable, report the missing review instead of presenting
-  your own review as independent.
+- **Routing.** A selected issue follows
+  [`taxiway-issue`](../taxiway-issue/SKILL.md) with one implementation agent;
+  its review follows [`taxiway-review`](../taxiway-review/SKILL.md) and its PR
+  follow-up [`steward`](../steward/SKILL.md).
 - **Capacity.** Respect the launcher's `--max-agents` and `--max-heavy-tests`
   hints; without the launcher, use its defaults
   (`scripts/contribution-workflow.sh --help`). Reduce them further to actual
   capacity. Identify context ownership, defer work when memory, network pools
   or client capacity are exhausted, and do not duplicate agents or tests.
   Diagnose and retry narrowly; never globally prune resources or delete another
-  context.
-  Prefer asynchronous execution for long-running tools.
-- **Tests.** Durable E2E assertions follow the
-  [E2E scenario rule](../../../AGENTS.md#e2e-scenarios); choose and write checks
-  with [Testing](../../../docs/contributing/testing.md). To check the feature
-  being developed like a manual tester, select Docker or Lima according to the
-  feature and follow [Live validation](../../../docs/contributing/live-tests.md)
-  (including its [Lima recipes](../../../docs/contributing/live-tests.md#lima-driver-and-recording-recipes))
-  and [`tests/live/AGENTS.md`](../../../tests/live/AGENTS.md).
-- **Authentication failure.** When a live check reports one, follow
-  [When authentication fails](../../../docs/contributing/live-tests.md#when-authentication-fails)
-  and keep unrelated work moving.
+  context. Prefer asynchronous execution for long-running tools.
 - **Scope.** Acceptance-critical fixes stay in the subject. Unrelated
   discoveries and suspected dependency bugs go through
-  [`taxiway-intake`](../taxiway-intake/SKILL.md).
-- **PR and merge.** Prepare the PR as described in
-  [Pull Requests](../../../docs/contributing/development.md#pull-requests);
-  publication and merge follow the approvals above. Preserve unrelated work and
+  [`taxiway-intake`](../taxiway-intake/SKILL.md). Preserve unrelated work and
   credentials.
+- **Studies and plans** stay out of Git
+  ([invariants](../../../AGENTS.md#invariants)): the maintainer first reviews
+  them in a private page or a file outside the repository; once approved, they
+  are posted in English as an issue comment.
 
 ## Interaction
 
@@ -131,4 +121,4 @@ actionable request per blocker, and never invent percentages or finish dates.
   their owners, and the resume action. The final report links issues and PRs,
   states delivered behavior, actual checks and remaining limits, and
   distinguishes code-ready, independently reviewed, PR-open, merged and
-  cleaned-up states. Report cleanup complete only once verified.
+  cleaned-up states.

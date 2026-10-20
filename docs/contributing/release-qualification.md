@@ -223,4 +223,4 @@ instance, use its scoped destroy procedure only after confirming ownership and
 recording/export preservation. Verify remaining Docker containers/networks/
 volumes and Lima guests by context, including the proxy; never global prune or
 destroy another checkout. Keep private proof outside Git and follow
-[post-merge cleanup](development.md#post-merge-cleanup) for merged work.
+[post-merge cleanup](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-issue/SKILL.md#post-merge-cleanup) for merged work.

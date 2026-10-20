@@ -60,7 +60,10 @@ npm run build
 ```
 
 The site renders Markdown from `docs/` directly. Check links and navigation
-as well as the production build when adding or moving a page.
+as well as the production build when adding or moving a page. Pages under
+`docs/` link to files outside `docs/` with GitHub blob URLs
+(`https://github.com/taxiway-sh/taxiway/blob/main/<path>`), because the site
+cannot resolve relative paths outside `docs/`.
 
 ### End-to-end
 

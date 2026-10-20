@@ -13,7 +13,7 @@ source in Codex and Claude Code; no client-specific workflow engine is needed.
 
 1. Reconcile the exact clean candidate, current agents/processes/resources and
    existing proof. Identify release scope, drivers/architectures and missing
-   prerequisites. Follow [`taxiway-workflow`](../taxiway-workflow/SKILL.md) for fixes and independent review.
+   prerequisites. Fix through [`taxiway-issue`](../taxiway-issue/SKILL.md) and review with [`taxiway-review`](../taxiway-review/SKILL.md).
 2. Initialize a private report outside the checkout using
    `python3 tests/release/qualify.py --report <directory> init --candidate <SHA>`.
    Resume only the same clean HEAD. Inspect real running processes before retries;

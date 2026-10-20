@@ -75,8 +75,8 @@ See [Testing](testing.md) and [Drivers](../README.md#drivers).
 
 The portable [Agent Skills](https://agentskills.io/) skill
 [`taxiway-workflow`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-workflow/SKILL.md)
-is the session entry point and owns the contribution procedure: routing, approvals, coordination, independent
-review, status, pause, resume and finish. It routes new needs to
+is the session entry point and owns the contribution procedure: routing, approvals, coordination,
+status, pause, resume and finish. It routes new needs to
 [`taxiway-intake`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-intake/SKILL.md)
 and backlog suggestions to
 [`taxiway-triage`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-triage/SKILL.md).
@@ -117,22 +117,19 @@ for example `... codex -- --profile my-profile`.
 To resume, restart with the launcher and request **resume**, or use your
 client's native session-resume mechanism and invoke the same skill.
 
-## Worktrees and Branches
+## Issues and Pull Requests
 
-Branch rules are in the [invariants](https://github.com/taxiway-sh/taxiway/blob/main/AGENTS.md#invariants).
-Each subject has one worktree named `.worktrees/issue-<number>-<short-subject>`
-and an intention-appropriate branch, for example `fix/93-gastown-deacon-startup` or
-`feat/117-portable-contribution-workflow`. Start from current `main`. Inspect
-`git worktree list` and existing branches first, and preserve existing work
-rather than creating duplicate assignments.
-
-## Pull Requests
-
-A PR describes the final behavior, checks and limitations, links the issues it
-resolves with `Fixes #...`, and uses appropriate existing labels from
-[Issues](issues.md). Its title follows [Conventional Commits](#commit-messages).
-The merge criterion of the [E2E scenario rule](https://github.com/taxiway-sh/taxiway/blob/main/AGENTS.md#e2e-scenarios)
-applies; [Testing](testing.md) explains how to run the scenarios. Publishing and merging follow the skill's approvals.
+Each selected issue is worked in its own worktree and branch, then through a
+pull request, as described in the
+[`taxiway-issue`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-issue/SKILL.md)
+skill, which also owns
+[post-merge cleanup](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-issue/SKILL.md#post-merge-cleanup).
+Independent review follows
+[`taxiway-review`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-review/SKILL.md),
+and PR follow-up (CI, E2E results, conflicts, stacked PRs) follows
+[`steward`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/steward/SKILL.md).
+GitHub pre-fills new PR descriptions with the
+[PR template](https://github.com/taxiway-sh/taxiway/blob/main/.github/pull_request_template.md).
 
 ## Upstream Dependency Bugs
 
@@ -161,29 +158,6 @@ Taxiway's target by mistake (see the [invariants](https://github.com/taxiway-sh/
 Reuse an existing upstream report rather than opening duplicates. Track
 upstream links, any local workaround and its removal criteria as described in
 [`taxiway-intake`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-intake/SKILL.md#upstream-dependency-fixes).
-
-## Post-Merge Cleanup
-
-An authorized PR merge also authorizes cleanup of its development instance,
-worktree, and feature branch; no separate confirmation is needed.
-
-1. Coordinate with the worktree's agent and wait for its tests to finish.
-   Check for uncommitted work and preserve anything not included in the PR.
-2. Load that worktree's `.envrc` and identify its existing context id and lab
-   state. Run `./taxiway list`, then `./taxiway destroy --yes` from that context
-   to remove all its labs, gateways, observability, proxy, and generated state.
-   Do this before removing the worktree or its runtime assets.
-3. Verify that the context's Docker containers, networks, volumes, and Lima
-   labs are gone. Investigate any leftovers by their exact context ownership;
-   never use a global prune or remove another worktree's resources. If destroy
-   or verification fails, keep the worktree for recovery and report the failure.
-4. Remove the clean feature worktree and its local and remote feature branches
-   after confirming the PR was merged. Do not discard uncommitted work or
-   unrelated commits, and do not remove `main`.
-5. Fast-forward local `main`, then update the other active feature branches
-   against it. Coordinate rebases with their agents at a safe point so ongoing
-   edits and tests are preserved. Resolve conflicts and rerun affected checks;
-   force-pushing still requires explicit authorization.
 
 ## Commit Messages
 
