@@ -94,6 +94,9 @@ that owns that rule (see the routing table in `AGENTS.md`), with a link to the
 issue or PR where it was taken. Do not write ADRs or separate decision logs, and
 do not restate the rule elsewhere: link to its owner.
 
+When the user corrects you, or answers a question that applies beyond the
+current task, propose on the spot to record it this way.
+
 ## Status on demand
 
 When the user asks, and promptly at milestones or blockers, report each
@@ -122,3 +125,8 @@ actionable request per blocker, and never invent percentages or finish dates.
   states delivered behavior, actual checks and remaining limits, and
   distinguishes code-ready, independently reviewed, PR-open, merged and
   cleaned-up states.
+- **Frictions observed and rules to record:** end with this short list for the
+  user: missing, ambiguous or contradictory rules, workarounds used, checks
+  that could not run and refused tools. Propose each as a change to its owner
+  ([Decisions](#decisions)) or an issue through
+  [`taxiway-intake`](../taxiway-intake/SKILL.md).
