@@ -70,7 +70,7 @@ printf '\n' >> "$GC_LOG"
 case "$1 ${2:-}" in
   "init "*)
     mkdir -p "$2"
-    printf '[workspace]\nprovider = "claude"\n' > "$2/city.toml"
+    printf '[workspace]\nprovider = "claude"\n\n[providers]\n[providers.claude]\nbase = "builtin:claude"\nready_delay_ms = 0\n' > "$2/city.toml"
     ;;
   "supervisor status")
     [[ -f "$GC_RUNNING" ]]
@@ -165,22 +165,43 @@ assert claude["args"] == ["--model", "test-selected-claude-model"]
 assert claude["env"]["ENABLE_TOOL_SEARCH"] == "true"
 assert claude["env"]["ENABLE_CLAUDEAI_MCP_SERVERS"] == "false"
 assert claude["env"]["ANTHROPIC_DEFAULT_OPUS_MODEL"] == "test-opus"
-assert tomllib.loads((city / "city.toml").read_text())["include"] == ["taxiway.toml"]
+config = tomllib.loads((city / "city.toml").read_text())
+assert config["include"] == ["taxiway.toml"]
+assert config["providers"]["claude"] == {"base": "builtin:claude", "ready_delay_ms": 0, "option_defaults": {"effort": "max"}}
 projects = json.loads((home / ".claude.json").read_text())["projects"]
 for root in (city, rig):
     assert projects[str(root)]["hasTrustDialogAccepted"] is True
 PY
 then
-  _pass "fragment routes Claude through the gateway with the selected model, city and rig trusted"
+  _pass "fragment routes Claude through the gateway with the selected model and default effort, city and rig trusted"
 else
-  _fail "fragment routes Claude through the gateway with the selected model, city and rig trusted"
+  _fail "fragment routes Claude through the gateway with the selected model and default effort, city and rig trusted"
 fi
 
 echo ""
 echo "=== gascity restart is idempotent and applies subscription mode ==="
 : > "$tmp/gc.log"
-printf 'include = ["other.toml"]\n%s\n' "$(sed '1d' "$city/city.toml")" > "$city/city.toml"
-out="$(run_start env GC_RIG_PATH="$rig" TAXIWAY_SET_AUTH_MODE=subscription ANTHROPIC_AUTH_TOKEN=stale TAXIWAY_SET_TOOL_SEARCH=false)"
+# Gas City rewrites city.toml in its own layout: a commented include and the
+# option defaults as a subtable must both be handled.
+cat > "$city/city.toml" <<'EOF'
+include = ["other.toml"] # operator fragment
+
+[workspace]
+provider = "claude"
+
+[providers]
+[providers.claude]
+base = "builtin:claude"
+
+[providers.claude.option_defaults]
+effort = "max"
+permission_mode = "unrestricted"
+
+[daemon]
+patrol_interval = "30s"
+EOF
+chmod 640 "$city/city.toml"
+out="$(run_start env GC_RIG_PATH="$rig" TAXIWAY_SET_AUTH_MODE=subscription ANTHROPIC_AUTH_TOKEN=stale TAXIWAY_SET_TOOL_SEARCH=false TAXIWAY_SET_EFFORT=high)"
 gc_calls="$(cat "$tmp/gc.log")"
 _assert_not_contains "reuses the existing city" "$gc_calls" "gc init"
 _assert_not_contains "reuses the registered rig" "$gc_calls" "rig add"
@@ -195,13 +216,50 @@ data = tomllib.loads((city / "taxiway.toml").read_text())
 upstream = data["upstreams"]["taxiway-litellm"]
 assert "auth_token" not in upstream and "auth_token_env" not in upstream
 assert data["providers"]["claude"]["env"]["ENABLE_TOOL_SEARCH"] == "false"
-assert tomllib.loads((city / "city.toml").read_text())["include"] == ["other.toml", "taxiway.toml"]
+text = (city / "city.toml").read_text()
+config = tomllib.loads(text)
+assert config["include"] == ["other.toml", "taxiway.toml"]
+assert "# operator fragment" in text
+assert config["providers"]["claude"]["option_defaults"] == {"effort": "high", "permission_mode": "unrestricted"}
+assert config["daemon"] == {"patrol_interval": "30s"}
+assert (city / "city.toml").stat().st_mode & 0o777 == 0o640
+assert not list(city.glob(".taxiway-*")), "temporary files must not remain"
 PY
 then
-  _pass "restart rewrites the fragment and keeps a single include"
+  _pass "restart rewrites the fragment, keeps a single include and updates only the effort"
 else
-  _fail "restart rewrites the fragment and keeps a single include"
+  _fail "restart rewrites the fragment, keeps a single include and updates only the effort"
 fi
+
+echo ""
+echo "=== gascity start reports an include it cannot extend ==="
+printf 'include = [\n  "other.toml",\n]\n%s\n' "$(sed '1d' "$city/city.toml")" > "$city/city.toml"
+cp "$city/city.toml" "$tmp/city.before"
+set +e
+out="$(run_start env GC_RIG_PATH="$rig")"
+status=$?
+set -e
+if [[ "$status" != 0 ]] && cmp -s "$city/city.toml" "$tmp/city.before"; then
+  _pass "multi-line include fails without changing city.toml"
+else
+  _fail "multi-line include fails without changing city.toml" "status=$status"
+fi
+_assert_contains "names the include to add" "$out" 'include is not a single-line array; add "taxiway.toml" to it'
+printf 'include = ["other.toml", "taxiway.toml"]\n%s\n' "$(sed '1,3d' "$city/city.toml")" > "$city/city.toml"
+
+echo ""
+echo "=== gascity start validates template and effort ==="
+for setting in TAXIWAY_SET_TEMPLATE=custom TAXIWAY_SET_EFFORT=extreme; do
+  set +e
+  out="$(run_start env GC_RIG_PATH="$rig" "$setting")"
+  status=$?
+  set -e
+  if [[ "$status" != 0 && "$out" == *"unsupported Gas City"* ]]; then
+    _pass "rejects $setting"
+  else
+    _fail "rejects $setting" "status=$status" "$out"
+  fi
+done
 
 echo ""
 echo "=== gascity start fails when sessions never become active ==="

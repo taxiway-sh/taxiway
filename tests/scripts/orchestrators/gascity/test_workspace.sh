@@ -162,6 +162,16 @@ _assert_fails "invalid rig name fails" \
     TAXIWAY_CITY_DIR="$tmp/work/gc" TAXIWAY_REPO_URL=https://github.com/example/123.git \
     TAXIWAY_WORKSPACE_DIR="$tmp/work/123" bash "$WORKSPACE_SH"
 
+_assert_fails "unsupported template fails before gc calls" \
+  env PATH="$fake_bin:$PATH" HOME="$tmp/home" GC_LOG="$tmp/gc.log" GC_RIGS="$tmp/rigs" GIT_LOG="$tmp/git.log" \
+    TAXIWAY_CITY_DIR="$tmp/work/gc-custom" TAXIWAY_REPO_URL=https://github.com/example/demo-repo.git \
+    TAXIWAY_WORKSPACE_DIR="$tmp/work/demo-repo" TAXIWAY_SET_TEMPLATE=custom bash "$WORKSPACE_SH"
+if [[ -e "$tmp/work/gc-custom" ]]; then
+  _fail "unsupported template creates no city"
+else
+  _pass "unsupported template creates no city"
+fi
+
 echo ""
 echo "Results: $pass passed, $fail failed"
 [[ $fail -eq 0 ]]
