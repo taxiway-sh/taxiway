@@ -6,9 +6,8 @@ creating an authenticated scenario.
 - Reuse `taxiway_live.py` for guest execution, auth propagation and temporary
   labs. Keep feature-specific scripts and sanitized results outside Git. This
   directory contains reusable tooling, not committed feature regression suites.
-  Lifecycle nonregression assertions enrich the nine existing scenarios in
-  `internal/cli/orchestrator_e2e_test.go`, with helpers in that file. Do not add
-  parallel suites/files, `TestE2E_` entry points, jobs or Makefile runners.
+  Lifecycle nonregression assertions follow the
+  [E2E scenario rule](../../AGENTS.md#e2e-scenarios).
 - Run with the worktree's dev/e2e environment loaded. Use bounded commands and
   short prompts. Real model calls consume account usage and are opt-in.
 - Name persistent manual-validation labs `test-claude`, `test-codex` and

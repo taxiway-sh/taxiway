@@ -5,10 +5,8 @@ Docker or Lima Taxiway lab, selected according to the implemented feature, as
 a person would manually. Choose bounded actions and observable
 results for that task; keep temporary scripts, logs and sanitized reports outside
 Git. `tests/live/` provides reusable tooling, not a feature regression suite.
-Orchestrator lifecycle nonregression assertions enrich the nine existing scenarios and
-helpers in `internal/cli/orchestrator_e2e_test.go`; do not add parallel suites,
-files, entry points, jobs or Makefile runners. See
-[Testing](testing.md). Real model calls are explicitly opt-in and consume the
+Orchestrator lifecycle nonregression assertions follow the
+[E2E scenario rule](https://github.com/taxiway-sh/taxiway/blob/main/AGENTS.md#e2e-scenarios); see [Testing](testing.md). Real model calls are explicitly opt-in and consume the
 account's subscription allowance. Account-free E2Es do not prove real-account
 model access, inference or delegation.
 
@@ -190,7 +188,7 @@ delegation, or a particular model. Inspect actual effects and traces using the
 
 ## Lima driver and recording recipes
 
-The nine automated E2E scenarios use Docker. Lima validation is a task-specific
+The automated lifecycle E2E scenarios use Docker. Lima validation is a task-specific
 manual check by an agent, selected here through the existing
 [workflow skill](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-workflow/SKILL.md).
 These recipes preserve the useful observations of the former native scripts;

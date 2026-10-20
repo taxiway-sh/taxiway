@@ -5,18 +5,15 @@ description: Use when preparing, qualifying, cutting or resuming a Taxiway relea
 
 # Taxiway release qualification
 
-Durable E2E assertions enrich the nine existing scenarios in
-`internal/cli/orchestrator_e2e_test.go`. Add helpers to that same file; do not
-create another scenario file, standalone suite, `TestE2E_` entry point, CI job
-or Makefile runner. `e2e_support_test.go` owns setup/cleanup, not a parallel suite.
-
-Read `AGENTS.md` and the [release recipe](../../../docs/contributing/release-qualification.md).
-That document owns checks, evidence and phase-specific commands. Use the same
+Read [`AGENTS.md`](../../../AGENTS.md) and the
+[release recipe](../../../docs/contributing/release-qualification.md); durable
+E2E assertions follow the [E2E scenario rule](../../../AGENTS.md#e2e-scenarios).
+The recipe owns checks, evidence and phase-specific commands. Use the same
 source in Codex and Claude Code; no client-specific workflow engine is needed.
 
 1. Reconcile the exact clean candidate, current agents/processes/resources and
    existing proof. Identify release scope, drivers/architectures and missing
-   prerequisites. Follow `taxiway-workflow` for fixes and independent review.
+   prerequisites. Follow [`taxiway-workflow`](../taxiway-workflow/SKILL.md) for fixes and independent review.
 2. Initialize a private report outside the checkout using
    `python3 tests/release/qualify.py --report <directory> init --candidate <SHA>`.
    Resume only the same clean HEAD. Inspect real running processes before retries;
@@ -48,8 +45,9 @@ source in Codex and Claude Code; no client-specific workflow engine is needed.
    opened UI or empty response never proves that findings were reviewed.
 5. Have a different reviewer inspect findings, fixes and proof; rerun affected
    checks on the final candidate. Present release blockers, qualified combinations,
-   untested paths and the report, even under deadline pressure. Do not substitute
-   core CI for the nine E2Es or snapshot success for published installation.
+   untested paths and the report, even under deadline pressure. Core CI does not
+   replace the lifecycle E2E scenarios of every orchestrator, and snapshot success
+   does not replace published installation.
 6. Qualification-only requests perform no tag, push or publication. A request
    to publish authorizes only the explicit requested publication after the recipe;
    follow `release.md` and do not push main. After authorized publication, start

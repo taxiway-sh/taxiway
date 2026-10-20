@@ -1,90 +1,46 @@
 # AGENTS.md — taxiway
 
-This file is the lightweight working contract for agents contributing to
-Taxiway. Keep it small and practical. Public documentation lives under `docs/`.
+Taxiway is a local engineering lab for agent orchestrators: isolated Docker or
+Lima labs, orchestrator adapters, local credentials, recorded terminal sessions
+and local observability through Langfuse and LiteLLM. Keep it simple,
+reproducible, observable and resettable; Kubernetes and heavyweight
+infrastructure are out of scope. Repository `taxiway-sh/taxiway`, default branch `main`.
 
-## Project
+Each rule has one owner; link to it instead of restating it.
 
-Taxiway is a local engineering lab for agent orchestrators. It creates isolated
-Docker or Lima labs, runs orchestrator adapters, provisions local credentials,
-records terminal sessions, and exposes local observability through Langfuse and
-LiteLLM.
+## Invariants
 
-Keep the project:
+- Never push to `main`, even with permission to publish or merge: every change goes through a feature branch and PR.
+- Merge, publish, force-push or publish upstream only when the user explicitly asks.
+- Every `gh` command for this repository includes `--repo taxiway-sh/taxiway`.
+- Beta: no historical compatibility or migration code/tests unless requested; keep current lifecycle, idempotency and recovery coverage.
+- Conventional Commits, split by intention. An agent other than the implementer reviews each change.
+- Prefer the existing code and documentation structure; no PRDs, ADRs, approval gates, run manifests or agent workflow docs unless requested.
+- Before claiming work is complete, run the narrowest meaningful checks and report what passed or could not be run.
+- Never run `gh auth login`, change GitHub authentication or git credential configuration, or set or print `GH_TOKEN`, `GITHUB_TOKEN`, `GIT_ASKPASS`, API keys, OAuth tokens, private keys or passwords; the local environment handles authentication.
+- Never commit credentials, secrets, generated auth files, lab state, recordings, run logs, working plans, scratch files or private notes.
 
-- simple;
-- reproducible;
-- observable;
-- resettable.
+## E2E scenarios
 
-Kubernetes and heavyweight infrastructure are out of scope.
+Each orchestrator has three lifecycle E2E scenarios on Docker (Up, PrepareRun,
+PhaseByPhase) in `internal/cli/orchestrator_e2e_test.go`. When a change affects
+provisioned or runtime behavior, enrich the affected scenarios with assertions
+and helpers in that file. Run them and verify they pass before merging; core
+CI or skipped runs do not count. Adding an orchestrator adds its three
+scenarios, Makefile targets and CI matrix entries. Do not add other parallel
+suites, scenario files, `TestE2E_` entry points, jobs or runners;
+`e2e_support_test.go` is setup/cleanup only.
 
-## Working Rules
+## Need → read
 
-- Prefer the existing code and documentation structure over new process.
-- Use a dedicated worktree and implementation agent per subject, and a different
-  agent for independent review. Follow the [contribution workflow](docs/contributing/development.md#contribution-workflow).
-- Taxiway is in beta: do not add historical compatibility or migration code/tests
-  unless requested. Keep current lifecycle, idempotency and recovery coverage.
-- Test product behavior directly; do not add a separate test layer for test assertions.
-- E2Es prevent regressions in each orchestrator's lifecycle on Docker.
-  Live validation lets an agent simply test its feature on Docker or Lima.
-- When a feature changes provisioned or runtime behavior, enrich the affected
-  scenarios among the nine existing scenarios in `internal/cli/orchestrator_e2e_test.go` with
-  assertions of that behavior and helpers in that file. Do not add parallel E2E
-  suites, scenario files, `TestE2E_` entry points, jobs or Makefile runners.
-  `e2e_support_test.go` is setup/cleanup support, not an alternative suite.
-  Run the affected existing scenarios and verify they pass before merging; core CI or skipped E2E tests are not sufficient.
-- Keep E2E actions chronological, with named guarantees directly underneath.
-- Helpers add no agent/model wrappers or nested assertion levels; attach checks
-  to the responsible action and preserve onboarding/readiness ordering.
-- Make injected runtime mutations explicit and restore them on failure.
-- Do not add PRDs, ADRs, approval gates, run manifests, or agent workflow docs
-  unless explicitly requested.
-- Do not commit working plans, scratch files, local run logs, generated lab
-  state, or private notes.
-- User-facing documentation belongs in `docs/`.
-- Contributor documentation belongs in `docs/contributing/`.
-- Use Conventional Commits so GoReleaser can generate useful release notes:
-  - `feat:` for user-facing capabilities;
-  - `fix:` for bug fixes;
-  - `cleanup:` for simplification or removal work;
-  - `docs:`, `test:`, `refactor:`, and `chore:` where appropriate.
-- Split commits by intention; PRs describe behavior, validation and limitations,
-  link resolved issues with `Fixes #...`, and use existing appropriate labels.
-- Before claiming work is complete, run the narrowest meaningful checks and
-  report what passed or could not be run.
-- Live validation is a task-specific manual check by an agent, not a committed
-  feature regression suite. Reuse `tests/live/taxiway_live.py` and read
-  `tests/live/AGENTS.md` plus `docs/contributing/live-tests.md`. Keep its scripts
-  and sanitized evidence temporary; lifecycle nonregression assertions enrich
-  the existing orchestrator E2Es. Unit/component contracts keep their own tests.
-- For release requests, use the shared `taxiway-release` skill and
-  [release recipe](docs/contributing/release-qualification.md); qualification
-  does not authorize publication, and missing/skipped checks are not validation.
-
-## GitHub
-
-- Repository: `taxiway-sh/taxiway`
-- Default branch: `main`
-- Every `gh` command for this repository must include
-  `--repo taxiway-sh/taxiway`.
-- Do not merge, publish, or force-push unless the user explicitly asks for it.
-- Never push directly to `main`. All changes, including documentation and
-  agent instructions, must go through a feature branch and pull request.
-- After an authorized PR merge, clean up its Taxiway instance, labs, worktree,
-  and feature branch without further confirmation. Update `main` and active
-  branches while preserving ongoing work and other instances; follow
-  [post-merge cleanup](docs/contributing/development.md#post-merge-cleanup).
-
-## Security
-
-Do not:
-
-- run `gh auth login` or change GitHub authentication;
-- modify git credential configuration;
-- set or print `GH_TOKEN`, `GITHUB_TOKEN`, `GIT_ASKPASS`, API keys, OAuth
-  tokens, private keys, or passwords;
-- commit credentials, secrets, generated auth files, lab state, or recordings.
-
-Authentication is handled by the local environment.
+| Need | Owner |
+|---|---|
+| Start or resume a session, intake, backlog, approvals, coordination | [`taxiway-workflow` skill](.agents/skills/taxiway-workflow/SKILL.md) |
+| Issue format, scope and labels | [Issues](docs/contributing/issues.md) |
+| Choosing and writing tests, E2E style, CI | [Testing](docs/contributing/testing.md) |
+| Live validation on Docker or Lima, live authentication | [Live validation](docs/contributing/live-tests.md), [`tests/live/AGENTS.md`](tests/live/AGENTS.md), [model gateway](docs/contributing/model-gateway-tests.md) |
+| Build, worktrees, PRs, commit messages, upstream dependency bugs | [Development](docs/contributing/development.md) |
+| After an authorized merge | [Post-merge cleanup](docs/contributing/development.md#post-merge-cleanup) |
+| Releases and release qualification | [`taxiway-release` skill](.agents/skills/taxiway-release/SKILL.md) |
+| Model catalog, installation qualification | [Model catalog](docs/contributing/model-catalog.md), [Installation qualification](docs/contributing/installation-qualification.md) |
+| Where documentation lives | User docs in `docs/`, contributor docs in [`docs/contributing/`](docs/contributing/README.md) |
