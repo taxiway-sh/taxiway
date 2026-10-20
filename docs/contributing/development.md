@@ -113,10 +113,10 @@ missing priorities and existing assignments without rewriting labels. Selecting
 or resuming a named subject answers intake; it does not authorize publishing,
 merging, or starting additional subjects.
 
-Configure the active-session targets and capacity if needed:
+Set the `--max-agents` and `--max-heavy-tests` capacity hints if needed:
 
 ```bash
-bash scripts/contribution-workflow.sh codex --status-interval 300 --triage-interval 900 --max-agents 2 --max-heavy-tests 1
+bash scripts/contribution-workflow.sh codex --max-agents 3 --max-heavy-tests 1
 ```
 
 Use `--help` for settings. Options after `--` are passed verbatim to the client,

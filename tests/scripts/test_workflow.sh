@@ -20,7 +20,7 @@ if [[ ! -f "$launcher" ]]; then
   exit 1
 fi
 cd "$test_dir/outside"
-bash "$launcher" codex --status-interval 17 --triage-interval 29 --max-agents 2 --max-heavy-tests 1 -- --profile 'two words'
+bash "$launcher" codex --max-agents 3 --max-heavy-tests 1 -- --profile 'two words'
 [[ "$(cat "$test_dir/cwd")" == "$repo_dir" ]]
 python3 - "$test_dir/args" <<'PY'
 import pathlib, sys
@@ -29,8 +29,9 @@ assert args[:2] == ['--profile', 'two words'], args
 assert len(args) == 3, args
 prompt = args[-1]
 assert '.agents/skills/taxiway-workflow/SKILL.md' in prompt
-assert '17 seconds' in prompt and '29 seconds' in prompt
-assert '2 agents' in prompt and '1 heavy' in prompt
+assert 'AGENTS.md' in prompt
+assert '3 agents' in prompt and '1 heavy' in prompt
+assert 'seconds' not in prompt, prompt
 assert 'new need or problem' in prompt and 'backlog' in prompt
 PY
 echo 'PASS: shared prompt, exact arguments and repository cwd'
@@ -46,7 +47,7 @@ status=$?
 set -e
 [[ "$status" == 37 ]]
 echo 'PASS: child exit status propagated'
-for args in 'other' 'codex --status-interval 0' 'claude --max-agents nope' 'codex --max-heavy-tests' 'codex --unknown'; do
+for args in 'other' 'codex --max-agents 0' 'codex --status-interval 300' 'claude --triage-interval 900' 'claude --max-agents nope' 'codex --max-heavy-tests' 'codex --unknown'; do
   if bash "$launcher" $args >/dev/null 2>&1; then
     echo "FAIL: invalid invocation accepted: $args" >&2
     exit 1
