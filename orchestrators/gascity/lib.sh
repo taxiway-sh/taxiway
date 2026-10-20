@@ -6,12 +6,20 @@
 
 GASCITY_CITY_DIR="${TAXIWAY_CITY_DIR:-/lab/work/gc}"
 GASCITY_TEMPLATE="${TAXIWAY_SET_TEMPLATE:-gastown}"
+GASCITY_EFFORT="${TAXIWAY_SET_EFFORT:-max}"
 
 # Both templates define always-on sessions, which start readiness relies on.
 case "$GASCITY_TEMPLATE" in
     gastown|minimal) ;;
     *)
         printf 'ERROR: unsupported Gas City template %q; use gastown or minimal\n' "$GASCITY_TEMPLATE" >&2
+        exit 1 ;;
+esac
+# Gas City's builtin Claude effort tiers.
+case "$GASCITY_EFFORT" in
+    low|medium|high|xhigh|max) ;;
+    *)
+        printf 'ERROR: unsupported Gas City effort %q; use low, medium, high, xhigh or max\n' "$GASCITY_EFFORT" >&2
         exit 1 ;;
 esac
 

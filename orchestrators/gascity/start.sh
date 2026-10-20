@@ -60,6 +60,7 @@ if taxiway_is_plan; then
     fi
     log "Configuring Gas City for the Taxiway LiteLLM gateway"
     taxiway_plan_detail "model: $GASCITY_MODEL"
+    taxiway_plan_detail "effort: $GASCITY_EFFORT"
     taxiway_plan_detail "fragment: $GASCITY_CITY_DIR/$FRAGMENT"
     log "Trusting the Gas City city for Claude Code"
     log "Restarting the Gas City supervisor"
@@ -111,9 +112,12 @@ fi
 
 # write_gateway_fragment renders the Taxiway-managed fragment and includes it
 # from city.toml. Rewriting the whole file keeps restarts idempotent: TOML
-# tables cannot repeat, so nothing is appended to city.toml itself.
+# tables cannot repeat, so nothing is appended to city.toml itself. The effort
+# is a Claude provider option default, which Gas City only reads from
+# city.toml: that single key is updated in place.
 write_gateway_fragment() {
     GASCITY_MODEL="$GASCITY_MODEL" \
+    GASCITY_EFFORT="$GASCITY_EFFORT" \
     GASCITY_FRAGMENT="$FRAGMENT" \
     TAXIWAY_LITELLM_BASE_URL="$TAXIWAY_LITELLM_BASE_URL" \
     python3 - "$GASCITY_CITY_DIR" <<'PY'
@@ -225,7 +229,35 @@ if fragment_name not in data.get("include", []):
                 + (match.group(2) or "") + text[match.end():])
     expected["include"] = [*data.get("include", []), fragment_name]
 
-# Never write a config that changes anything but the include.
+# Set effort among the Claude provider's option defaults, keeping other keys.
+claude = data.get("providers", {}).get("claude")
+if not isinstance(claude, dict):
+    raise SystemExit("city.toml has no [providers.claude] table")
+defaults = dict(claude.get("option_defaults", {}))
+defaults["effort"] = os.environ["GASCITY_EFFORT"]
+expected["providers"]["claude"]["option_defaults"] = defaults
+lines = text.splitlines(keepends=True)
+header = re.compile(r"^\s*\[")
+def table_range(pattern):
+    starts = [i for i, line in enumerate(lines) if re.match(pattern, line)]
+    if not starts:
+        return None
+    end = next((i for i in range(starts[0] + 1, len(lines)) if header.match(lines[i])), len(lines))
+    return starts[0], end
+subtable = table_range(r"^\s*\[providers\.claude\.option_defaults\]\s*(#.*)?$")
+if subtable:
+    del lines[subtable[0]:subtable[1]]
+claude_table = table_range(r"^\s*\[providers\.claude\]\s*(#.*)?$")
+if not claude_table:
+    raise SystemExit("city.toml: [providers.claude] must be a table header to set the effort")
+start, end = claude_table
+lines[start + 1:end] = [line for line in lines[start + 1:end] if not re.match(r"^\s*option_defaults\s*[.=]", line)]
+inline = ", ".join(f"{json.dumps(key) if not re.fullmatch(r'[A-Za-z0-9_-]+', key) else key} = {q(value)}"
+                   for key, value in sorted(defaults.items()))
+lines.insert(start + 1, f"option_defaults = {{ {inline} }}\n")
+text = "".join(lines)
+
+# Never write a config that changes anything but the include and option defaults.
 if tomllib.loads(text) != expected:
     raise SystemExit("city.toml: refusing an edit that would change other settings")
 if text != original:

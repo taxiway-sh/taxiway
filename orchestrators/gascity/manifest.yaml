@@ -50,6 +50,15 @@ settings:
       - claude-sonnet-5-5
     phases:
       - start
+  - name: effort
+    description: Claude Code effort passed with --effort to every Gas City agent; low, medium, high, xhigh or max (Gas City's default).
+    default: max
+    examples:
+      - max
+      - high
+      - medium
+    phases:
+      - start
   - name: tool-search
     description: Load MCP tool definitions on demand. Use false to disable tool search or auto:N for a context percentage threshold.
     default: "true"

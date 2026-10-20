@@ -77,6 +77,7 @@ if taxiway_is_plan; then
     fi
   done
   log "Configuring Dolt identity and Beads role when missing"
+  log "Disabling Beads anonymous usage metrics"
   exit 0
 fi
 
@@ -193,6 +194,11 @@ configure_dolt_identity
 configure_beads_role
 install_goreleaser_binary beads beads "$BEADS_VERSION" bd checksums.txt Beads
 install_goreleaser_binary gascity gascity "$GASCITY_VERSION" gc "gascity_${GASCITY_VERSION}_checksums.txt" "Gas City"
+
+# Beads enables anonymous usage metrics by default; labs opt out (idempotent,
+# stored in ~/.config/bd).
+log "Disabling Beads anonymous usage metrics"
+bd metrics off >/dev/null
 
 for binary in gc bd dolt; do
   actual="$(installed_version "$binary")"
