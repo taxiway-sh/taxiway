@@ -74,6 +74,18 @@ exit 0
 EOF
   chmod +x "$bin/$name"
 done
+# Dolt prints an upgrade notice after its version; reading only the first line
+# would kill it with SIGPIPE and fail the phase under pipefail.
+cat > "$bin/dolt" <<EOF
+#!/usr/bin/env bash
+printf 'dolt %s\n' "\$*" >> "$home/calls.log"
+if [[ "\${1:-}" == version ]]; then
+  echo "dolt version 2.2.0"
+  sleep 0.2
+  echo "Warning: you are on an old version of Dolt. The newest version is 2.5.0."
+fi
+exit 0
+EOF
 # Process tools are present too, so no package is installed.
 for name in lsof pgrep flock jq; do
   printf '#!/usr/bin/env bash\nexit 0\n' > "$bin/$name"

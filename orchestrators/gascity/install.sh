@@ -46,13 +46,17 @@ resolve_versions() {
 installed_version() {
   local binary="$1"
   command -v "$binary" >/dev/null 2>&1 || return 0
+  # Read the whole output: exiting early sends SIGPIPE to a binary that keeps
+  # writing (Dolt prints an upgrade notice after its version), and pipefail
+  # then fails the phase.
   "$binary" version 2>/dev/null | awk '
-    {
+    !found {
       for (i = 1; i <= NF; i++) {
         if ($i ~ /^v?[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$/) {
           sub(/^v/, "", $i)
           print $i
-          exit
+          found = 1
+          break
         }
       }
     }'
