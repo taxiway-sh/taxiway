@@ -49,6 +49,11 @@ type e2eOrchestratorExpectations struct {
 	// readinessActions replaces the single-session readiness probe for
 	// orchestrators that run several native agent sessions.
 	readinessActions func(*testing.T, *RootState, string, string)
+	// upSettings are explicit, non-default selections proven by the up scenario.
+	upSettings []string
+	// settingsFile means Claude reads its bypass-warning setting from a
+	// --settings file written by the orchestrator instead of inline JSON.
+	settingsFile bool
 }
 
 type e2eFixtureWorkspace struct {
@@ -88,6 +93,7 @@ func e2eExpectations(t *testing.T, orch string) e2eOrchestratorExpectations {
 			// The workspace clone is trusted before start; start trusts the city.
 			workspaceTrustedBeforeStart: true, assertSessions: assertE2EGascitySessions,
 			checkHandoff: runE2EGascityHandoff, readinessActions: runE2EGascityReadinessActions,
+			upSettings: []string{"effort=high"}, settingsFile: true,
 		}
 	default:
 		t.Fatalf("unsupported E2E orchestrator %q", orch)
@@ -627,7 +633,9 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 	}
 	if expectations.checkHandoff != nil {
 		expectations.checkHandoff(t, state, id)
-		expectations.readinessActions(t, state, id, "after-handoff")
+		if expectations.readinessActions != nil {
+			expectations.readinessActions(t, state, id, "after-handoff")
+		}
 	}
 
 	runE2EStep(t, e2eCommandStepAt("after-up", "doctor"), func(t *testing.T) {
@@ -757,7 +765,11 @@ func testE2EOrchestratorUp(t *testing.T, orch string) {
 	})
 
 	runE2EStep(t, fmt.Sprintf("taxiway:up[--type=%s,--repo=<fixture>,--skip-auth-check]", orch), func(t *testing.T) {
-		runE2ECommand(t, root, tb, "up", lab, "--type", orch, "--repo", e2eFixtureRepoURL, "--skip-auth-check", "--set", "auth_mode=api-key", "--set", "model="+expectations.model, "--set", e2eHarnessPin(orch))
+		args := []string{"up", lab, "--type", orch, "--repo", e2eFixtureRepoURL, "--skip-auth-check", "--set", "auth_mode=api-key", "--set", "model=" + expectations.model, "--set", e2eHarnessPin(orch)}
+		for _, setting := range expectations.upSettings {
+			args = append(args, "--set", setting)
+		}
+		runE2ECommand(t, root, tb, args...)
 		runE2EAssert(t, "assert:phase-started", func(t *testing.T) {
 			assertE2EPhase(t, stateDir, id, phases.PhaseStart)
 		})
@@ -1701,13 +1713,13 @@ while True:
     time.sleep(0.2)
 args = (pathlib.Path('/proc') / pane[0] / 'cmdline').read_bytes().split(b'\0')
 assert b'--dangerously-skip-permissions' in args, 'Claude lost autonomous permission contract'
-def skips_bypass_warning(value):
-    value = value.decode()
-    # Inline settings (Taxiway launchers) or a settings file (Gas City).
-    data = json.loads(value if value.lstrip().startswith('{') else pathlib.Path(value).read_text())
-    return data.get('skipDangerousModePermissionPrompt') is True
-settings = [args[i + 1] for i, arg in enumerate(args[:-1]) if arg == b'--settings']
-assert any(skips_bypass_warning(value) for value in settings), 'Claude must skip the bypass startup warning'
+if sys.argv[4] == 'file':
+    # Gas City writes the setting to a --settings file it owns.
+    settings = [args[i + 1] for i, arg in enumerate(args[:-1]) if arg == b'--settings']
+    assert any(json.loads(pathlib.Path(value.decode()).read_text()).get('skipDangerousModePermissionPrompt') is True
+               for value in settings), 'Claude must skip the bypass startup warning'
+else:
+    assert b'{"skipDangerousModePermissionPrompt":true}' in args, 'Claude must skip the bypass startup warning'
 env = dict(entry.split(b'=', 1) for entry in (pathlib.Path('/proc') / pane[0] / 'environ').read_bytes().split(b'\0') if b'=' in entry)
 assert env.get(b'ENABLE_TOOL_SEARCH') == b'true', 'Claude lost tool search default'
 assert env.get(b'ENABLE_CLAUDEAI_MCP_SERVERS') == b'false', 'Claude must disable connector import by default'
@@ -1726,7 +1738,7 @@ policy = json.loads(pathlib.Path('/etc/claude-code/managed-settings.json').read_
 assert sorted(policy['availableModels']) == sorted(expected['models']), 'Claude managed model catalog differs from gateway'
 assert policy['enforceAvailableModels'] is True, 'Claude model policy is not enforced'
 assert policy['availableModelsMatch'] == 'exact', 'Claude model policy must match exact IDs'
-`, socket, session, string(expected)},
+`, socket, session, string(expected), map[bool]string{true: "file", false: "inline"}[e2eExpectations(t, ref.Orch).settingsFile]},
 		Stderr: &stderr,
 	})
 	require.NoError(t, err, "Claude model/MCP environment in %s: %s", session, stderr.String())
@@ -2182,11 +2194,18 @@ func e2eGascityAgentSessions(t *testing.T, ctx context.Context, state *RootState
 	return sessions
 }
 
-// The Taxiway-managed fragment routes every session through the lab gateway:
-// compare the Claude process with the managed Lab configuration in the guest,
-// without printing credentials.
-func assertE2EGascityGateway(t *testing.T, state *RootState, id, session string) {
+// The Taxiway-managed configuration routes every session through the lab
+// gateway with the selected effort: compare the Claude process with the
+// managed Lab configuration in the guest, without printing credentials.
+func assertE2EGascityLaunch(t *testing.T, state *RootState, id, session string) {
 	t.Helper()
+	ref, ok, err := state.Driver.ReadLabRef(context.Background(), id)
+	require.NoError(t, err)
+	require.True(t, ok)
+	effort := ref.Settings["effort"]
+	if effort == "" {
+		effort = "max" // Manifest default, Gas City's own default.
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	runE2EGascity(t, ctx, state, id, "python3", "-c", `import pathlib, shlex, subprocess, sys, tomllib
@@ -2206,7 +2225,10 @@ assert city.get('include', []).count('taxiway.toml') == 1, 'city.toml must inclu
 fragment = pathlib.Path(sys.argv[3], 'taxiway.toml')
 assert fragment.stat().st_mode & 0o077 == 0, 'managed fragment must be private'
 assert key not in fragment.read_text(), 'managed fragment must reference, not inline, the gateway key'
-`, e2eGascitySocket, session, e2eGascityCityDir)
+args = (pathlib.Path('/proc') / pid / 'cmdline').read_bytes().split(b'\0')
+efforts = [args[i + 1].decode() for i, arg in enumerate(args[:-1]) if arg == b'--effort']
+assert efforts == [sys.argv[4]], 'session must run with the selected effort, got %s' % efforts
+`, e2eGascitySocket, session, e2eGascityCityDir, effort)
 }
 
 func assertE2EGascitySessions(t *testing.T, state *RootState, id string) {
@@ -2238,7 +2260,7 @@ func assertE2EGascitySessions(t *testing.T, state *RootState, id string) {
 		runE2EGascity(t, ctx, state, id, "gc", "session", "list"))
 	for _, session := range sessions {
 		assertE2EClaudeEnvironment(t, state, id, e2eGascitySocket, session.SessionName)
-		assertE2EGascityGateway(t, state, id, session.SessionName)
+		assertE2EGascityLaunch(t, state, id, session.SessionName)
 		// Agents run under the trusted city (.gc/agents/*) or the trusted rig.
 		require.True(t, strings.HasPrefix(session.WorkDir, e2eGascityCityDir+"/") || session.WorkDir == e2eGascityRepo,
 			"session %s works outside the trusted roots: %s", session.SessionName, session.WorkDir)
@@ -2323,7 +2345,7 @@ func runE2EGascityReadinessActions(t *testing.T, state *RootState, id, stage str
 		runE2EAssert(t, "assert:fresh-session-configured-and-trusted", func(t *testing.T) {
 			require.Equal(t, e2eGascityRepo, fresh.WorkDir)
 			assertE2EClaudeEnvironment(t, state, id, e2eGascitySocket, fresh.SessionName)
-			assertE2EGascityGateway(t, state, id, fresh.SessionName)
+			assertE2EGascityLaunch(t, state, id, fresh.SessionName)
 			assertE2EAgentWorkspaceTrusted(t, state, id, "claude-code", fresh.WorkDir)
 		})
 	})
@@ -2361,7 +2383,7 @@ func runE2EGascityHandoff(t *testing.T, state *RootState, id string) {
 			waitE2EGascityActive(t, ctx, state, id, target.ID)
 			runE2EAssert(t, "assert:replacement-process-model-and-gateway-preserved", func(t *testing.T) {
 				assertE2EClaudeEnvironment(t, state, id, e2eGascitySocket, target.SessionName)
-				assertE2EGascityGateway(t, state, id, target.SessionName)
+				assertE2EGascityLaunch(t, state, id, target.SessionName)
 				if role == "gastown.mayor" {
 					assertE2EGascitySessions(t, state, id)
 				}
