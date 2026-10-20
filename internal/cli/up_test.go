@@ -2319,3 +2319,15 @@ func TestVersionChangeUsesPersistedLabDriver(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "0.160.0", saved.Settings["codex-version"])
 }
+
+func TestBuildBaseEnvExposesDriverGuestKind(t *testing.T) {
+	repo := t.TempDir()
+	for driverName, kind := range map[string]string{"docker": "container", "lima": "vm"} {
+		env, err := buildBaseEnv(repo, config.LabRef{Lab: "demo", Orch: "gascity", Driver: driverName})
+		require.NoError(t, err)
+		require.Equal(t, kind, env["TAXIWAY_GUEST_KIND"], driverName)
+	}
+	env, err := buildBaseEnv(repo, config.LabRef{Lab: "demo", Orch: "gascity"})
+	require.NoError(t, err)
+	require.NotContains(t, env, "TAXIWAY_GUEST_KIND", "an unknown driver must not claim a guest kind")
+}

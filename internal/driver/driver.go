@@ -94,3 +94,24 @@ type Status struct {
 	Created time.Time
 	Extra   map[string]string // driver-specific metadata (e.g. session_id, ip)
 }
+
+// Guest kinds name the environment type a driver provides. Adapters read them
+// (TAXIWAY_GUEST_KIND) to use each tool's official method for that type, for
+// example a detached supervisor in a container and a service unit in a VM.
+const (
+	GuestKindContainer = "container"
+	GuestKindVM        = "vm"
+)
+
+// GuestKind returns the guest environment type of the named driver, or "" for
+// an unknown driver.
+func GuestKind(driverName string) string {
+	switch driverName {
+	case "docker", "mock":
+		return GuestKindContainer
+	case "lima":
+		return GuestKindVM
+	default:
+		return ""
+	}
+}

@@ -295,3 +295,10 @@ func TestDryRun_ExecForwardsInspectionOnly(t *testing.T) {
 	require.True(t, calls[0].Inspect)
 	require.Equal(t, "inspection result\n", inspectOut.String())
 }
+
+func TestGuestKindMapsDriversToEnvironmentTypes(t *testing.T) {
+	require.Equal(t, GuestKindContainer, GuestKind(NewDockerDriver(t.TempDir()).Name()))
+	require.Equal(t, GuestKindVM, GuestKind(NewLimaDriver(t.TempDir()).Name()))
+	require.Equal(t, GuestKindContainer, GuestKind("mock"))
+	require.Empty(t, GuestKind("unknown"))
+}

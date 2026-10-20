@@ -168,6 +168,15 @@ Taxiway owns the lab lifecycle and calls the adapter at known phase boundaries.
 The adapter owns the details of installing, verifying, configuring, and starting
 the specific orchestrator.
 
+Every phase script receives `TAXIWAY_GUEST_KIND`, provided by the driver:
+`container` for Docker labs and `vm` for Lima labs. Adapters use it to pick each
+tool's official install and runtime method for that environment type, for
+example a detached foreground-style supervisor in a container and the tool's
+service unit in a VM. A container guest runs an init as PID 1 that reaps
+orphaned processes, and it has no systemd user manager: `systemctl --user`
+fails there instead of pretending to succeed. Adapters never mount the host
+Docker socket, and Taxiway does not fake system services for them.
+
 Agents can optionally provide `trust-workspace.sh`. Taxiway calls this hook
 after agent installation for `/lab/work`, then again after repository
 provisioning for the resolved workspace. The lifecycle owns when trust is
