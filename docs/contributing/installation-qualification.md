@@ -60,12 +60,12 @@ The step then checks the guest runtime contract that adapters rely on (see
   (`sh -c '(sleep 1 &)'`) is reaped and leaves no `Z` process, and
   `systemctl --user show-environment` fails with
   `[docker-shim] no systemd user manager in container`;
-- Lima: `systemctl --user show-environment` succeeds in the guest (a real
-  user manager).
+- Lima: `limactl shell taxiway-<lab> -- systemctl --user show-environment`
+  succeeds (a real user manager).
 
-The workflow installs a published release. Releases up to `0.4.0` predate this
+The workflow installs a published release. Releases before `0.5.0` predate this
 contract, so the job logs `skipped: release <version> predates the guest
-runtime contract` for them; every later release must pass these checks.
+runtime contract` for them; `0.5.0` and later releases must pass these checks.
 
 This validates installation and lab creation before orchestrator provisioning.
 It does not run authenticated agents or measure Gas Town performance.
