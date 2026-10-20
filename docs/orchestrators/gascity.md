@@ -89,7 +89,10 @@ and opens the `gascity` tmux session used by `taxiway shell` and
 In a Docker lab the detached supervisor inherits the start environment, and
 Docker's init (PID 1) reaps the processes the city leaves behind. The
 container has no systemd user manager, so Gas City never installs a unit
-there. A Lima unit only receives allow-listed variables: Taxiway sets
+there; `gc start` still prints that a per-user systemd instance is not
+available, which is expected in a container guest (start says so just before).
+If a running supervisor does not stop after one bounded retry, start fails
+with the stop error instead of reusing it, in both environments. A Lima unit only receives allow-listed variables: Taxiway sets
 `GC_SUPERVISOR_ENV="TAXIWAY_LITELLM_API_KEY TAXIWAY_LITELLM_BASE_URL"` during
 `gc start` so the fragment references resolve. The per-environment runtime
 contract is tracked in #179.

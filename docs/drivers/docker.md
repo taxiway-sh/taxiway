@@ -57,8 +57,10 @@ This matches the Lima driver contract: runtime assets are read-only, while
 directories under `.lab-state/<lab>/`. `/lab/work` is writable but remains
 internal to the lab for stronger isolation.
 
-Docker labs created before the `--init` change keep `sleep infinity` as PID 1;
-remove and recreate them (`taxiway rm`, then `taxiway up`) to get the init.
+Docker labs created before the `--init` change keep `sleep infinity` as PID 1
+and the old `systemctl` shim, which reported success for `systemctl --user`;
+remove and recreate them (`taxiway rm`, then `taxiway up`) to get the init and
+the current shim.
 
 Phase scripts receive `TAXIWAY_GUEST_KIND=container` in Docker labs; see
 [Adapter Boundary](../reference/architecture.md#adapter-boundary).
