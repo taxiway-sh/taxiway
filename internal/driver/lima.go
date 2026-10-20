@@ -26,6 +26,9 @@ func NewLimaDriver(stateDir string) *LimaDriver { return &LimaDriver{stateDir: s
 
 func (l *LimaDriver) Name() string { return "lima" }
 
+// GuestKind reports a VM guest with its own init and systemd.
+func (l *LimaDriver) GuestKind() string { return GuestKindVM }
+
 func (l *LimaDriver) Exists(ctx context.Context, id string) (bool, error) {
 	out, err := exec.CommandContext(ctx, "limactl", "list", "--format={{.Name}}").Output()
 	if err != nil {

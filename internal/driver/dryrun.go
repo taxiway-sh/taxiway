@@ -23,6 +23,8 @@ func NewDryRun(d Driver) Driver {
 
 func (dr *dryRunDriver) Name() string { return dr.inner.Name() }
 
+func (dr *dryRunDriver) GuestKind() string { return dr.inner.GuestKind() }
+
 func (dr *dryRunDriver) Exists(ctx context.Context, id string) (bool, error) {
 	return dr.inner.Exists(ctx, id)
 }

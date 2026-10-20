@@ -733,9 +733,6 @@ func buildBaseEnv(repoDir string, ref config.LabRef) (map[string]string, error) 
 		"TAXIWAY_LAB":  ref.Lab,
 		"TAXIWAY_ID":   idName(ref.Lab),
 	}
-	if kind := driver.GuestKind(ref.Driver); kind != "" {
-		env["TAXIWAY_GUEST_KIND"] = kind
-	}
 	if hqDir := os.Getenv("TAXIWAY_HQ_DIR"); hqDir != "" {
 		env["TAXIWAY_HQ_DIR"] = hqDir
 	}

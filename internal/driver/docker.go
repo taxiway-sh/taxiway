@@ -54,6 +54,9 @@ func NewDockerDriver(stateDir string) *DockerDriver {
 
 func (d *DockerDriver) Name() string { return "docker" }
 
+// GuestKind reports a container guest: an init as PID 1 and no systemd.
+func (d *DockerDriver) GuestKind() string { return GuestKindContainer }
+
 // idDir returns the sidecar directory for a given lab/lab name.
 func (d *DockerDriver) idDir(id string) string {
 	return filepath.Join(d.stateDir, config.LabDirOf(id))

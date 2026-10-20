@@ -19,6 +19,9 @@ var ErrExecTimeout = errors.New("exec timeout")
 // All CLI commands call only methods on Driver, never tool-specific CLIs directly.
 type Driver interface {
 	Name() string
+	// GuestKind is the environment type the lab provides to phase scripts
+	// (GuestKindContainer or GuestKindVM).
+	GuestKind() string
 
 	// Lifecycle
 	Exists(ctx context.Context, id string) (bool, error)
@@ -95,23 +98,11 @@ type Status struct {
 	Extra   map[string]string // driver-specific metadata (e.g. session_id, ip)
 }
 
-// Guest kinds name the environment type a driver provides. Adapters read them
-// (TAXIWAY_GUEST_KIND) to use each tool's official method for that type, for
-// example a detached supervisor in a container and a service unit in a VM.
+// Guest kinds name the environment type a driver provides. Phase scripts
+// receive it as TAXIWAY_GUEST_KIND and use each tool's official method for that
+// type, for example a detached supervisor in a container and a service unit in
+// a VM.
 const (
 	GuestKindContainer = "container"
 	GuestKindVM        = "vm"
 )
-
-// GuestKind returns the guest environment type of the named driver, or "" for
-// an unknown driver.
-func GuestKind(driverName string) string {
-	switch driverName {
-	case "docker", "mock":
-		return GuestKindContainer
-	case "lima":
-		return GuestKindVM
-	default:
-		return ""
-	}
-}

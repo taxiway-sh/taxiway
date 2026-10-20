@@ -252,7 +252,11 @@ func planScript(ctx context.Context, state *RootState, ref config.LabRef, script
 	if opts.InspectionAvailable {
 		return execPlannableScriptToWithRef(ctx, state, ref, script, stdout, stderr, env)
 	}
-	return execOfflinePlanScript(ctx, script, stdout, stderr, env)
+	d, err := driverForRef(state, ref)
+	if err != nil {
+		return err
+	}
+	return execOfflinePlanScript(ctx, script, stdout, stderr, withGuestKind(d, env))
 }
 
 func planAgentScripts(ctx context.Context, state *RootState, ref config.LabRef, scriptName string, stdout, stderr io.Writer, baseEnv map[string]string, opts phasePlanOptions) error {

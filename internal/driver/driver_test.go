@@ -296,9 +296,9 @@ func TestDryRun_ExecForwardsInspectionOnly(t *testing.T) {
 	require.Equal(t, "inspection result\n", inspectOut.String())
 }
 
-func TestGuestKindMapsDriversToEnvironmentTypes(t *testing.T) {
-	require.Equal(t, GuestKindContainer, GuestKind(NewDockerDriver(t.TempDir()).Name()))
-	require.Equal(t, GuestKindVM, GuestKind(NewLimaDriver(t.TempDir()).Name()))
-	require.Equal(t, GuestKindContainer, GuestKind("mock"))
-	require.Empty(t, GuestKind("unknown"))
+func TestDriversDeclareTheirGuestKind(t *testing.T) {
+	require.Equal(t, GuestKindContainer, NewDockerDriver(t.TempDir()).GuestKind())
+	require.Equal(t, GuestKindVM, NewLimaDriver(t.TempDir()).GuestKind())
+	require.Equal(t, GuestKindContainer, NewMockDriver(t.TempDir()).GuestKind())
+	require.Equal(t, GuestKindVM, NewDryRun(NewLimaDriver(t.TempDir())).GuestKind(), "dry-run keeps the wrapped driver's guest kind")
 }
