@@ -2789,6 +2789,12 @@ func configureE2ELiteLLMModelCatalog(t *testing.T, state *RootState, fakeUpstrea
 	converted, err := ensureLiteLLMChatGPTAuth(authStateDir(state), true)
 	require.NoError(t, err)
 	require.True(t, converted, "fixture auth must be provisioned before starting ChatGPT routes")
+	cache := liteLLMChatGPTAuthStatePath(authStateDir(state))
+	for path, want := range map[string]os.FileMode{filepath.Dir(cache): 0o700, cache: 0o600} {
+		info, err := os.Stat(path)
+		require.NoError(t, err)
+		require.Equal(t, want, info.Mode().Perm(), "ChatGPT token cache must stay private: %s", path)
+	}
 }
 
 func assertE2EGatewayModels(t *testing.T, state *RootState, id, orch string) {

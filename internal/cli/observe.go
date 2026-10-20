@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -476,6 +477,14 @@ func ensureLiteLLMChatGPTAuth(stateDir string, required bool) (bool, error) {
 	}
 
 	dst := liteLLMChatGPTAuthStatePath(stateDir)
+	// MkdirAll and WriteFile only apply modes on creation, so restrict an
+	// existing directory and file too.
+	if err := os.MkdirAll(filepath.Dir(dst), 0o700); err != nil {
+		return false, fmt.Errorf("creating LiteLLM ChatGPT auth directory: %w", err)
+	}
+	if err := os.Chmod(filepath.Dir(dst), 0o700); err != nil {
+		return false, fmt.Errorf("restricting LiteLLM ChatGPT auth directory: %w", err)
+	}
 	if dstInfo, statErr := os.Stat(dst); statErr == nil && !sourceInfo.ModTime().After(dstInfo.ModTime()) {
 		// LiteLLM can replace an invalid cache with device-login state. Its
 		// modification time alone does not mean usable credentials exist.
@@ -487,6 +496,9 @@ func ensureLiteLLMChatGPTAuth(stateDir string, required bool) (bool, error) {
 		}
 		if readErr == nil && json.Unmarshal(cached, &tokens) == nil &&
 			tokens.AccessToken != "" && tokens.RefreshToken != "" && tokens.IDToken != "" {
+			if err := restrictLiteLLMChatGPTAuthFile(dst); err != nil {
+				return false, err
+			}
 			return true, nil
 		}
 	}
@@ -499,13 +511,22 @@ func ensureLiteLLMChatGPTAuth(stateDir string, required bool) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if err := os.MkdirAll(filepath.Dir(dst), 0o700); err != nil {
-		return false, fmt.Errorf("creating LiteLLM ChatGPT auth directory: %w", err)
-	}
 	if err := os.WriteFile(dst, converted, 0o600); err != nil {
 		return false, fmt.Errorf("writing LiteLLM ChatGPT auth file: %w", err)
 	}
+	if err := restrictLiteLLMChatGPTAuthFile(dst); err != nil {
+		return false, err
+	}
 	return true, nil
+}
+
+// restrictLiteLLMChatGPTAuthFile tightens an existing cache file. A
+// container-owned file cannot be changed; its directory still restricts it.
+func restrictLiteLLMChatGPTAuthFile(path string) error {
+	if err := os.Chmod(path, 0o600); err != nil && !errors.Is(err, os.ErrPermission) {
+		return fmt.Errorf("restricting LiteLLM ChatGPT auth file: %w", err)
+	}
+	return nil
 }
 
 func convertCodexAuthToLiteLLMChatGPTAuth(data []byte) ([]byte, error) {

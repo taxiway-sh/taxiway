@@ -1527,6 +1527,43 @@ func TestEnsureLiteLLMChatGPTAuth_ValidatesNewerCache(t *testing.T) {
 	}
 }
 
+func TestEnsureLiteLLMChatGPTAuth_RestrictsExistingCacheModes(t *testing.T) {
+	for _, tc := range []struct {
+		name, cached string
+	}{
+		{"valid-cache-kept", `{"access_token":"a","refresh_token":"r","id_token":"i"}`},
+		// WriteFile keeps an existing file's mode, so the rewrite must chmod it.
+		{"invalid-cache-rewritten", `{`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			source := filepath.Join(home, ".codex", "auth.json")
+			stateDir := filepath.Join(home, "auth")
+			cache := liteLLMChatGPTAuthStatePath(stateDir)
+			require.NoError(t, os.MkdirAll(filepath.Dir(source), 0o700))
+			require.NoError(t, os.MkdirAll(filepath.Dir(cache), 0o755))
+			require.NoError(t, os.Chmod(filepath.Dir(cache), 0o755))
+			require.NoError(t, os.WriteFile(source, []byte(`{"tokens":{"access_token":"host-access","refresh_token":"refresh","id_token":"id"}}`), 0o600))
+			require.NoError(t, os.WriteFile(cache, []byte(tc.cached), 0o644))
+			require.NoError(t, os.Chmod(cache, 0o644))
+			older := time.Now().Add(-time.Hour)
+			require.NoError(t, os.Chtimes(source, older, older))
+
+			enabled, err := ensureLiteLLMChatGPTAuth(stateDir, true)
+
+			require.NoError(t, err)
+			require.True(t, enabled)
+			dirInfo, err := os.Stat(filepath.Dir(cache))
+			require.NoError(t, err)
+			assert.Equal(t, os.FileMode(0o700), dirInfo.Mode().Perm())
+			fileInfo, err := os.Stat(cache)
+			require.NoError(t, err)
+			assert.Equal(t, os.FileMode(0o600), fileInfo.Mode().Perm())
+		})
+	}
+}
+
 func TestEnsureLiteLLMConfigFile_OverwritesGeneratedLabConfig(t *testing.T) {
 	tmp := t.TempDir()
 	home := t.TempDir()
