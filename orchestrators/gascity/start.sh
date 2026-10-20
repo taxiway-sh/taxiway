@@ -348,8 +348,9 @@ PY
 
 log "Waiting for Gas City agent sessions"
 wait_for_sessions
-if [[ -n "${TAXIWAY_DASHBOARD_HOST_PORT:-}" ]]; then
-    echo "Dashboard: http://127.0.0.1:${TAXIWAY_DASHBOARD_HOST_PORT} (forwarded on Lima labs)"
+# Only Lima labs forward the dashboard to the host; Docker labs do not publish it.
+if [[ "${TAXIWAY_GUEST_KIND:-}" == vm && -n "${TAXIWAY_DASHBOARD_HOST_PORT:-}" ]]; then
+    echo "Dashboard: http://127.0.0.1:${TAXIWAY_DASHBOARD_HOST_PORT}"
 fi
 
 start_dir="$GASCITY_CITY_DIR"

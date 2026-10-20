@@ -286,8 +286,9 @@ done
 echo ""
 echo "=== gascity start runs the supervisor detached in a container guest ==="
 : > "$tmp/gc.log"
-out="$(run_start env GC_RIG_PATH="$rig" TAXIWAY_GUEST_KIND=container)"
+out="$(run_start env GC_RIG_PATH="$rig" TAXIWAY_GUEST_KIND=container TAXIWAY_DASHBOARD_HOST_PORT=23456)"
 gc_calls="$(cat "$tmp/gc.log")"
+_assert_not_contains "does not announce a dashboard Docker does not publish" "$out" "Dashboard: http://127.0.0.1:23456"
 _assert_order "stops the running supervisor before starting it detached" "$gc_calls" "gc supervisor stop --wait" "gc supervisor start"
 _assert_order "starts the detached supervisor before the city" "$gc_calls" "gc supervisor start" "gc start $city"
 _assert_line "the detached supervisor inherits the gateway key without a service opt-in" "$gc_calls" \
@@ -299,8 +300,9 @@ _assert_contains "reports the container runtime" "$out" "Starting the Gas City s
 echo ""
 echo "=== gascity start uses gc start alone in a VM guest ==="
 : > "$tmp/gc.log"
-out="$(run_start env GC_RIG_PATH="$rig" TAXIWAY_GUEST_KIND=vm)"
+out="$(run_start env GC_RIG_PATH="$rig" TAXIWAY_GUEST_KIND=vm TAXIWAY_DASHBOARD_HOST_PORT=23456)"
 gc_calls="$(cat "$tmp/gc.log")"
+_assert_contains "announces the forwarded dashboard" "$out" "Dashboard: http://127.0.0.1:23456"
 _assert_not_contains "does not start a detached supervisor" "$gc_calls" "gc supervisor start"
 _assert_line "opts the gateway variables into the service unit" "$gc_calls" "GC_SUPERVISOR_ENV=TAXIWAY_LITELLM_API_KEY TAXIWAY_LITELLM_BASE_URL"
 
