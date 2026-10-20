@@ -28,3 +28,16 @@ func TestPortForwardGascityDashboardUsesSupervisorPort(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEqual(t, spec.GuestPort, port)
 }
+
+func TestPreparePortForwardExplainsStoppedLimaLab(t *testing.T) {
+	_, state, mock, _, _ := buildUpTestRoot(t)
+	state.Driver = &namedTestDriver{MockDriver: mock, name: "lima"}
+	ref := config.LabRef{Lab: "demo", Orch: "gascity", Driver: "lima"}
+
+	err := preparePortForward(testCtx(t), state, ref, map[string]string{})
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `lab "demo" is not running`)
+	require.Contains(t, err.Error(), "taxiway create demo")
+	require.Contains(t, err.Error(), "taxiway run demo")
+}
