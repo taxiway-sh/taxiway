@@ -154,23 +154,31 @@ assert_contains "$output" "Starting Gas Town daemon if required"
 assert_contains "$output" "Starting crew workspace"
 assert_contains "$output" "Starting tmux session 'gastown'"
 
-output="$(run_plan "$ROOT_DIR/orchestrators/gascity/start.sh" env \
-  TAXIWAY_LAB=demo TAXIWAY_GUEST_KIND=container \
-  TAXIWAY_LITELLM_API_KEY=test TAXIWAY_SET_MODEL=test-model \
-  TAXIWAY_REPO_URL=https://github.com/acme/project.git \
-  TAXIWAY_WORKSPACE_DIR=/lab/work/project)"
-assert_contains "$output" "Initializing Gas City city at /lab/work/gc when required"
-assert_contains "$output" "Registering rig from /lab/work/project when missing"
-assert_contains "$output" "Configuring Gas City for the Taxiway LiteLLM gateway"
-assert_contains "$output" "model: test-model"
-assert_contains "$output" "effort: max"
-assert_contains "$output" "Restarting the Gas City supervisor"
-assert_contains "$output" "container guest: detached gc supervisor start, then gc start"
-output="$(run_plan "$ROOT_DIR/orchestrators/gascity/start.sh" env \
-  TAXIWAY_LAB=demo TAXIWAY_GUEST_KIND=vm TAXIWAY_LITELLM_API_KEY=test TAXIWAY_SET_MODEL=test-model)"
-assert_contains "$output" "vm guest: gc start with its systemd user unit"
-assert_contains "$output" "Waiting for Gas City agent sessions"
-assert_contains "$output" "Starting tmux session 'gascity'"
+for kind in container vm; do
+  output="$(run_plan "$ROOT_DIR/orchestrators/gascity/start.sh" env \
+    TAXIWAY_LAB=demo TAXIWAY_GUEST_KIND="$kind" \
+    TAXIWAY_LITELLM_API_KEY=test TAXIWAY_SET_MODEL=test-model \
+    TAXIWAY_REPO_URL=https://github.com/acme/project.git \
+    TAXIWAY_WORKSPACE_DIR=/lab/work/project)"
+  assert_contains "$output" "Initializing Gas City city at /lab/work/gc when required"
+  assert_contains "$output" "Registering rig from /lab/work/project when missing"
+  assert_contains "$output" "Configuring Gas City for the Taxiway LiteLLM gateway"
+  assert_contains "$output" "model: test-model"
+  assert_contains "$output" "effort: max"
+  assert_contains "$output" "Restarting the Gas City supervisor"
+  assert_contains "$output" "Waiting for Gas City agent sessions"
+  assert_contains "$output" "Starting tmux session 'gascity'"
+  case "$kind" in
+    container) gascity_container_plan="$output" ;;
+    vm) gascity_vm_plan="$output" ;;
+  esac
+done
+assert_contains "$gascity_container_plan" "container guest: detached gc supervisor start, then gc start"
+assert_contains "$gascity_vm_plan" "vm guest: gc start with its systemd user unit"
+if [[ "$gascity_container_plan" == *"vm guest:"* || "$gascity_vm_plan" == *"container guest:"* ]]; then
+  printf 'Gas City start plan mixes guest kinds\n' >&2
+  exit 1
+fi
 
 output="$(run_plan "$ROOT_DIR/infra/commands/reset.sh")"
 assert_contains "$output" "Stopping workspace services"

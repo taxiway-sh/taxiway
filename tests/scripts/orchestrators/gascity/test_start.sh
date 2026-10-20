@@ -41,6 +41,15 @@ _assert_not_contains() {
   fi
 }
 
+_assert_line() {
+  local test_name="$1" output="$2" expected="$3"
+  if grep -qxF -- "$expected" <<<"$output"; then
+    _pass "$test_name"
+  else
+    _fail "$test_name" "expected the exact line: $expected" "in output: $output"
+  fi
+}
+
 _assert_order() {
   local test_name="$1" output="$2" first="$3" second="$4"
   local first_line second_line
@@ -76,10 +85,14 @@ case "$1 ${2:-}" in
     [[ -f "$GC_RUNNING" ]]
     ;;
   "supervisor stop")
+    if [[ -n "${GC_SUPERVISOR_STICKY:-}" ]]; then
+      echo "fake: supervisor refused to stop" >&2
+      exit 1
+    fi
     rm -f "$GC_RUNNING"
     ;;
   "supervisor start")
-    printf 'detached GC_SUPERVISOR_ENV=%s\n' "${GC_SUPERVISOR_ENV:-}" >> "$GC_LOG"
+    printf 'detached GC_SUPERVISOR_ENV=%s TAXIWAY_LITELLM_API_KEY=%s\n' "${GC_SUPERVISOR_ENV:-}" "${TAXIWAY_LITELLM_API_KEY:+set}" >> "$GC_LOG"
     touch "$GC_RUNNING"
     ;;
   "start "*)
@@ -144,7 +157,7 @@ gc_calls="$(cat "$tmp/gc.log")"
 _assert_contains "creates the missing city" "$gc_calls" "gc init $city --template gastown"
 _assert_contains "registers the workspace rig" "$gc_calls" "gc rig add $rig --name demo"
 _assert_not_contains "does not stop a supervisor that is not running" "$gc_calls" "gc stop"
-_assert_contains "opts the gateway variables into the supervisor environment" "$gc_calls" \
+_assert_line "opts the gateway variables into the supervisor environment" "$gc_calls" \
   "GC_SUPERVISOR_ENV=TAXIWAY_LITELLM_API_KEY TAXIWAY_LITELLM_BASE_URL"
 _assert_contains "api-key mode exports the native gateway credential" "$gc_calls" "ANTHROPIC_AUTH_TOKEN=set"
 _assert_contains "waits for agent sessions" "$out" "Gas City agent sessions are active"
@@ -272,8 +285,10 @@ out="$(run_start env GC_RIG_PATH="$rig" TAXIWAY_GUEST_KIND=container)"
 gc_calls="$(cat "$tmp/gc.log")"
 _assert_order "stops the running supervisor before starting it detached" "$gc_calls" "gc supervisor stop --wait" "gc supervisor start"
 _assert_order "starts the detached supervisor before the city" "$gc_calls" "gc supervisor start" "gc start $city"
-_assert_contains "the detached supervisor needs no service environment opt-in" "$gc_calls" "detached GC_SUPERVISOR_ENV="
-_assert_not_contains "no service environment opt-in for the city start" "$gc_calls" "GC_SUPERVISOR_ENV=TAXIWAY_LITELLM_API_KEY"
+_assert_line "the detached supervisor inherits the gateway key without a service opt-in" "$gc_calls" \
+  "detached GC_SUPERVISOR_ENV= TAXIWAY_LITELLM_API_KEY=set"
+_assert_line "no service environment opt-in for the city start" "$gc_calls" "GC_SUPERVISOR_ENV="
+_assert_contains "explains gc's systemd message in a container" "$out" "expected in a container guest"
 _assert_contains "reports the container runtime" "$out" "Starting the Gas City supervisor detached (container guest)"
 
 echo ""
@@ -282,7 +297,33 @@ echo "=== gascity start uses gc start alone in a VM guest ==="
 out="$(run_start env GC_RIG_PATH="$rig" TAXIWAY_GUEST_KIND=vm)"
 gc_calls="$(cat "$tmp/gc.log")"
 _assert_not_contains "does not start a detached supervisor" "$gc_calls" "gc supervisor start"
-_assert_contains "opts the gateway variables into the service unit" "$gc_calls" "GC_SUPERVISOR_ENV=TAXIWAY_LITELLM_API_KEY TAXIWAY_LITELLM_BASE_URL"
+_assert_line "opts the gateway variables into the service unit" "$gc_calls" "GC_SUPERVISOR_ENV=TAXIWAY_LITELLM_API_KEY TAXIWAY_LITELLM_BASE_URL"
+
+echo ""
+echo "=== gascity start refuses a supervisor that does not stop ==="
+for kind in container vm; do
+  touch "$tmp/running"
+  : > "$tmp/gc.log"
+  set +e
+  out="$(run_start env GC_RIG_PATH="$rig" TAXIWAY_GUEST_KIND="$kind" GC_SUPERVISOR_STICKY=1)"
+  status=$?
+  set -e
+  gc_calls="$(cat "$tmp/gc.log")"
+  if [[ "$status" != 0 ]]; then
+    _pass "fails when the supervisor survives the retry ($kind)"
+  else
+    _fail "fails when the supervisor survives the retry ($kind)"
+  fi
+  _assert_contains "reports the stuck supervisor ($kind)" "$out" "could not stop the running Gas City supervisor"
+  _assert_contains "shows the stop error ($kind)" "$out" "fake: supervisor refused to stop"
+  if [[ "$(grep -cxF 'gc supervisor stop --wait' <<<"$gc_calls")" == 2 ]]; then
+    _pass "retries the bounded stop once ($kind)"
+  else
+    _fail "retries the bounded stop once ($kind)" "$gc_calls"
+  fi
+  _assert_not_contains "never reuses the stale supervisor ($kind)" "$gc_calls" "gc start $city"
+done
+rm -f "$tmp/running"
 
 echo ""
 echo "=== gascity start fails when sessions never become active ==="
