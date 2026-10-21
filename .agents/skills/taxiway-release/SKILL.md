@@ -7,7 +7,7 @@ description: Use when preparing, qualifying, cutting or resuming a Taxiway relea
 
 Read [`AGENTS.md`](../../../AGENTS.md) and the
 [release recipe](../../../docs/contributing/release-qualification.md); durable
-E2E assertions follow the [E2E scenario rule](../../../AGENTS.md#e2e-scenarios).
+E2E assertions follow the [E2E scenario rule](../taxiway-testing/SKILL.md#e2e-scenarios).
 The recipe owns checks, evidence and phase-specific commands. Use the same
 source in Codex and Claude Code; no client-specific workflow engine is needed.
 
@@ -26,7 +26,7 @@ documentation-only and agent-tooling changes wait for the next one.
    committed feature suite. Preserve the real-account evidence requirements;
    controlled-provider E2Es do not prove real delegation or model availability.
    Work through the pre-publication table and documentation/behavior checklist.
-   Reuse existing E2Es and live helpers. Coordinate one heavy run at a time;
+   Reuse the live helpers. Coordinate one heavy run at a time;
    bound commands and provider usage. Authentication failures follow
    [When authentication fails](../../../docs/contributing/live-tests.md#when-authentication-fails).
 4. Inspect actual test counts, skips, outputs/effects, observed versions/models
@@ -47,9 +47,9 @@ documentation-only and agent-tooling changes wait for the next one.
    checks on the final candidate. Present release blockers, qualified combinations,
    untested paths and the report, even under deadline pressure, and end with
    one go/no-go line that names deferred items and untested combinations.
-   Core CI does not
-   replace the lifecycle E2E scenarios of every orchestrator, and snapshot success
-   does not replace published installation.
+   Lifecycle E2E coverage follows the
+   [E2E scenario rule](../taxiway-testing/SKILL.md#e2e-scenarios), and snapshot
+   success does not replace published installation.
 6. Qualification-only requests perform no tag, push or publication. A request
    to publish authorizes only the explicit requested publication after the recipe;
    follow `release.md`. After authorized publication, start

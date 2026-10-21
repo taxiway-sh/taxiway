@@ -6,7 +6,10 @@ a person would manually. Choose bounded actions and observable
 results for that task; keep temporary scripts, logs and sanitized reports outside
 Git. `tests/live/` provides reusable tooling, not a feature regression suite.
 Orchestrator lifecycle nonregression assertions follow the
-[E2E scenario rule](https://github.com/taxiway-sh/taxiway/blob/main/AGENTS.md#e2e-scenarios); see [Testing](testing.md). Real model calls are explicitly opt-in and consume the
+[E2E scenario rule](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-testing/SKILL.md#e2e-scenarios); choosing Docker or Lima and
+what a cloud session cannot validate follow the
+[`taxiway-testing` skill](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-testing/SKILL.md#live-validation-docker-or-lima).
+This page owns the commands; see also [Testing](testing.md). Real model calls are explicitly opt-in and consume the
 account's subscription allowance. Account-free E2Es do not prove real-account
 model access, inference or delegation.
 
@@ -205,9 +208,47 @@ direnv exec . python3 tests/live/taxiway_live.py run \
 `run` prepares a uniquely named lab, propagates the login before starting any
 agent roles, runs the ordinary runtime phases,
 runs the command with the lab's own gateway environment, then removes only that
-temporary lab. Captured command output is not printed. A missing marker,
+temporary lab. Captured command output is not printed unless `--show-output`
+is given. A missing marker,
 nonzero exit or timeout fails the smoke check and still triggers cleanup.
 The reference login and shared Langfuse/proxy runtime remain available.
+
+### Diagnostic output for provider-free runs
+
+When a provider-free check fails (installation, `init`, a new adapter's
+supervisor or session readiness), add `--show-output` to print the failed
+command's captured stdout and stderr instead of withholding them:
+
+```bash
+direnv exec . python3 tests/live/taxiway_live.py run \
+  --type gascity --show-output --timeout 60 -- gc status
+```
+
+The output is sanitized: values of key, token, secret, password and
+authorization fields and options, credentials in URLs, bearer tokens, API-key,
+GitHub, GitLab, Slack, AWS and JWT token shapes and private keys are redacted;
+the runtime directory, the repository and home (and their resolved forms) are
+named instead of printed; only the last 4000 characters of each stream are
+kept. An empty capture prints `(no captured output)`. The helper still
+removes the owned lab. `--show-output` is refused with `--auth-lab`, and
+`diagnostic_output()` is refused once the process has handled a reference
+login, so authenticated runs keep withholding output. Redaction is a safety
+net, not a license: do not use the mode on commands that print credentials.
+Without the flag, output stays withheld.
+
+Temporary scripts get the same diagnostic for a failed `command`, `guest` or
+`run_in_lab` call:
+
+```python
+from taxiway_live import CommandFailed, diagnostic_output, guest, temporary_lab
+
+with temporary_lab("gascity", prepare_only=True) as lab:
+    try:
+        guest(lab, "gc status", timeout=30)
+    except CommandFailed as error:
+        print(diagnostic_output(error))
+        raise
+```
 
 Use `--driver lima` for a Lima target, repeat `--set key=value` for orchestrator
 settings, or add `--repo <git-url>` for a workspace. These settings are persisted
@@ -223,8 +264,8 @@ delegation, or a particular model. Inspect actual effects and traces using the
 ## Lima driver and recording recipes
 
 The automated lifecycle E2E scenarios use Docker. Lima validation is a task-specific
-manual check by an agent, selected here through the existing
-[workflow skill](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-workflow/SKILL.md).
+manual check by an agent, chosen as the
+[`taxiway-testing` skill](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-testing/SKILL.md#live-validation-docker-or-lima) says.
 These recipes preserve the useful observations of the former native scripts;
 they are not a committed executable suite. Docker results do not qualify Lima.
 Choose only the observations relevant to your feature, and report which actually
@@ -274,7 +315,8 @@ file in `finally`, even after a failed assertion.
 
 Use `subprocess.run(..., capture_output=True, timeout=30)` for that expected
 rejection so you can inspect its exit code and specific stderr locally; the
-shared `command` deliberately withholds error output.
+shared `command` keeps error output off its error message (see
+[diagnostic output](#diagnostic-output-for-provider-free-runs)).
 
 Rerun create after restoring readiness: it must succeed and write `create.done`
 while reusing the same runtime ID. For restart, run `taxiway down <lab>` (120-second
@@ -367,7 +409,8 @@ Available helpers:
 | `run_in_lab(lab, argv, agent=..., ...)` | Execute argv with the lab's gateway environment and a guest timeout |
 | `propagate_claude_auth(source, target, overwrite=False)` | Reuse a reference OAuth login without copying gateway secrets |
 | `temporary_lab(orch, auth_lab=..., ...)` | Create an owned lab and remove it on normal exit or an exception |
-| `command(argv, ...)` | Run a bounded host command; capture output without printing it |
+| `command(argv, ...)` | Run a bounded host command; capture output without printing it; a failure raises `CommandFailed` |
+| `diagnostic_output(error)` | Sanitized captured output of a failed provider-free command; refused after credential propagation |
 | `runtime_id(lab)` | Resolve the driver identifier from the active context |
 
 For example, this temporary check verifies filesystem persistence across an
@@ -391,8 +434,9 @@ test "$(cat /lab/work/live-fixture)" = fixture && printf RESTART_OK
 Add the assertions that establish your feature's behavior: inspect a resulting
 file for an edit, client tool events for tool execution, child session metadata
 for delegation, and gateway/Langfuse generations for actual model calls.
-Reuse existing E2Es for durable regression assertions; real-account observations
-remain task-specific live evidence.
+Durable regression assertions go where the
+[E2E scenario rule](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-testing/SKILL.md#e2e-scenarios) says; real-account
+observations remain task-specific live evidence.
 
 `guest` captures shell stdout, so never print or persist credential-bearing
 output in a scenario. Keep requests small and timeouts explicit. Tests run
