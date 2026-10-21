@@ -25,10 +25,9 @@ Each agent is declared in this repository and changes only through reviewed PRs:
 - `.agents/agents/<id>.prompt.md`: the job, read at the start of every run.
 
 `repositories` lists the repositories the agent works on (`taxiway-sh/taxiway`
-and `taxiway-sh/agents`); the read-only attachments of public upstream
-repositories that a run makes through
+and `taxiway-sh/agents`); the upstream repositories a run reads through git, as
 [`taxiway-upstream`](../taxiway-upstream/SKILL.md#reading-upstream-from-a-cloud-session)
-are not declared there. `read` means the agent never pushes to that repository.
+says, are not declared there. `read` means the agent never pushes to that repository.
 `write` on `taxiway-sh/taxiway` means pushing, without force, to branches other
 than `main`; `make lint` requires it exactly when `push-pr-branch` or
 `change-agent-system` is at `ask` or `auto`. Issue and PR writes follow
