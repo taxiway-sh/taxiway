@@ -41,6 +41,8 @@ When something needs the maintainer, send one `PushNotification` titled
    [Heartbeat, offline machine and metrics](../skills/taxiway-agents/SKILL.md#heartbeat-offline-machine-and-metrics)
    says;
 5. agents not installed, each linked to its declaration on `main`.
+6. old sessions ready to archive, as Check reports them:
+   `old session ready to archive: run /install-agents`.
 
 An agent not installed is listed in the reply and in `waiting` at every run,
 but calls for a `PushNotification` only on the first day it appears; when it
