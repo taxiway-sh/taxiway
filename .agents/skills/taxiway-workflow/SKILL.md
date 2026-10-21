@@ -27,6 +27,10 @@ running or a check passed; old-head results do not validate a new commit;
 unknown past results remain unknown. Do not claim drafts, diagnoses, tests or
 state writes exist without an actual commit, comment, process or result.
 
+Before proposing an action on an issue or PR, read its comments, reviews and
+checks since the last review or decision you know of: a maintainer decision
+recorded in a comment supersedes any earlier heartbeat, review or report.
+
 - **New need:** follow [`taxiway-intake`](../taxiway-intake/SKILL.md).
 - **Backlog:** follow [`taxiway-triage`](../taxiway-triage/SKILL.md); the user
   selects the work.
