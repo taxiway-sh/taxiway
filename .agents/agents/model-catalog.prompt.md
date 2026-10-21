@@ -20,10 +20,13 @@ to green, or report why not.
    checks the fix needs (`taxiway-testing`, or
    [Testing](../../docs/contributing/testing.md) while that skill is not on
    `main`), then propose the push (`push-pr-branch`) with the diff and the
-   results. After the OK, push with
-   `git push origin HEAD:automation/model-catalog`, never with force; when
-   the push is refused because the branch moved, fetch and redo the fix.
-   Remove the worktree after the push or the refusal.
+   results. After the maintainer's OK, push with
+   `git push origin HEAD:automation/model-catalog`, never with force. When
+   git refuses the push because the branch moved, fetch it, redo the fix and
+   propose it again with its new diff: the earlier OK covered another diff.
+   Remove the worktree after the push, after git refuses it, or when the
+   maintainer refuses the proposal. At the start of each run, and once the
+   deadline below has passed, remove any repair worktree left over.
 4. **Ready and merge.** Ask for the OK to mark the PR ready (`mark-pr-ready`)
    only when every recorded check passes on its head, and to merge it
    (`merge-pr`) only once it is ready.
