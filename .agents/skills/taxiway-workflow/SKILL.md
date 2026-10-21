@@ -43,6 +43,7 @@ without an actual artifact, process or result.
 | Releases: follow [`taxiway-release`](../taxiway-release/SKILL.md) | |
 | Upstream issues, PRs, comments, pushes or forks ([procedure](../../../docs/contributing/development.md#upstream-dependency-bugs)) | |
 | Real-provider (paid) live checks | |
+| Installing, changing or removing a [scheduled agent](../taxiway-agents/SKILL.md) | |
 | Discarding commits, user edits or persistent labs | |
 
 Authorization for Taxiway work never authorizes upstream publication. A pending
@@ -94,6 +95,9 @@ maintainer.
 
 ## Interaction
 
+- A question or a request for an opinion is not a request to act: answer it
+  and propose the action; act only when asked, within the
+  [approvals](#approvals).
 - Commands handed to the user are single lines that run as pasted from the
   worktree root, with worktree-relative paths, lab names per
   [live validation](../../../tests/live/AGENTS.md) and the expected output of

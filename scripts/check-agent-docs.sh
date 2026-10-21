@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # Check agent docs and docs/ pages: skill frontmatter and discovery symlinks,
+# scheduled agent declarations and heartbeat schema,
 # relative Markdown links (pages under docs/ reach other files through blob
 # URLs), and normative phrases that must stay in their owner.
 # Usage: scripts/check-agent-docs.sh [repository-root]
 set -euo pipefail
 root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 exec python3 -I - "$root" <<'PY'
+import json
 import pathlib
 import re
 import sys
@@ -121,6 +123,71 @@ def check_skills():
             errors.append(f".claude/skills/{entry.name}: no matching .agents/skills/{entry.name}")
 
 
+AGENT_FIELDS = {"id", "title", "schedule", "repositories", "workdir", "skills", "outputs", "autonomy"}
+AUTONOMY = {"ask"}
+HEARTBEAT_SCHEMA = "status.schema.json"
+
+
+def check_agents():
+    """Scheduled agent declarations: .agents/agents/<id>.json + <id>.prompt.md."""
+    agents = root / ".agents/agents"
+    schedules = {}
+    schema = agents / HEARTBEAT_SCHEMA
+    if agents.is_dir():
+        try:
+            if "promptVersion" not in json.loads(schema.read_text()).get("required", []):
+                errors.append(f"{rel(schema)}: must require promptVersion")
+        except (OSError, ValueError) as err:
+            errors.append(f"{rel(schema)}: unreadable heartbeat schema: {err}")
+    decls = [p for p in agents.glob("*.json") if p.name != HEARTBEAT_SCHEMA] if agents.is_dir() else []
+    for decl in sorted(decls):
+        name = rel(decl)
+        try:
+            data = json.loads(decl.read_text())
+        except ValueError as err:
+            errors.append(f"{name}: invalid JSON: {err}")
+            continue
+        if not isinstance(data, dict):
+            errors.append(f"{name}: must be a JSON object")
+            continue
+        missing = AGENT_FIELDS - data.keys()
+        extra = data.keys() - AGENT_FIELDS
+        if missing:
+            errors.append(f"{name}: missing fields {sorted(missing)}")
+        if extra:
+            errors.append(f"{name}: unknown fields {sorted(extra)}")
+        if data.get("id") != decl.stem:
+            errors.append(f"{name}: id must be {decl.stem!r}")
+        if not (agents / f"{decl.stem}.prompt.md").is_file():
+            errors.append(f"{name}: missing {decl.stem}.prompt.md")
+        schedule = data.get("schedule")
+        if not isinstance(schedule, str) or len(schedule.split()) != 5:
+            errors.append(f"{name}: schedule must be five cron fields")
+        elif schedule in schedules:
+            errors.append(f"{name}: schedule {schedule!r} already used by {schedules[schedule]}")
+        else:
+            schedules[schedule] = decl.stem
+        repos = data.get("repositories")
+        if not isinstance(repos, dict) or any(v not in ("read", "write") for v in repos.values()):
+            errors.append(f"{name}: repositories must map each repository to read or write")
+        elif repos.get("taxiway-sh/taxiway") != "read":
+            errors.append(f"{name}: taxiway-sh/taxiway access must be read")
+        for field in ("title", "workdir"):
+            if not isinstance(data.get(field), str) or not data.get(field):
+                errors.append(f"{name}: {field} must be a non-empty string")
+        for field in ("skills", "outputs"):
+            if not isinstance(data.get(field), list) or not all(isinstance(v, str) for v in data.get(field)):
+                errors.append(f"{name}: {field} must be a list of strings")
+        for skill in data.get("skills") if isinstance(data.get("skills"), list) else []:
+            if not (root / ".agents/skills" / str(skill) / "SKILL.md").is_file():
+                errors.append(f"{name}: unknown skill {skill!r}")
+        if not isinstance(data.get("autonomy"), str) or data["autonomy"] not in AUTONOMY:
+            errors.append(f"{name}: autonomy must be one of {sorted(AUTONOMY)}")
+    for prompt in sorted(agents.glob("*.prompt.md")) if agents.is_dir() else []:
+        if not (agents / (prompt.name[: -len(".prompt.md")] + ".json")).is_file():
+            errors.append(f"{rel(prompt)}: no matching declaration")
+
+
 def in_docs(path):
     return path.resolve().is_relative_to(root / "docs")
 
@@ -156,6 +223,7 @@ def check_owned_phrases(files):
 
 files = docs()
 check_skills()
+check_agents()
 for path in files:
     check_links(path)
 check_owned_phrases(files)

@@ -31,6 +31,13 @@ PR):
   falls out naturally, not when forced.
 - Independent documentation fixes are the exception worth splitting: each small,
   self-contained correction makes a good `good first issue`.
+- An issue is about the Taxiway product or how to contribute to it. The
+  maintainer's personal tooling, agent setup and machine, and studies of
+  them, are not Taxiway work and stay out of issues, PRs and comments;
+  approved Taxiway studies and plans are posted as described in
+  [`taxiway-workflow`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-workflow/SKILL.md).
+  Host details and private paths follow the
+  [invariants](https://github.com/taxiway-sh/taxiway/blob/main/AGENTS.md#invariants).
 
 ## Issue format
 
