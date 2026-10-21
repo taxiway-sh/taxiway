@@ -100,7 +100,7 @@ Review adversarially: look for what is wrong, not for confirmation.
   agent that ran the round notes it as declined.
 - Keep reviews proportionate: on a small documentation change, one blind round
   over the whole PR is enough when it finds nothing; add rounds only after
-  findings were fixed.
+  findings were fixed or the scope changed.
 - Problems that are global or outside the change become issue proposals
   through [`taxiway-intake`](../taxiway-intake/SKILL.md), not fixes in this
   change.
