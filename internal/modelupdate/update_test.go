@@ -149,50 +149,53 @@ func TestPrepareAddsRetirementFieldsWithoutReformatting(t *testing.T) {
 	}
 }
 
-// lastLine returns the last source line of n or any of its descendants.
-func lastLine(n *yaml.Node) int {
-	end := n.Line
-	for _, c := range n.Content {
-		if l := lastLine(c); l > end {
-			end = l
-		}
-	}
-	return end
+// syntheticModel is an active chatgpt route to gpt-5.5, which fixtureSources
+// retires on 2026-10-14. lifecycle holds its status line and any retirement
+// fields Prepare adds after its last line.
+func syntheticModel(dash, indent, lifecycle string) string {
+	return dash + "- name: zz-fixture-gpt-5.5\n" +
+		indent + "provider: chatgpt\n" +
+		indent + "upstream: gpt-5.5\n" +
+		indent + "api: responses\n" +
+		indent + lifecycle +
+		indent + "source: https://learn.chatgpt.com/docs/models\n"
 }
 
-// withSyntheticRetiringModel inserts, after the catalog's last model and at its
-// indentation, an active chatgpt route to gpt-5.5, which fixtureSources
-// retires on 2026-10-14. Prepare must then patch the catalog whatever models
-// it lists.
-func withSyntheticRetiringModel(t *testing.T, catalog []byte) []byte {
+// withSyntheticRetiringModel appends syntheticModel to the catalog's models,
+// at the last model's indentation, so Prepare must patch the catalog whatever
+// models it lists. It returns the catalog and the entry's indentation.
+func withSyntheticRetiringModel(t *testing.T, catalog []byte) ([]byte, string, string) {
 	t.Helper()
 	var doc yaml.Node
 	if err := yaml.Unmarshal(catalog, &doc); err != nil {
 		t.Fatal(err)
 	}
-	if len(doc.Content) != 1 {
-		t.Fatal("catalog is not a single document")
+	if len(doc.Content) != 1 || doc.Content[0].Kind != yaml.MappingNode {
+		t.Fatal("catalog is not a single mapping")
 	}
-	models := get(doc.Content[0], "models")
-	if models == nil || models.Kind != yaml.SequenceNode || len(models.Content) == 0 {
-		t.Fatal("catalog has no models")
+	root := doc.Content[0]
+	models := get(root, "models")
+	if models == nil || models.Kind != yaml.SequenceNode || models.Style&yaml.FlowStyle != 0 || len(models.Content) == 0 {
+		t.Fatal("catalog has no block sequence of models")
 	}
 	last := models.Content[len(models.Content)-1]
 	indent := strings.Repeat(" ", last.Column-1)
 	dash := strings.Repeat(" ", last.Column-3)
-	entry := "\n" + dash + "- name: zz-fixture-gpt-5.5\n" +
-		indent + "provider: chatgpt\n" +
-		indent + "upstream: gpt-5.5\n" +
-		indent + "api: responses\n" +
-		indent + "status: active\n" +
-		indent + "source: https://learn.chatgpt.com/docs/models\n"
+	// Insert before the next top-level key, or at the end of the file, so a
+	// multiline value ending the last model is never cut.
 	lines := strings.SplitAfter(string(catalog), "\n")
-	end := lastLine(last) - 1
-	if !strings.HasSuffix(lines[end], "\n") {
-		lines[end] += "\n"
+	at := len(lines)
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		if root.Content[i+1] == models && i+2 < len(root.Content) {
+			at = root.Content[i+2].Line - 1
+		}
 	}
-	lines[end] += entry
-	return []byte(strings.Join(lines, ""))
+	if at > 0 && lines[at-1] != "" && !strings.HasSuffix(lines[at-1], "\n") {
+		lines[at-1] += "\n"
+	}
+	entry := "\n" + syntheticModel(dash, indent, "status: active\n")
+	out := strings.Join(lines[:at], "") + entry + strings.Join(lines[at:], "")
+	return []byte(out), dash, indent
 }
 
 // The live catalog changes with every reviewed update, so this test asserts
@@ -200,15 +203,23 @@ func withSyntheticRetiringModel(t *testing.T, catalog []byte) []byte {
 // needs a lifecycle change, Prepare accepts and patches the catalog's own
 // formatting, and its proposal is a fixed point.
 func TestPrepareIsIdempotentOnLiveCatalog(t *testing.T) {
-	original := withSyntheticRetiringModel(t, readCatalog(t, "../../infra/gateway/litellm/models.yaml"))
-	for _, now := range []time.Time{
-		time.Date(2026, 10, 3, 0, 0, 0, 0, time.UTC),
-		time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC),
+	original, dash, indent := withSyntheticRetiringModel(t, readCatalog(t, "../../infra/gateway/litellm/models.yaml"))
+	for _, test := range []struct {
+		now    time.Time
+		status string
+	}{
+		{time.Date(2026, 10, 3, 0, 0, 0, 0, time.UTC), "deprecated"},
+		{time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC), "retired"},
 	} {
+		now := test.now
 		t.Run(now.Format("2006-01-02"), func(t *testing.T) {
-			out, _, changed, err := Prepare(original, fixtureSources(), now)
+			out, report, changed, err := Prepare(original, fixtureSources(), now)
 			if err != nil || !changed {
 				t.Fatalf("synthetic retirement not applied: changed=%v err=%v", changed, err)
+			}
+			want := syntheticModel(dash, indent, "status: "+test.status+"\n") + indent + "retirement_date: \"2026-10-14\"\n"
+			if !bytes.Contains(out, []byte(want)) || !strings.Contains(report, "Marked `zz-fixture-gpt-5.5` "+test.status) {
+				t.Fatalf("synthetic route not patched as %s:\n%s\n%s", test.status, out, report)
 			}
 			again, _, changed, err := Prepare(out, fixtureSources(), now)
 			if err != nil || changed || !bytes.Equal(out, again) {
