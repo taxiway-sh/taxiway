@@ -103,6 +103,15 @@ if [[ "$1" == config && "${2:-}" == --global && "$#" -eq 3 ]]; then
 fi
 EOF
   chmod +x "$fake_bin/git"
+
+  # The guest has coreutils' timeout; hosts such as macOS do not. The fakes
+  # return at once, so the stand-in runs the command without a bound.
+  cat > "$fake_bin/timeout" <<'EOF'
+#!/usr/bin/env bash
+shift
+exec "$@"
+EOF
+  chmod +x "$fake_bin/timeout"
 }
 
 tmp="$(mktemp -d)"

@@ -132,6 +132,15 @@ printf 'pkill %s\n' "$*" >> "$GC_LOG"
 exit 1
 EOF
   chmod +x "$fake_bin/pkill"
+
+  # The guest has coreutils' timeout; hosts such as macOS do not. The fakes
+  # return at once, so the stand-in runs the command without a bound.
+  cat > "$fake_bin/timeout" <<'EOF'
+#!/usr/bin/env bash
+shift
+exec "$@"
+EOF
+  chmod +x "$fake_bin/timeout"
 }
 
 tmp="$(mktemp -d)"
