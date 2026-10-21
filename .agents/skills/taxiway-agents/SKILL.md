@@ -193,8 +193,8 @@ For each declaration, or the one `id` requested:
    3. the session and the scheduled task named with the declared `title`.
 
    When a step finds more than one session or scheduled task for the agent,
-   stop and report them to the maintainer; never guess which one is the
-   agent's. Reuse them when they exist; never create a second one for the
+   stop for that agent and report them to the maintainer; never guess which
+   one is the agent's. Reuse them when they exist; never create a second one for the
    same agent.
    A session or scheduled task found under another name is renamed to the
    declared `title` (`set_session_title`, `update_trigger`).
@@ -230,8 +230,8 @@ matches the declarations.
 ## Check
 
 Find each agent's session and scheduled task as in [Install](#install) step 1,
-which stops and reports an agent with more than one session or scheduled
-task, then report:
+which stops for that agent and reports it when it has more than one
+session or scheduled task, then report:
 
 - the last heartbeat's date and result against the declared `schedule`: a
   heartbeat older than the latest time that cron expression fired, whether
