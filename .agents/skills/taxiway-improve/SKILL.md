@@ -17,10 +17,13 @@ The agentic system starts with little autonomy and earns more as it proves
 itself. An action, by a scheduled agent or an interactive session, merging a
 PR included, keeps the maintainer's approval until recorded results show it
 works; the maintainer then grants more through a reviewed change to the rule
-that holds it, such as an agent's declaration or the
+that holds it, such as `AGENTS.md`, an agent's declaration or the
 [approvals](../taxiway-workflow/SKILL.md#approvals) matrix. When it stops
-working, autonomy is withdrawn the same way. Proposals to grant or withdraw it
-follow [Steps](#steps).
+working, autonomy is withdrawn the same way. A scheduled agent's level follows
+[Promotion and demotion](../taxiway-agents/SKILL.md#promotion-and-demotion);
+other proposals follow [Steps](#steps), and a scheduled agent never proposes
+changing the approvals matrix or `AGENTS.md`
+([never list](../taxiway-agents/SKILL.md#never)).
 
 ## Steps
 
