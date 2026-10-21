@@ -16,9 +16,10 @@ Each agent is declared in this repository and changes only through reviewed PRs:
 - `.agents/agents/<id>.json`: `id` (the file name), `title` (the name of its
   session and scheduled task, `Taxiway – <role> agent (<scope>)` with an en
   dash, for example `Taxiway – triage agent (backlog)`; the watchdog is
-  `Taxiway – agents watchdog`), `schedule` (five cron fields, UTC), `model` (a model ID, or `default` for the account's
-  default), `repositories` (`read` or `write` per repository),
-  `workdir`, `skills`, `outputs` and `autonomy` (see [Autonomy](#autonomy));
+  `Taxiway – agents watchdog`), `schedule` (five cron fields, UTC), `model`
+  (a model ID, or `default` for the account's default), `repositories`
+  (`read` or `write` per repository), `workdir`, `skills`, `outputs` and
+  `autonomy` (see [Autonomy](#autonomy));
 - `.agents/agents/<id>.prompt.md`: the job, read at the start of every run.
 
 `read` means the agent never pushes to that repository. `write` on
@@ -49,8 +50,8 @@ never rules:
   The history of `status/<id>.json` is the approval log;
 - `deployed.json`: for each installed agent, its schedule, `model` and the
   `promptVersion` it was installed from. Session and scheduled task IDs stay
-  out of it: install and check look them up, the session by tag and the
-  scheduled task by name;
+  out of it: install and check look them up as [Install](#install) step 1
+  says;
 - `improvement/`, trials and rejected proposals, defined by
   [`taxiway-improve`](../taxiway-improve/SKILL.md#state-layout), and
   `learn/campaigns/`, history campaign progress, defined by
@@ -179,13 +180,20 @@ declaration-only PR.
 
 For each declaration, or the one `id` requested:
 
-1. Look up the agent's session with `list_sessions`, by the tag
-   `taxiway-agent:<id>` first; if the tag filter is refused or finds nothing,
-   list your own sessions and match the declared `title`. Its scheduled task
-   is the one bound to that session or named with the same `title`, paging
-   through `list_triggers`. Reuse them when they exist; never create a second
-   one for the same agent. A session or scheduled task found under another
-   name is renamed to the declared `title`.
+1. Look up the agent's session and scheduled task, in this order, stopping at
+   the first match:
+   1. the session, not archived, tagged `taxiway-agent:<id>` (`list_sessions`
+      with the tag filter, which an in-session caller may be refused), and
+      the scheduled task bound to it;
+   2. the scheduled task whose stored prompt is the bootstrap prompt naming
+      `taxiway/.agents/agents/<id>.prompt.md`, paging through
+      `list_triggers`; its `persistent_session_id` is the agent's session.
+      This finds an agent whatever its names;
+   3. the session and the scheduled task named with the declared `title`.
+
+   Reuse them when they exist; never create a second one for the same agent.
+   A session or scheduled task found under another name is renamed to the
+   declared `title` (`set_session_title`, `update_trigger`).
 2. Otherwise create one standing session for the agent from the `taxiway`
    repository, with the declared `model`, titled with the declared `title` and
    tagged `taxiway-agent:<id>`, and send a setup-only first prompt: attach
@@ -195,12 +203,20 @@ For each declaration, or the one `id` requested:
    agent's session; the repository then stays attached as a source of the
    session.
 3. Create a scheduled task named with the declared `title`, bound to that
-   session, with the declared schedule and the bootstrap prompt. Never use a new
-   session per run: such a session has no repository access.
+   session, with the declared schedule and the bootstrap prompt. Never use a
+   new session per run: such a session has no repository access.
 4. When the schedule or the prompt changed, update the existing scheduled task.
-   When the model changed, create a new session as in step 2, rebind the task
-   to it, then rename the old session `OLD session – <title>` and archive it,
-   so title lookups find only the new one.
+   When the model changed, a scheduled task cannot be rebound to another
+   session, so:
+   1. create a new session as in step 2;
+   2. create a new scheduled task bound to it as in step 3, with the same
+      `title`, schedule and bootstrap prompt;
+   3. delete the old scheduled task with `delete_trigger`;
+   4. rename the old session `OLD session – <title>` with
+      `set_session_title`, then archive it with `archive_session`, so title
+      lookups find only the new one.
+
+   The new scheduled task's run history starts empty.
 5. Record the schedule, `model` and `promptVersion` in `deployed.json`.
 
 Installation is idempotent: running it again changes nothing that already
