@@ -121,6 +121,11 @@ One line each; follow the link for the rules.
 - [`taxiway-agents`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-agents/SKILL.md):
   declaring, installing, checking and repairing scheduled agents, the run
   contract, autonomy, and the machine queue.
+- [`taxiway-install-agents`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-install-agents/SKILL.md)
+  and [`taxiway-check-agents`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-check-agents/SKILL.md):
+  the `/taxiway-install-agents` and `/taxiway-check-agents` entry points to
+  Install and Check: install modes with a plan and one OK, and a dry run
+  before an agent's first run.
 
 **Learning and improvement**
 
@@ -142,15 +147,16 @@ the prompt file holds its job. Schedules are in UTC.
 |---|---|---|---|
 | [Triage](https://github.com/taxiway-sh/taxiway/blob/main/.agents/agents/triage.prompt.md) | Weekdays 04:15 | Ranks the backlog and checks label hygiene with [`taxiway-triage`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-triage/SKILL.md) | Comments, issues, labels, PR reviews, closures |
 | [Watchdog](https://github.com/taxiway-sh/taxiway/blob/main/.agents/agents/watchdog.prompt.md) | Daily 04:45 | Checks that every agent and nightly workflow ran, collects what waits for the maintainer, and notifies only when something does | Nothing: it reads and reports |
-| [CI watch](https://github.com/taxiway-sh/taxiway/blob/main/.agents/agents/ci-watch.prompt.md) | Daily 04:00, catch-up at 07:00 | Diagnoses failed nightly E2E and installation runs, and a failed catalog run without a PR, and deduplicates them against issues | Comments, issues, workflow reruns |
+| [CI watch](https://github.com/taxiway-sh/taxiway/blob/main/.agents/agents/ci-watch.prompt.md) | Daily 04:00, catch-up at 07:00 | Diagnoses failed nightly E2E and installation runs, and a failed catalog run without an open draft PR, and deduplicates them against issues | Comments, issues, workflow reruns |
 | [Dependency watch](https://github.com/taxiway-sh/taxiway/blob/main/.agents/agents/dependency-watch.prompt.md) | Mondays 03:40 | Compares pinned dependencies with upstream releases and follows tracked upstream fixes | Issues for bumps or workaround removals, status comments |
 | [Model catalog](https://github.com/taxiway-sh/taxiway/blob/main/.agents/agents/model-catalog.prompt.md) | Daily 03:50 | Reviews the automated model catalog PR and brings it to green | Pushes to that PR's branch, marking it ready, merging it, issues |
 | [Contributions](https://github.com/taxiway-sh/taxiway/blob/main/.agents/agents/contributions.prompt.md) | Weekdays 07:20, 10:20, 13:20, 16:20 | Drafts replies, reviews and follow-ups for external contributors with [`taxiway-contributions`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-contributions/SKILL.md) | Comments, PR reviews, assignments, labels, closures |
 | [Improvement](https://github.com/taxiway-sh/taxiway/blob/main/.agents/agents/improvement.prompt.md) | Mondays 03:45 | Turns the week's frictions, review findings and learnings into proposed changes of the agentic system | Draft PRs on skills and declarations, issues, trials, promotions and demotions |
 | [Machine](https://github.com/taxiway-sh/taxiway/blob/main/.agents/agents/machine.prompt.md) | On request, and at least every 12 hours | Runs queued checks a cloud session cannot, such as Lima, a macOS host, installed releases, real accounts or long E2E runs, on a machine the maintainer operates, and publishes sanitized reports | Nothing: it only serves its queue |
 
-How agents are installed and checked is in
-[`taxiway-agents`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-agents/SKILL.md#install).
+Agents are installed with `/taxiway-install-agents` and checked with
+`/taxiway-check-agents`, as
+[`taxiway-agents`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-agents/SKILL.md#install) describes.
 The machine agent's queue, approval rule and public report format are in
 [Machine agent and queue](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-agents/SKILL.md#machine-agent-and-queue).
 
@@ -175,8 +181,8 @@ is the same for every scheduled agent:
 1. **Bootstrap.** For a cloud agent, the scheduled task sends the same short
    prompt every time: update the clones to `main`, then read the agent's
    prompt file and follow it. The machine agent gets the same prompt by
-   message or from its local schedule. The run reads its instructions and autonomy levels from `main`, and
-   records which commit it read.
+   message or from its local schedule. The run reads its instructions and
+   autonomy levels from `main`, and records which commit it read.
 2. **Job.** The agent does the job in its prompt file, records the
    maintainer's answers to its previous proposals, and notes any friction: a
    missing, ambiguous or contradictory rule, a workaround, a check it could
