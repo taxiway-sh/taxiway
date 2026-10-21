@@ -1124,13 +1124,13 @@ operation=initialization
 trap 'printf "snapshot operation=%s exit=%s\n" "$operation" "$?" >&2' ERR
 for path in "$HOME/.config/taxiway" "$HOME/.codex" "$HOME/.claude" /lab/work; do
   if [ -d "$path" ]; then
-    # GasTown's running database and daemon logs, and Codex's scratch directory and
-    # log databases, change independently of previews. Keep their directory presence
+    # GasTown's running database and daemon logs, and Codex's scratch directory, log
+    # databases and SQLite journals, change independently of previews. Keep their directory presence
     # while hashing persistent configuration and workspace files.
     operation=directory-modes
-    find "$path" \( -path /lab/work/gt/.dolt-data -o -path /lab/work/gt/daemon -o -path "$HOME/.codex/.tmp" \) -printf 'mode|%m|%p\n' -prune -o ! -path "$HOME/.codex/logs_*.sqlite*" -printf 'mode|%m|%p\n'
+    find "$path" \( -path /lab/work/gt/.dolt-data -o -path /lab/work/gt/daemon -o -path "$HOME/.codex/.tmp" \) -printf 'mode|%m|%p\n' -prune -o ! -path "$HOME/.codex/logs_*.sqlite*" ! -path "$HOME/.codex/*.sqlite-wal" ! -path "$HOME/.codex/*.sqlite-shm" -printf 'mode|%m|%p\n'
     operation=file-digests
-    find "$path" \( -path /lab/work/gt/.dolt-data -o -path /lab/work/gt/daemon -o -path "$HOME/.codex/.tmp" \) -prune -o -type f ! -path /lab/work/gt/.runtime/doctor-fix.log ! -path "$HOME/.codex/logs_*.sqlite*" -exec sha256sum {} +
+    find "$path" \( -path /lab/work/gt/.dolt-data -o -path /lab/work/gt/daemon -o -path "$HOME/.codex/.tmp" \) -prune -o -type f ! -path /lab/work/gt/.runtime/doctor-fix.log ! -path "$HOME/.codex/logs_*.sqlite*" ! -path "$HOME/.codex/*.sqlite-wal" ! -path "$HOME/.codex/*.sqlite-shm" -exec sha256sum {} +
   fi
 done
 if [[ "$1" != frozen ]] && command -v tmux >/dev/null 2>&1; then
