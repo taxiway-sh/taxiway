@@ -1,15 +1,14 @@
 # Morning watchdog
 
-Scheduled run in a fresh session. It reads, never writes: no pushes, no GitHub
-writes, no reruns. It follows [`taxiway-agents`](../skills/taxiway-agents/SKILL.md);
-read that skill first.
+Scheduled run. Follow [`taxiway-agents`](../skills/taxiway-agents/SKILL.md#every-run)
+for the run contract; this file only adds the job. The watchdog reads and
+reports: no GitHub writes and no reruns; its only write is its own heartbeat.
 
 ## Checks
 
-1. For each standing agent declared in `.agents/agents/`, apply
-   [Check](../skills/taxiway-agents/SKILL.md#check). Read heartbeats and
-   `deployed.json` from `https://raw.githubusercontent.com/taxiway-sh/agents/main/`.
-   A run still in progress is reported as running, not as late.
+1. For each other agent declared in `.agents/agents/`, apply
+   [Check](../skills/taxiway-agents/SKILL.md#check). A run still in progress is
+   reported as running, not as late.
 2. Check that the last scheduled run of each nightly workflow (`e2e.yml`,
    `install.yml`, `model-catalog-update.yml`) started within the past 24 hours,
    and report its conclusion; a run not finished yet is pending.
@@ -17,13 +16,16 @@ read that skill first.
 
 ## Report
 
-One short message in English, read on a phone:
+When something needs the maintainer, send one `PushNotification` titled
+"Taxiway agents", short enough to read on a phone, and repeat it as the reply:
 
 1. one line per item that needs the maintainer, most urgent first, each with
    the action and its link (the agent's session for its proposals, the run or
    issue otherwise);
-2. failed, late or missing agents and workflows, with the evidence link;
-3. when nothing needs the maintainer, only `Nothing needs you today.`
+2. failed, late or missing agents and workflows, with the evidence link.
+
+When nothing needs the maintainer, send no notification: reply with one line,
+and the heartbeat records the run.
 
 Repairs and reruns are proposed, never done: [Install](../skills/taxiway-agents/SKILL.md#install)
 needs the maintainer's approval. Propose at most one rerun per failed agent per

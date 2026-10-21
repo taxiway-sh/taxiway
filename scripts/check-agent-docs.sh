@@ -123,7 +123,7 @@ def check_skills():
             errors.append(f".claude/skills/{entry.name}: no matching .agents/skills/{entry.name}")
 
 
-AGENT_FIELDS = {"id", "title", "schedule", "model", "session", "repositories", "workdir", "skills", "outputs", "autonomy"}
+AGENT_FIELDS = {"id", "title", "schedule", "model", "repositories", "workdir", "skills", "outputs", "autonomy"}
 AUTONOMY = {"ask"}
 HEARTBEAT_SCHEMA = "status.schema.json"
 
@@ -175,10 +175,6 @@ def check_agents():
         for field in ("title", "workdir", "model"):
             if not isinstance(data.get(field), str) or not data.get(field):
                 errors.append(f"{name}: {field} must be a non-empty string")
-        if data.get("session") not in ("standing", "fresh"):
-            errors.append(f"{name}: session must be standing or fresh")
-        elif data["session"] == "fresh" and isinstance(repos, dict) and "write" in repos.values():
-            errors.append(f"{name}: a fresh agent only reads repositories")
         for field in ("skills", "outputs"):
             if not isinstance(data.get(field), list) or not all(isinstance(v, str) for v in data.get(field)):
                 errors.append(f"{name}: {field} must be a list of strings")
