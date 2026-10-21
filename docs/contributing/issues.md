@@ -104,8 +104,10 @@ fragility, near-term · **p2** cleanliness or later.
 - A label exists before it is applied. Applying a label that does not exist
   makes GitHub create it grey and without a description, so a new label (for
   example `orchestrator:<name>`) is first created with its axis colour from
-  [Labels](#labels) and a description in its axis's form, then applied. Both
-  steps are label changes under the
+  [Labels](#labels) and a description in its axis's form, then applied. A
+  marker label, which has no axis (for example `automation`), keeps GitHub's
+  default grey `ededed` unless documented otherwise. Both steps are label
+  changes under the
   [approvals matrix](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-workflow/SKILL.md#approvals).
 - `needs-triage` is removed at triage, or as soon as work on the issue starts.
 - GitHub's default `duplicate`, `invalid`, `question`, `wontfix` and
@@ -122,8 +124,8 @@ fragility, near-term · **p2** cleanliness or later.
   issues it is part of (`Refs #n`, or the equivalent `Part of #n`). A
   `Related:` line is not a link.
 - A PR's type is the type of the issue it primarily fixes (its first `Fixes`
-  or `Closes`), otherwise of its first `Refs` or `Part of`. A PR with no linked issue gets
-  a type chosen for the change, as for an issue.
+  or `Closes`), otherwise of its first `Refs` or `Part of`. A PR with no
+  linked issue gets a type chosen for the change, as for an issue.
 - A PR's area labels are the union of its linked issues' area labels and the
   areas the PR itself changes. When it changes an area its issue lacks, the PR
   gets that label and the label is proposed on the issue.
