@@ -106,15 +106,17 @@ comment on the PR; the reviewer itself stays read-only, as
 - for each finding, the commit that fixes it, added by editing the comment
   once that commit is pushed, or why it is not fixed.
 
-Rounds run before the PR is opened are posted as soon as it is; then add
-each comment's link to the Validation line, and a later round adds its own
-when it is posted. On an external contributor's PR, the report goes into the
-review drafted as [`taxiway-contributions`](../taxiway-contributions/SKILL.md#external-pr)
-says, at its level, not into report comments. An
+Rounds run before the PR is opened are posted as soon as it is. An
 implementer that handed its range back leaves the comments to the agent that
 ran the review. The comments are public and follow
 [public writing](../taxiway-security/SKILL.md#public-writing).
 
 The PR's Validation section states the review rounds as the line
 `Independent review: N rounds`, followed by links to those comments, and that
-findings were addressed.
+findings were addressed. The agent that ran the review adds each link once its
+comment is posted.
+
+On an external contributor's PR, neither applies: the report goes into the
+review drafted as
+[`taxiway-contributions`](../taxiway-contributions/SKILL.md#external-pr) says,
+posted only after the maintainer approves it.
