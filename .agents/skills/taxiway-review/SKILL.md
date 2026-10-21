@@ -95,7 +95,7 @@ Review adversarially: look for what is wrong, not for confirmation.
 
 ## Review reports
 
-The agent that started the reviewer publishes the report of each round as a
+The agent that ran the review publishes the report of each round as a
 comment on the PR; the reviewer itself stays read-only, as
 [Reviewer](#reviewer) says. Each comment gives:
 
@@ -106,7 +106,11 @@ comment on the PR; the reviewer itself stays read-only, as
 - for each finding, the commit that fixes it, added by editing the comment
   once that commit is pushed, or why it is not fixed.
 
-Rounds run before the PR is opened are posted as soon as it is. An
+Rounds run before the PR is opened are posted as soon as it is; then add
+each comment's link to the Validation line, and a later round adds its own
+when it is posted. On an external contributor's PR, the report goes into the
+review drafted as [`taxiway-contributions`](../taxiway-contributions/SKILL.md#external-pr)
+says, at its level, not into report comments. An
 implementer that handed its range back leaves the comments to the agent that
 ran the review. The comments are public and follow
 [public writing](../taxiway-security/SKILL.md#public-writing).
