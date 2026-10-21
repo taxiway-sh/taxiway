@@ -70,8 +70,9 @@ page body for the site:
   its sections do not exist on the site, which keeps only `#contributing`.
 
 The [link test](../../../site/src/docs/__tests__/links.test.jsx) walks every
-link of every docs page and fails on a link that reaches no page, drops or
-misses its anchor, or points to a file the site does not serve.
+link and image of every docs page and fails on a link that reaches no page,
+drops or misses its anchor, or points to a file the site does not serve, and on
+an image by relative path.
 
 ## Navigation
 
