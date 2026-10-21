@@ -9,9 +9,10 @@ import { docs, resolveDocLink } from '../loader.js';
 // link must reach an existing page route and, with an anchor, an existing
 // heading id of that page; a same-page anchor must exist on the page; any other
 // link, and every image, must be absolute, because the site cannot serve a
-// relative non-page path. Bodies render with the site's own Markdown pipeline, so links and
-// heading ids are the ones the site shows. The GitHub-only contributing index
-// is walked too: GitHub renders it, and its links must work on both.
+// relative non-page path. Bodies render with the site's own Markdown
+// pipeline, so links and heading ids are the ones the site shows. The
+// GitHub-only contributing index is walked too: GitHub renders it, and its
+// links must work on both.
 const files = import.meta.glob('../../../../docs/**/*.md', {
   query: '?raw', import: 'default', eager: true,
 });
