@@ -81,6 +81,9 @@ Push the branch and open the PR under the approvals matrix. Its title is a
 subject; its body follows the
 [PR template](../../../.github/pull_request_template.md); its labels follow
 [Pull request labels](../../../docs/contributing/issues.md#pull-request-labels).
+The PR that completes an issue's acceptance criteria links it with
+`Fixes #<issue>`, so the merge closes it; a PR that delivers only part of an
+issue links it with `Refs #<issue>`.
 
 ## 7. CI and follow-up
 
@@ -115,5 +118,10 @@ worktree and feature branch; no separate confirmation is needed.
 5. Fast-forward local `main`, then update the other active branches at a safe
    point with their agents so ongoing edits and tests are preserved, as in
    [Conflicts](../steward/SKILL.md#conflicts), and rerun affected checks.
+6. For each issue the PR links with `Refs` or `Part of`, reread its
+   acceptance criteria. When the merge completed them, close it as completed
+   with a comment that names the PRs that delivered it; otherwise tick the
+   criteria now met. Criteria that need a later step, such as an installation
+   or a week of runs, keep it open until that step is done.
 
 Report cleanup complete only once verified.
