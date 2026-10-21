@@ -223,6 +223,18 @@ json.dump(data, open(sys.argv[1], "w"))
 PY2
 expect_fail 'agent title with a zero-width character' "$tree" 'title must not contain invisible format characters'
 
+for scope in 'fixture \u00e9t\u00e9' '\uff46ixture' 'fixture\u00a0x'; do
+  tree="$(fixture agent-title-non-ascii-scope)"
+  SCOPE="$scope" python3 - "$tree/.agents/agents/watch.json" <<'PY2'
+import json, os, sys
+scope = os.environ["SCOPE"].encode().decode("unicode_escape")
+data = json.load(open(sys.argv[1])); data["title"] = f"Taxiway \u2013 watch agent ({scope})"
+json.dump(data, open(sys.argv[1], "w"))
+PY2
+  expect_fail "agent title with a non-ASCII scope ($scope)" "$tree" "title must be 'Taxiway – <role> agent (<scope>)'"
+  rm -rf "$tree"
+done
+
 tree="$(fixture agent-duplicate-title-case)"
 sed 's/"watch"/"other"/; s/"0 4 \* \* \*"/"0 5 * * *"/; s/watch agent (fixture)/Watch agent (Fixture)/' "$tree/.agents/agents/watch.json" > "$tree/.agents/agents/other.json"
 printf '# Other\n' > "$tree/.agents/agents/other.prompt.md"

@@ -144,9 +144,10 @@ AGENTS_SKILL = ".agents/skills/taxiway-agents/SKILL.md"
 HEARTBEAT_SCHEMA = "status.schema.json"
 APPROVAL_FIELDS = {"class", "proposal", "answer", "date", "link"}
 APPROVAL_ANSWERS = ["ok", "refused", "corrected"]
-# A declaration's title names its session and scheduled task (en dash).
+# A declaration's title names its session and scheduled task (en dash); the
+# scope is printable ASCII without parentheses.
 TITLE = re.compile(r"Taxiway \u2013 [A-Za-z][A-Za-z0-9-]*(?: [A-Za-z0-9-]+)* agent"
-                   r" \([^()\s]+(?: [^()\s]+)*\)")
+                   r" \([!-'*-~]+(?: [!-'*-~]+)*\)")
 WATCHDOG_TITLE = "Taxiway \u2013 agents watchdog"
 
 
@@ -303,10 +304,10 @@ def check_agents():
                 errors.append(f"{name}: title must be {WATCHDOG_TITLE!r}")
             elif decl.stem != "watchdog" and not TITLE.fullmatch(title):
                 errors.append(f"{name}: title must be 'Taxiway \u2013 <role> agent (<scope>)'")
-            elif title.casefold() in titles:
-                errors.append(f"{name}: title {title!r} already used by {titles[title.casefold()]}")
+            elif (key := unicodedata.normalize("NFKC", title).casefold()) in titles:
+                errors.append(f"{name}: title {title!r} already used by {titles[key]}")
             else:
-                titles[title.casefold()] = decl.stem
+                titles[key] = decl.stem
         for field in ("skills", "outputs"):
             if not isinstance(data.get(field), list) or not all(isinstance(v, str) for v in data.get(field)):
                 errors.append(f"{name}: {field} must be a list of strings")
