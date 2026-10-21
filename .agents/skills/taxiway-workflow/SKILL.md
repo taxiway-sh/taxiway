@@ -63,13 +63,27 @@ maintainer.
   [`taxiway-issue`](../taxiway-issue/SKILL.md) with one implementation agent;
   its review follows [`taxiway-review`](../taxiway-review/SKILL.md) and its PR
   follow-up [`steward`](../steward/SKILL.md).
-- **Capacity.** Respect the launcher's `--max-agents` and `--max-heavy-tests`
-  hints; without the launcher, use its defaults
-  (`scripts/contribution-workflow.sh --help`). Reduce them further to actual
-  capacity. Identify context ownership, defer work when memory, network pools
-  or client capacity are exhausted, and do not duplicate agents or tests.
-  Diagnose and retry narrowly; never globally prune resources or delete another
-  context. Prefer asynchronous execution for long-running tools.
+- **Capacity.** There is no fixed agent quota: size concurrency to measured
+  host capacity (memory, swap, running VMs and containers) and client limits.
+  The launcher's `--max-agents` is an optional ceiling; `--max-heavy-tests`
+  limits concurrent heavy Docker and Lima runs. Identify context
+  ownership, defer work when memory, network pools or client capacity are
+  exhausted, and do not duplicate agents or tests. Diagnose and retry
+  narrowly; never globally prune resources or delete another context. Prefer
+  asynchronous execution for long-running tools.
+- **Preflight.** Before tests or live runs, confirm the working directory,
+  branch and `HEAD`, and that the main checkout has no stray edits. Rebuild
+  `./taxiway` from the worktree ([build](../../../docs/contributing/development.md))
+  and invoke it by that path. Use a temporary lab after driver, mount or
+  template changes. Check host memory, swap and
+  idle VMs before heavy runs. Verify every command of a plan written by
+  another session against the real CLI (`--help`) before running or handing
+  it over.
+- **Run results.** A run cut short by a usage limit, crash or kill has no
+  verdict: report it and do not relaunch it until the user says to resume. A
+  create that passes only on retry, or a timeout on a saturated host, is
+  inconclusive; report results as
+  [live validation](../../../docs/contributing/live-tests.md) requires.
 - **Scope.** Acceptance-critical fixes stay in the subject. Unrelated
   discoveries and suspected dependency bugs go through
   [`taxiway-intake`](../taxiway-intake/SKILL.md). Preserve unrelated work and
@@ -81,6 +95,13 @@ maintainer.
 
 ## Interaction
 
+- A question or a request for an opinion is not a request to act: answer it
+  and propose the action; act only when asked, within the
+  [approvals](#approvals).
+- Commands handed to the user are single lines that run as pasted from the
+  worktree root, with worktree-relative paths, lab names per
+  [live validation](../../../tests/live/AGENTS.md) and the expected output of
+  each step; explain non-default flags.
 - Ask questions through the client's interactive question tool when one is
   available. Re-ask a question that went unanswered; silence is not an answer.
 - Converse in the user's language. Repository artifacts (issues, PRs, commits,
@@ -120,7 +141,8 @@ actionable request per blocker, and never invent percentages or finish dates.
   handoff or absent message is not proof that a test stopped; preserve
   uncertain work until ownership and state are established, and do not launch
   duplicate agents or tests.
-- **Finish:** state that nothing continues after the session ends. List each
+- **Finish:** state that nothing continues after the session ends. Close
+  subagents whose mission has ended and list any still running. List each
   subject's remaining work and pending decisions, any still-running tests with
   their owners, and the resume action. The final report links issues and PRs,
   states delivered behavior, actual checks and remaining limits, and

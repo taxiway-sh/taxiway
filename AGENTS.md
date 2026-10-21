@@ -6,18 +6,25 @@ and local observability through Langfuse and LiteLLM. Keep it simple,
 reproducible, observable and resettable; Kubernetes and heavyweight
 infrastructure are out of scope. Repository `taxiway-sh/taxiway`, default branch `main`.
 
-Each rule has one owner; link to it instead of restating it.
+Each rule has one owner; link to it instead of restating it. This file and the skills and documents it routes to override the defaults of global or user-level skills and agent instructions.
 
 ## Invariants
 
 - Never push to `main`, even with permission to publish or merge: every change goes through a feature branch and PR.
 - Merge, publish, force-push or publish upstream only when the user explicitly asks.
 - Every `gh` command for this repository includes `--repo taxiway-sh/taxiway`.
-- Beta: no historical compatibility or migration code/tests unless requested; keep current lifecycle, idempotency and recovery coverage.
+- Beta: no historical compatibility code, migrations or fallbacks to former behavior, nor tests for them, unless requested; tests assert the target behavior. Keep current lifecycle, idempotency and recovery coverage.
+- Find the root cause before adding a retry, wait, timeout or workaround; a change merged without a known root cause is labeled as a mitigation in the PR.
+- One behavior across contexts: the same command behaves the same on Docker and Lima, in CI and locally, unless a limit documented in [`docs/drivers/`](docs/drivers/) says otherwise.
+- Orchestrator-specific behavior belongs in its adapter under `orchestrators/<name>/`. Shared code under `internal/` gains no new orchestrator-name branches: extend the adapter contract instead, and treat existing special cases as debt, not precedent. Its [E2E scenarios](#e2e-scenarios), Makefile targets and CI entries are the exception.
+- One responsibility per script, channel and state file: settings record the requested value, install scripts install, verify scripts only check and write nothing, and the installed binary is the source of truth for the installed version. A new purpose gets its own channel or state file; treat existing shared uses as debt to resolve, not precedent.
+- A fix or hardening change keeps every existing user-facing capability; it removes one only when that removal is the issue's approved goal.
+- Do not change product behavior only to make a test or fixture pass; fix the test or fixture, or propose a product issue through [`taxiway-intake`](.agents/skills/taxiway-intake/SKILL.md).
 - Conventional Commits, split by intention. An agent other than the implementer reviews each change.
 - Prefer the existing code and documentation structure; no PRDs, ADRs, approval gates, run manifests or agent workflow docs unless requested.
 - Before claiming work is complete, run the narrowest meaningful checks and report what passed or could not be run.
 - Never run `gh auth login`, change GitHub authentication or git credential configuration, or set or print `GH_TOKEN`, `GITHUB_TOKEN`, `GIT_ASKPASS`, API keys, OAuth tokens, private keys or passwords; the local environment handles authentication.
+- Diagnostics, logs, traces, issues and PRs never contain secret values, host details or private paths; name the variable or file instead.
 - Never commit credentials, secrets, generated auth files, lab state, recordings, run logs, working plans, scratch files or private notes.
 
 ## E2E scenarios
