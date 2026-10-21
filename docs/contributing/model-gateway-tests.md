@@ -28,10 +28,11 @@ establish real account access or model-driven delegation.
 ## Choose a real-account check
 
 Use the existing
-[persistent labs](live-tests.md#persistent-labs-for-manual-validation) in the
-isolated worktree context, or their actual existing names. Follow the live guide for
-reference preflight, authentication propagation and owned temporary labs. Codex
-uses the existing host login through its gateway; do not copy auth into clients.
+[persistent labs](live-tests.md#persistent-labs-for-manual-validation)
+in the isolated worktree context, or their actual existing names. Follow the
+live guide for reference preflight, authentication propagation and owned
+temporary labs. Codex uses the existing host login through its gateway; do not
+copy auth into clients.
 
 For Claude model selection, try the configured principal model, an alias such
 as `sonnet`, or a full catalog ID relevant to the change. For delegation, define
