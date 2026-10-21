@@ -601,9 +601,10 @@ or syntax can change: check them against the installed version.
    `taxiway` clone on `main`, never from a run worktree.
 5. Commits in `taxiway-sh/agents` are public and carry the git identity: set
    a non-identifying one in the `agents` clone's own configuration, which the
-   heartbeat script accepts, with `git -C agents config user.name '<name>'` and
-   `git -C agents config user.email '<GitHub noreply address>'`. Never leave
-   git to derive it from the OS user name or the hostname; check with
+   heartbeat script accepts, with `git -C agents config user.name '<name>'`
+   and `git -C agents config user.email '<email>'`, using the noreply address
+   of the account that owns the token. Never leave git to derive it from the
+   OS user name or the hostname; check with
    `git -C agents var GIT_COMMITTER_IDENT` that neither appears.
 6. Create the reference logins needed for real-account checks, as
    [Authenticate once](../../../docs/contributing/live-tests.md#authenticate-once)
@@ -618,12 +619,13 @@ or syntax can change: check them against the installed version.
    - `permissions.allow`: `Bash(cd:*)`, `Bash(git:*)`, `Bash(gh:*)`,
      `Bash(make:*)`, `Bash(go:*)`, `Bash(docker:*)`, `Bash(limactl:*)`,
      `Bash(direnv:*)`, `Bash(python3:*)`, `Bash(bash:*)`, `Bash(./taxiway:*)`,
-     `Bash(scripts/agents/push-heartbeat.sh:*)`, and for the `install` kind's
-     installer and archive checks `Bash(sh:*)`, `Bash(curl:*)`, `Bash(tar:*)`,
-     `Bash(shasum:*)`, `Bash(mktemp:*)` and the run worktree directory's
-     executables, `Bash(<absolute path of the run worktree directory>/*)`, since
-     it installs into an isolated directory inside its run worktree, plus `Edit` and `Write` limited to the `agents`
-     clone, the run worktree directory and the evidence directory, as path rules such as
+     `Bash(scripts/agents/push-heartbeat.sh:*)`, and for the `install` kind
+     `Bash(sh:*)`, `Bash(curl:*)`, `Bash(tar:*)`, `Bash(shasum:*)`,
+     `Bash(mktemp:*)` and `Bash(<absolute path of the run worktree
+     directory>/*)`, where it installs
+     ([machine prompt](../../agents/machine.prompt.md) step 3), plus `Edit`
+     and `Write` limited to the `agents` clone, the run worktree directory and
+     the evidence directory, as path rules such as
      `Edit(//<absolute path of the agents clone>/**)` and
      `Write(//<absolute path of the agents clone>/**)`, never the `taxiway`
      clone;

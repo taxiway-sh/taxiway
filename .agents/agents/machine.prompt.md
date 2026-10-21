@@ -49,7 +49,10 @@ clone, oldest first, and for each one:
    [`taxiway-testing`](../skills/taxiway-testing/SKILL.md)
    and [`taxiway-release`](../skills/taxiway-release/SKILL.md) say for its
    kind, with their documented commands, within
-   `maxMinutes` in total, one heavy run at a time. A run that exceeds
+   `maxMinutes` in total, one heavy run at a time. The `install` kind installs
+   with `HOME` and `TAXIWAY_INSTALL_BIN_DIR` set to a directory inside its run
+   worktree, so the host installation is untouched and removing the worktree
+   removes it. A run that exceeds
    `maxMinutes` stops and ends `failed`, with the reason. Real-account checks
    use the reference logins already on the machine; no other kind uses them
    or passes them to the labs it creates. A confirmed
