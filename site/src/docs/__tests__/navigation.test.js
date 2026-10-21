@@ -28,6 +28,9 @@ function section(markdown, heading) {
 }
 
 // Markdown links to <prefix><page>.md, as { rel, text } in document order.
+// Only bare `<prefix><page>.md)` targets match: a link with an anchor
+// (`page.md#x`) or a `./` prefix is not counted, so the list comparison fails.
+// That is by design: the overview and the indexes link to pages, not sections.
 function pageLinks(markdown, prefix, folder) {
   const pattern = new RegExp(`\\[([^\\]]+)\\]\\(${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([\\w-]+)\\.md\\)`, 'g');
   return [...markdown.matchAll(pattern)].map(([, text, page]) => ({ rel: `${folder}/${page}`, text }));

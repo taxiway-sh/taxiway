@@ -64,7 +64,7 @@ export function resolveDocLink(currentRel, href) {
 // Explicit page order, shared by the sidebar, the overview page (docs/README.md)
 // and the contributing index (docs/contributing/README.md); a site test keeps
 // them in sync. Anything not listed falls back to the end, alphabetically.
-export const PAGE_ORDER = [
+export const PAGE_ORDER = Object.freeze([
   'README',
   'reference/concepts', 'reference/installation', 'reference/commands', 'reference/configuration', 'reference/architecture',
   'drivers/lima', 'drivers/docker',
@@ -73,7 +73,7 @@ export const PAGE_ORDER = [
   'contributing/development', 'contributing/testing', 'contributing/live-tests', 'contributing/model-gateway-tests',
   'contributing/model-catalog', 'contributing/issues', 'contributing/agentic-system',
   'contributing/release', 'contributing/release-qualification', 'contributing/installation-qualification',
-];
+]);
 const orderIndex = (rel) => {
   const i = PAGE_ORDER.indexOf(rel);
   return i === -1 ? PAGE_ORDER.length : i;
