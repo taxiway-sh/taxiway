@@ -1,4 +1,4 @@
-# How Taxiway is maintained with agents
+# Maintained with agents
 
 Taxiway's maintainer works with AI coding agents: interactive sessions to
 implement, review and release changes, and scheduled agents that watch the
