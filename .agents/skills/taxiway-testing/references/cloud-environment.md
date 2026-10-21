@@ -17,8 +17,9 @@ session) or **#185** (from that report, not reproduced since).
   ```
 
 - A background task is killed at its 2-hour limit, and `dockerd` with it, taking
-  every lab and the shared services down mid-run (**#185**). The aggregate E2E
-  targets take about 2.5 hours
+  every lab and the shared services down mid-run (**#185**). The
+  twelve-scenario targets `make test-e2e` and `make test-e2e-only` take about
+  2.5 hours
   ([Testing](../../../../docs/contributing/testing.md#end-to-end)), so they
   cannot finish under that limit. A run interrupted this way has no verdict.
 
