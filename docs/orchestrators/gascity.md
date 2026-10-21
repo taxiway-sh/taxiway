@@ -203,9 +203,11 @@ cd /lab/work/gc && gc resume
 running agent sessions and starts no new ones until `gc resume`. The state
 stays in the city. The start phase waits for active agent sessions, so a
 command that restarts a suspended city without deleting it times out, such as
-`taxiway start`, or `taxiway up` on a stopped lab. Run `gc resume` first.
-Within a lab, only `taxiway start --force` and `taxiway reset` delete the city
-and its suspension state; `taxiway rm` removes the whole lab.
+`taxiway start`, or `taxiway up` on a stopped lab. Run `gc resume` first,
+before you stop the lab: after a timed-out restart, `taxiway shell` has no
+session to open, and `taxiway start --force` recreates the city without its
+state. Within a lab, only `taxiway start --force` and `taxiway reset` delete
+the city and its suspension state; `taxiway rm` removes the whole lab.
 
 ## Reset
 
