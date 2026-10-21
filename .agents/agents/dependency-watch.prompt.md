@@ -2,6 +2,9 @@
 
 Scheduled run. Follow [`taxiway-agents`](../skills/taxiway-agents/SKILL.md#every-run)
 for the run contract; this file only adds the job.
+Read upstream as
+[Reading upstream from a cloud session](../skills/taxiway-upstream/SKILL.md#reading-upstream-from-a-cloud-session)
+says.
 
 1. **Versions.** For each dependency in
    [Where versions live](../skills/taxiway-upstream/SKILL.md#where-versions-live),
