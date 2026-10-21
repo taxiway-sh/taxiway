@@ -80,14 +80,14 @@ fails, use the live helper's diagnostic output
 the helper with raw `docker exec` or `limactl shell`.
 
 A local session has Docker, Lima and the live helper: it runs live validation
-itself, real-account checks included once
+itself, real-provider checks included once
 [approved](../taxiway-workflow/SKILL.md#approvals), and asks the maintainer only
 for what needs a person: an interactive login the context lacks, or a look at
 what their own terminal shows. A check the maintainer runs by hand uses a lab
 created from the change's branch in the worktree's context, prepared by the
-agent up to that human step and paused afterwards when it keeps costing; a lab
-patched by hand does not validate the change
-([#283](https://github.com/taxiway-sh/taxiway/pull/283)).
+agent up to that human step and paused afterwards when idle agents keep calling
+the model; a lab patched by hand does not validate the change
+([#285](https://github.com/taxiway-sh/taxiway/pull/285)).
 
 A cloud session cannot validate Lima (no KVM or Lima), a macOS host, or
 real-account behavior (no maintainer login). List those as pending as

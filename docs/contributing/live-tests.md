@@ -135,7 +135,7 @@ The shared tooling reuses authentication after the initial user login:
 | Agent | Initial authentication | Reuse by tests |
 |---|---|---|
 | Claude Code | User logs in once inside a reference lab such as `test-claude` | `temporary_lab(..., auth_lab=...)` copies OAuth credentials before starting roles; the `auth` command handles persistent targets |
-| Gas Town | Uses the same Claude Code reference login | Same copy helper; each Gas Town lab keeps its own gateway configuration |
+| Gas Town, Gas City | Use the same Claude Code reference login | Same copy helper; each lab keeps its own gateway configuration |
 | Codex | User has an existing Codex subscription login on the host | Taxiway prepares the lab gateway's ChatGPT authentication cache; no login is copied into the lab client |
 
 Pass the actual Claude reference name with `--auth-lab` (or `--source` for
@@ -176,11 +176,12 @@ direnv exec . python3 tests/live/taxiway_live.py auth --source test-claude --tar
 direnv exec . ./taxiway run test-gascity
 ```
 
-An idle Gas City city keeps calling the model: pause it between checks as
+With the default `gastown` template, an idle Gas City lab keeps calling the
+model: pause it between checks as
 [Pause the City](../orchestrators/gascity.md#pause-the-city) says.
 
-Prepare Gas Town before copying authentication so its roles first start with
-a usable login. If a lab already exists, inspect and reuse it instead of
+Prepare Gas Town and Gas City before copying authentication so their agents
+first start with a usable login. If a lab already exists, inspect and reuse it instead of
 creating a replacement or overwriting its authentication automatically.
 
 Leave persistent labs available after automated checks for the user's manual
@@ -190,8 +191,8 @@ use `gt status` and `gt mayor attach`; in Gas City, `gc status` and
 validation work is finished and removal is requested.
 
 Automatically owned scenarios continue to use unique `live-test-<random>`
-names and clean up their own labs. A temporary scenario never removes one of
-the three persistent labs.
+names and clean up their own labs. A temporary scenario never removes a
+persistent lab.
 
 ## Scripts for developers and agents
 
