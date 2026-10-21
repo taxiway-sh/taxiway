@@ -1,0 +1,15 @@
+{
+  "id": "watchdog",
+  "title": "Morning watchdog",
+  "schedule": "45 4 * * *",
+  "model": "default",
+  "session": "fresh",
+  "repositories": {
+    "taxiway-sh/taxiway": "read",
+    "taxiway-sh/agents": "read"
+  },
+  "workdir": "taxiway",
+  "skills": ["taxiway-agents"],
+  "outputs": ["report"],
+  "autonomy": "ask"
+}

@@ -15,7 +15,8 @@ Each agent is declared in this repository and changes only through reviewed PRs:
 
 - `.agents/agents/<id>.json`: `id` (the file name), `title`, `schedule` (five
   cron fields, UTC), `model` (a model ID, or `default` for the account's
-  default), `repositories` (`read` or `write` per repository),
+  default), `session` (`standing` or `fresh`, see [Every run](#every-run)),
+  `repositories` (`read` or `write` per repository),
   `workdir`, `skills`, `outputs` and `autonomy` (`ask` only, until
   per-action levels are defined in #196);
 - `.agents/agents/<id>.prompt.md`: the job, read at the start of every run.
@@ -46,7 +47,14 @@ raw logs.
 
 ## Every run
 
-The scheduled task always sends the same bootstrap prompt:
+Most agents run in one **standing** session that keeps its context and its
+attached state repository. A **fresh** agent starts a new session at every run
+instead, which lets its scheduled task send the maintainer a push and email
+notification; it only reads `taxiway-sh/agents` (public, over HTTPS) and
+writes no heartbeat. The [watchdog](../../agents/watchdog.prompt.md) is the
+fresh agent that tells the maintainer each morning what needs them.
+
+A standing agent's scheduled task always sends the same bootstrap prompt:
 
 > Update the `taxiway` and `agents` clones on `main` with
 > `git fetch origin main` and `git merge --ff-only origin/main`, then read
@@ -57,7 +65,15 @@ A clone whose fetch or fast-forward fails, or that is not on `main`, is
 reported: the run writes a `failed` heartbeat if the `agents` clone allows it,
 then stops. A run never resets or force-updates a clone.
 
-Each run then:
+A fresh agent's scheduled task sends:
+
+> Clone `https://github.com/taxiway-sh/taxiway` (`main`, shallow), then read
+> `.agents/agents/<id>.prompt.md` in that clone and follow it.
+
+The new session has no repository attached, so the run clones the public
+repository itself.
+
+Each standing run then:
 
 1. records the `taxiway` `main` SHA as `promptVersion`;
 2. does the job in its prompt file at the declared `autonomy`
@@ -80,7 +96,7 @@ For each declaration, or the one `id` requested:
    and match the title `Taxiway agent: <id>`), and its scheduled task by the
    same name, paging through `list_triggers`. Reuse them when they exist;
    never create a second one for the same agent.
-2. Otherwise create one standing session for the agent from the `taxiway`
+2. Otherwise, for a standing agent, create one standing session for the agent from the `taxiway`
    repository, with the declared `model`, titled `Taxiway agent: <id>` and
    tagged `taxiway-agent:<id>`, and send a setup-only first prompt: attach
    `taxiway-sh/agents` with `add_repo` (`access: push`), verify both clones
@@ -88,12 +104,15 @@ For each declaration, or the one `id` requested:
    session, so the maintainer approves that one `add_repo` call in the
    agent's session; the repository then stays attached as a source of the
    session.
-3. Create a scheduled task named `Taxiway agent: <id>`, bound to that session,
-   with the declared schedule and the bootstrap prompt. Never use a new
-   session per run.
+3. For a standing agent, create a scheduled task named `Taxiway agent: <id>`,
+   bound to that session, with the declared schedule and the bootstrap
+   prompt; never use a new session per run. For a fresh agent, create the
+   task with a new session per run, the declared model, the fresh bootstrap
+   prompt, and push and email notifications on.
 4. When the schedule or the prompt changed, update the existing scheduled task.
-   When the model changed, archive the session, create a new one as in step 2
-   and rebind the task.
+   When a standing agent's model changed, archive the session, create a new
+   one as in step 2 and rebind the task; for a fresh agent, update the task's
+   model.
 5. Record the schedule, `model` and `promptVersion` in `deployed.json`.
 
 Installation is idempotent: running it again changes nothing that already
@@ -104,10 +123,11 @@ matches the declarations.
 Find each agent's session and scheduled task as in [Install](#install) step 1,
 then report:
 
-- the last heartbeat's date and result against the schedule (late, failed or
-  missing is a finding);
+- for a standing agent, the last heartbeat's date and result against the
+  schedule (late, failed or missing is a finding);
 - the scheduled task: present, enabled, last run;
-- the session: present and not failed;
-- a `promptVersion` behind `main`, which shows the run read older instructions.
+- for a standing agent, the session: present and not failed;
+- for a standing agent, a `promptVersion` behind `main`, which shows the run
+  read older instructions.
 
 A check writes nothing. Repairs go through [Install](#install).

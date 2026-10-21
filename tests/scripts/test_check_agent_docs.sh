@@ -55,7 +55,7 @@ MD
   ln -s ../../.agents/skills/demo "$tree/.claude/skills/demo"
   mkdir -p "$tree/.agents/agents"
   cat > "$tree/.agents/agents/watch.json" <<'JSON'
-{"id": "watch", "title": "Watch", "schedule": "0 4 * * *", "model": "default",
+{"id": "watch", "title": "Watch", "schedule": "0 4 * * *", "model": "default", "session": "standing",
  "repositories": {"taxiway-sh/taxiway": "read", "taxiway-sh/agents": "write"},
  "workdir": "taxiway", "skills": ["demo"], "outputs": ["report"], "autonomy": "ask"}
 JSON
@@ -168,6 +168,14 @@ expect_fail 'agent skills as a string' "$tree" 'skills must be a list of strings
 tree="$(fixture heartbeat-schema)"
 printf '{"required": ["id"]}\n' > "$tree/.agents/agents/status.schema.json"
 expect_fail 'heartbeat schema without promptVersion' "$tree" 'status.schema.json: must require promptVersion'
+
+tree="$(fixture agent-fresh-writes)"
+sed -i.bak 's/"session": "standing"/"session": "fresh"/' "$tree/.agents/agents/watch.json"
+expect_fail 'fresh agent with write access' "$tree" 'a fresh agent only reads repositories'
+
+tree="$(fixture agent-bad-session)"
+sed -i.bak 's/"session": "standing"/"session": "daily"/' "$tree/.agents/agents/watch.json"
+expect_fail 'agent with unknown session kind' "$tree" 'session must be standing or fresh'
 
 tree="$(fixture agent-orphan-prompt)"
 printf '# Gone\n' > "$tree/.agents/agents/gone.prompt.md"
