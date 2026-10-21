@@ -68,6 +68,9 @@ One line each; follow the link for the rules.
 - [`taxiway-workflow`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-workflow/SKILL.md):
   the entry point of every session: routing, approvals, coordination, status,
   pause, resume and finish.
+- [`taxiway-coordinator`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-coordinator/SKILL.md):
+  the `/taxiway-coordinator` entry point that starts a new session as the
+  coordinator.
 
 **Issue to PR**
 
@@ -173,7 +176,7 @@ scheduled.
 
 | Role | Does | Skill |
 |---|---|---|
-| Coordinator | The maintainer's entry point: starts or resumes a session, routes needs, delegates work to subagents or dedicated sessions, tracks approvals and status from GitHub and the state repository; a new session becomes it with `/taxiway-coordinator`, which also checks the scheduled agents and proposes reinstalling any that are missing | [`taxiway-workflow`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-workflow/SKILL.md#coordinator) |
+| Coordinator | The maintainer's entry point: starts or resumes a session, routes needs, delegates work to subagents or dedicated sessions, tracks approvals and status from GitHub and the state repository; a new session becomes it with `/taxiway-coordinator`, which also checks the scheduled agents and proposes the repairs | [`taxiway-workflow`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-workflow/SKILL.md#coordinator) |
 | Implementer | Works one selected issue in its own worktree and branch | [`taxiway-issue`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-issue/SKILL.md) |
 | Reviewer | Reviews a change it did not write, read-only: a subagent by default, or a child session in auto mode with a stall check when a subagent cannot do it; the agent that ran it posts each round's report on the PR | [`taxiway-review`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-review/SKILL.md) |
 | PR steward | Follows an open PR until it is merged or closed | [`steward`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/steward/SKILL.md) |

@@ -51,19 +51,17 @@ a new session on `taxiway`; it needs nothing from earlier sessions.
 1. Read [`taxiway-agents`](../taxiway-agents/SKILL.md) after this skill.
 2. Attach `taxiway-sh/agents` with push (`add_repo`, `access: push`) and clone
    it next to `taxiway` on `main`; the maintainer approves the attachment in
-   this session.
+   this session. When it does not exist,
+   [Bootstrapping](../taxiway-agents/SKILL.md#bootstrapping) applies.
 3. Reconcile as [Intake and reconciliation](#intake-and-reconciliation) says,
-   then run the [Check](../taxiway-agents/SKILL.md#check) of scheduled agents.
-4. When the Check finds an agent not installed, or a session or scheduled task
-   that is missing or differs from its declaration, propose
-   [Install](../taxiway-agents/SKILL.md#install) for those agents and run it
-   once the maintainer approves. A maintainer sets up the machine agent as
-   [Machine setup](../taxiway-agents/SKILL.md#machine-setup) says.
+   without its opening question, then run the
+   [Check](../taxiway-agents/SKILL.md#check) of scheduled agents.
+4. Propose [Install](../taxiway-agents/SKILL.md#install) for the agents whose
+   Check findings it repairs, and run it once the maintainer approves. A
+   machine agent with no heartbeat, or [offline](../taxiway-agents/SKILL.md#heartbeat-offline-machine-and-metrics),
+   waits for a maintainer's [Machine setup](../taxiway-agents/SKILL.md#machine-setup).
 5. Report briefly what is in service, what waits for the maintainer and what
-   is abnormal, then wait for instructions.
-
-Merging stays in the [Approvals](#approvals) matrix: the coordinator merges
-only what the maintainer has authorized in this session.
+   is abnormal, then ask the opening question.
 
 ## Approvals
 
