@@ -27,7 +27,9 @@ git init --quiet --bare "$origin"
 # The script requires jsonschema, which the real validator imports, and runs
 # Python isolated (-I). The stand-in below does not need jsonschema: this
 # python3 wrapper provides an empty module where it is not installed.
-real_python="$(command -v python3)"
+# Resolve the interpreter itself: a pyenv shim would look python3 up on PATH
+# again and find this wrapper.
+real_python="$(python3 -c 'import sys; print(sys.executable)')"
 mkdir -p "$test_dir/py" "$test_dir/bin"
 touch "$test_dir/py/jsonschema.py"
 cat > "$test_dir/bin/python3" <<SH
@@ -87,6 +89,13 @@ expect_fail() { # message-pattern command...
   fi
 }
 origin_head() { git --git-dir="$origin" rev-parse main; }
+# Portable in-place edits: BSD sed (macOS) lacks GNU in-place and insert syntax.
+prepend_line() { # line file
+  { printf '%s\n' "$1"; cat "$2"; } > "$2.new" && mv "$2.new" "$2"
+}
+replace_in() { # sed-expression file
+  sed "$1" "$2" > "$2.new" && mv "$2.new" "$2"
+}
 
 # Success, with the default clone directory, run from the taxiway clone. An
 # untracked file is left alone, and the clone's hooks do not run.
@@ -182,7 +191,7 @@ echo 'PASS: unpushed local commits refused'
 # The validator runs from origin/main, not from the clone's working tree.
 updater="$test_dir/updater"
 git clone --quiet https://github.com/taxiway-sh/agents "$updater"
-sed -i "1i open('$test_dir/origin-validator-ran', 'w')" "$updater/scripts/check-status.py"
+prepend_line "open('$test_dir/origin-validator-ran', 'w')" "$updater/scripts/check-status.py"
 git -C "$updater" commit --quiet -am 'validator update'
 git -C "$updater" push --quiet origin main
 "$script" demo "$agents" >/dev/null 2>"$test_dir/ff.err" || { cat "$test_dir/ff.err" >&2; exit 1; }
@@ -191,7 +200,7 @@ git -C "$updater" push --quiet origin main
   || { echo 'FAIL: the clone was not fast-forwarded before the commit' >&2; exit 1; }
 # A local edit of the validator hidden from git diff does not run either.
 git -C "$agents" update-index --skip-worktree scripts/check-status.py
-sed -i "1i open('$test_dir/local-validator-ran', 'w')" "$agents/scripts/check-status.py"
+prepend_line "open('$test_dir/local-validator-ran', 'w')" "$agents/scripts/check-status.py"
 heartbeat demo ok
 "$script" demo "$agents" >/dev/null
 [[ ! -e "$test_dir/local-validator-ran" ]] || { echo 'FAIL: the local validator ran' >&2; exit 1; }
@@ -201,7 +210,7 @@ git -C "$agents" checkout --quiet -- scripts/check-status.py
 # fetched: the next validator update on origin still runs.
 git -C "$agents" config remote.origin.fetch +refs/heads/none:refs/remotes/origin/none
 git -C "$updater" pull --quiet --ff-only origin main
-sed -i "1i open('$test_dir/origin-validator-2-ran', 'w')" "$updater/scripts/check-status.py"
+prepend_line "open('$test_dir/origin-validator-2-ran', 'w')" "$updater/scripts/check-status.py"
 git -C "$updater" commit --quiet -am 'validator update 2'
 git -C "$updater" push --quiet origin main
 heartbeat demo ok
@@ -226,7 +235,7 @@ echo 'PASS: missing jsonschema reported'
 other="$test_dir/other"
 git clone --quiet https://github.com/taxiway-sh/agents "$other"
 cp "$agents/status/demo.json" "$other/status/other.json"
-sed -i 's/"demo"/"other"/' "$other/status/other.json"
+replace_in 's/"demo"/"other"/' "$other/status/other.json"
 git -C "$other" add status/other.json
 git -C "$other" commit --quiet -m 'chore(other): record run heartbeat'
 git -C "$other" push --quiet origin HEAD:refs/heads/side
