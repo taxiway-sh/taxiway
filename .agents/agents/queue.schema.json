@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Machine queue item (queue/machine/<id>.json in taxiway-sh/agents)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "link", "commit", "checks", "maxMinutes", "expires", "requester", "created", "status"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^[0-9]{8}-[0-9]{6}-[a-z0-9-]+$"},
+    "link": {"type": "string", "pattern": "^https://github\\.com/taxiway-sh/taxiway/(issues|pull)/[0-9]+$"},
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "scope"],
+        "properties": {
+          "kind": {"enum": ["lima", "macos", "install", "real-account", "e2e", "campaign"]},
+          "scope": {"type": "string", "minLength": 1, "maxLength": 300, "pattern": "^[^\\n]*$"}
+        }
+      }
+    },
+    "approval": {"type": "string", "pattern": "^https://github\\.com/taxiway-sh/taxiway/(issues|pull)/[0-9]+#issuecomment-[0-9]+$"},
+    "maxMinutes": {"type": "integer", "minimum": 1, "maximum": 720},
+    "expires": {"type": "string", "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "requester": {"type": "string", "pattern": "^[a-z0-9-]+$"},
+    "created": {"type": "string", "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "status": {"enum": ["pending", "running", "done", "failed", "expired", "rejected"]},
+    "started": {"type": "string", "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "finished": {"type": "string", "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary"],
+      "properties": {
+        "summary": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "link": {"type": "string", "pattern": "^https://github\\.com/taxiway-sh/agents/blob/main/queue/machine/[0-9]{8}-[0-9]{6}-[a-z0-9-]+\\.md$"},
+        "outcomes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "outcome"],
+            "properties": {
+              "kind": {"enum": ["lima", "macos", "install", "real-account", "e2e", "campaign"]},
+              "outcome": {"enum": ["pass", "fail", "not-executed"]}
+            }
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "pending"}}},
+      "then": {"not": {"anyOf": [{"required": ["started"]}, {"required": ["finished"]}, {"required": ["result"]}]}}
+    },
+    {
+      "if": {"properties": {"status": {"const": "running"}}},
+      "then": {"required": ["started"], "not": {"anyOf": [{"required": ["finished"]}, {"required": ["result"]}]}}
+    },
+    {
+      "if": {"properties": {"status": {"const": "done"}}},
+      "then": {
+        "required": ["started", "finished", "result"],
+        "properties": {"result": {"required": ["summary", "link", "outcomes"]}}
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "failed"}}},
+      "then": {"required": ["started", "finished", "result"]}
+    },
+    {
+      "if": {"properties": {"status": {"const": "rejected"}}},
+      "then": {"required": ["finished", "result"], "not": {"required": ["started"]}}
+    },
+    {
+      "if": {"properties": {"status": {"const": "expired"}}},
+      "then": {"required": ["finished", "result"], "not": {"required": ["started"]}}
+    }
+  ]
+}

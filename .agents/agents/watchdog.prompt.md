@@ -9,14 +9,17 @@ heartbeat or with a manual [Check](../skills/taxiway-agents/SKILL.md#check).
 
 ## Checks
 
-1. For each other agent declared in `.agents/agents/` on `main`, apply
-   [Check](../skills/taxiway-agents/SKILL.md#check), which owns lateness
-   against the declared schedule and the not-installed state.
+1. For each other agent declared in `.agents/agents/` on `main` that runs in
+   the cloud, apply [Check](../skills/taxiway-agents/SKILL.md#check), which
+   owns lateness against the declared schedule and the not-installed state.
 2. Check that the last scheduled run of each nightly workflow (`e2e.yml`,
    `install.yml`, `model-catalog-update.yml`) started within the past 24
    hours, and report only a run that is missing or did not start. Failures
    come from the [CI watch agent](ci-watch.prompt.md)'s `waiting` items.
-3. Collect every heartbeat's `waiting` items.
+3. Collect every heartbeat's `waiting` items. A machine agent's heartbeat is
+   its check; report an offline machine as
+   [Heartbeat, offline machine and metrics](../skills/taxiway-agents/SKILL.md#heartbeat-offline-machine-and-metrics)
+   says, with the number of pending queue items and the oldest one's age.
 4. Collect the `approvals` entries of every `status/<id>.json` commit since
    the watchdog's previous heartbeat (`git log`; with no previous heartbeat,
    the past 24 hours), answered `corrected` for a

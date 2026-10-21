@@ -22,8 +22,9 @@ For one practice, skill or agent:
 2. **Measure** what it costs, from those runs: review rounds per PR, maintainer
    questions and corrections, approvals and refusals, wall time, waits (for
    the maintainer, CI or a machine), re-runs, time with red CI and time to
-   merge. Say which numbers were counted and over which period; an indicator
-   with no data is reported as unknown, never estimated.
+   merge, counted as in [Indicators](#indicators). Say which numbers were
+   counted and over which period; an indicator with no data is reported as
+   unknown, never estimated.
 3. **Propose alternatives.** Look for: removing a step, automating a manual
    check, reordering work, a new tool or client capability, a new or merged
    skill or agent, a better default, a cheaper model or schedule, a stronger
@@ -46,6 +47,29 @@ For one practice, skill or agent:
    capability, tool or agent becomes an issue proposal through `taxiway-intake`.
    A refused proposal is recorded as a
    [rejected proposal](#rejected-proposals).
+
+## Indicators
+
+Each indicator is counted over a period in UTC, from these sources only.
+Heartbeats are read from the git history of `status/` in the
+[state repository](../taxiway-agents/SKILL.md#state-repository)
+(`git log -p`), since each run overwrites its file; GitHub is read with
+bounded REST results, as [`taxiway-triage`](../taxiway-triage/SKILL.md#inputs)
+does: merged PRs from `pulls?state=closed&sort=updated&direction=desc` with an
+explicit `page=N`, stopping after the first page whose last PR was updated
+before the period starts, never `--paginate`.
+
+| Indicator | Counted as | Source |
+|---|---|---|
+| Maintainer corrections | `corrected` answers, plus changes requested by the maintainer on PRs merged in the period; corrections given in comments or sessions are not counted, so this undercounts | `approvals` in heartbeats; `pulls/<n>/reviews` with state `CHANGES_REQUESTED` |
+| Questions asked | Distinct `waiting` items per agent, by link and the proposal id named in `action`, first listed in the period; the watchdog's items repeat other agents' and are left out | `waiting` in heartbeats |
+| Approval rate | `ok` answers over all answers, overall and per agent and action class | `approvals` in heartbeats |
+| Time with red CI | Hours during which the latest completed `ci.yml` run on `main` did not succeed; nightly `e2e.yml` and `install.yml` runs that failed | `actions/workflows/<file>/runs?branch=main` |
+| Time to merge | Median and longest time from opening to merge of PRs merged in the period; bot PRs (`automation/*`) apart | merged PRs, `created_at` and `merged_at` |
+| Review rounds per PR | Median of N in the `Independent review: N rounds` line of each merged PR's Validation section ([Findings](../taxiway-review/SKILL.md#findings)); a PR without it counts as unknown | PR bodies |
+
+Questions and corrections in interactive sessions are not in these sources:
+they are left out and the report says so.
 
 ## Trials
 
@@ -101,8 +125,8 @@ session identifiers or links, transcript content or other projects.
 
 ## Guardrails
 
-- A change to the agentic system (`AGENTS.md`, skills, agent declarations and
-  prompts, contributor docs and their checks) is always a draft PR that the
+- A change to the agentic system (`AGENTS.md`, skills, agent declarations or
+  prompts, contributor docs or their checks) is always a draft PR that the
   maintainer reviews. No autonomy level ever applies it automatically.
 - A trial is time-boxed and reversible. It never changes the approvals matrix
   or the actions agents must never take, and an agent never changes its own

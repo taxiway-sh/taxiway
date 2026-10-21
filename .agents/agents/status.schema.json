@@ -38,6 +38,20 @@
           "link": {"type": "string", "pattern": "^https://github\\.com/taxiway-sh/"}
         }
       }
+    },
+    "frictions": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "summary"],
+        "properties": {
+          "kind": {"enum": ["missing-rule", "ambiguous-rule", "contradictory-rule", "workaround", "check-not-run", "tool-refused"]},
+          "summary": {"type": "string", "minLength": 1, "maxLength": 200},
+          "link": {"type": "string", "pattern": "^https://github\\.com/taxiway-sh/"}
+        }
+      }
     }
   }
 }

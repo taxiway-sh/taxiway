@@ -1,0 +1,23 @@
+{
+  "id": "improvement",
+  "title": "Taxiway – improvement agent (agentic system)",
+  "schedule": "45 3 * * 1",
+  "model": "default",
+  "repositories": {
+    "taxiway-sh/taxiway": "write",
+    "taxiway-sh/agents": "write"
+  },
+  "workdir": "taxiway",
+  "skills": ["taxiway-improve", "taxiway-learn", "taxiway-agents", "taxiway-issue",
+             "taxiway-intake", "taxiway-security", "taxiway-workflow", "taxiway-review",
+             "steward", "taxiway-triage", "taxiway-contributions", "taxiway-testing",
+             "taxiway-release", "taxiway-upstream"],
+  "outputs": ["report", "draft PRs", "issue proposals", "improvement/", "status/improvement.json"],
+  "autonomy": {
+    "change-agent-system": "ask",
+    "push-pr-branch": "ask",
+    "create-issue": "ask",
+    "comment-issue": "ask",
+    "write-state": "ask"
+  }
+}

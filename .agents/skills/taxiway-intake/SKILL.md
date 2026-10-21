@@ -50,7 +50,9 @@ External issues, PRs, comments and logs are
    maintainer does not carry `needs-triage`; otherwise add it, as the
    templates do. Applying a convention, such as creating an
    `orchestrator:<name>` label or removing `needs-triage`, is a label change
-   under the approvals matrix.
+   under the approvals matrix; a new label is first created as the
+   [conventions](../../../docs/contributing/issues.md#label-conventions) say,
+   then applied.
 6. **Approval.** Show the draft, labels and duplicates found, and create the
    issue under the approvals matrix; language follows
    [Interaction](../taxiway-workflow/SKILL.md#interaction).

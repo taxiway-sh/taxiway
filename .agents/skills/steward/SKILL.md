@@ -37,7 +37,8 @@ closed, or when the user says stop.
   workaround not committed (example:
   [#185](https://github.com/taxiway-sh/taxiway/pull/185#issuecomment-6289335855)).
 - Lima, macOS host and real-account checks that this session cannot run are
-  listed as pending in the PR, never simulated or inferred from Docker results.
+  listed as pending in the PR, never simulated or inferred from Docker results,
+  and [queued for the machine agent](../taxiway-agents/SKILL.md#requesting-a-check).
 
 ## Review comments
 
