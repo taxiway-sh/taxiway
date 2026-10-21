@@ -35,7 +35,10 @@ documentation-only and agent-tooling changes wait for the next one.
    migration code and tests against the [beta invariant](../../../AGENTS.md#invariants),
    separately from necessary current recovery/idempotency. Review changes since the last
    published tag and prepare breaking-change notes with before/after, impact and
-   user action; beta permits breaks and does not imply migration support. Commit
+   user action; beta permits breaks and does not imply migration support. As
+   part of the authorized publication, add these prepared notes and the
+   [contributor credit](../taxiway-contributions/SKILL.md#credit) to the
+   published release with `gh release edit`. Commit
    markers help but never replace behavior review. Save sanitized exact-candidate
    proof. The helper's exit-zero PASS is provisional command evidence, not
    certification; external/manual records require independent inspection.
