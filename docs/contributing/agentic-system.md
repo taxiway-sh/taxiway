@@ -44,14 +44,16 @@ The state repository holds run state, never rules
   instructions version they were installed from;
 - `queue/machine/`: checks that cloud sessions cannot run, queued for the
   machine agent, with their public reports;
-- `improvement/`: trials and rejected improvement proposals.
+- `improvement/`: trials and rejected improvement proposals;
+- `learn/campaigns/`: the progress of
+  [history campaigns](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-learn/SKILL.md#history-campaigns).
 
 ```mermaid
 flowchart LR
-  K["Knowledge<br/>AGENTS.md + skills"] --> R["Agent session or run"]
-  D["Declarations<br/>.agents/agents/"] --> R
-  R --> S["State<br/>taxiway-sh/agents"]
-  R --> P["Proposals<br/>issues, PRs, comments"]
+  K["Knowledge: AGENTS.md, skills"] --> R["Agent session or run"]
+  D["Declarations: .agents/agents/"] --> R
+  R -->|"scheduled runs"| S["State: taxiway-sh/agents"]
+  R --> P["Proposals: issues, PRs, comments"]
   P --> M["Maintainer approves"]
   M -->|"reviewed PR"| K
   M -->|"reviewed PR"| D
@@ -114,7 +116,7 @@ One line each; follow the link for the rules.
 - [`taxiway-contributions`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-contributions/SKILL.md):
   replies, claims, reviews, follow-up and credit for external contributors.
 
-**Agents operation**
+**Agent operations**
 
 - [`taxiway-agents`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-agents/SKILL.md):
   declaring, installing, checking and repairing scheduled agents, the run
@@ -140,15 +142,14 @@ the prompt file holds its job. Schedules are in UTC.
 |---|---|---|---|
 | [Triage](https://github.com/taxiway-sh/taxiway/blob/main/.agents/agents/triage.prompt.md) | Weekdays 04:15 | Ranks the backlog and checks label hygiene with [`taxiway-triage`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-triage/SKILL.md) | Comments, issues, labels, PR reviews, closures |
 | [Watchdog](https://github.com/taxiway-sh/taxiway/blob/main/.agents/agents/watchdog.prompt.md) | Daily 04:45 | Checks that every agent and nightly workflow ran, collects what waits for the maintainer, and notifies only when something does | Nothing: it reads and reports |
-| [CI watch](https://github.com/taxiway-sh/taxiway/blob/main/.agents/agents/ci-watch.prompt.md) | Daily 04:00, catch-up at 07:00 | Diagnoses failed nightly E2E, installation and model catalog runs, and deduplicates them against issues | Comments, issues, workflow reruns |
+| [CI watch](https://github.com/taxiway-sh/taxiway/blob/main/.agents/agents/ci-watch.prompt.md) | Daily 04:00, catch-up at 07:00 | Diagnoses failed nightly E2E and installation runs, and a failed catalog run without a PR, and deduplicates them against issues | Comments, issues, workflow reruns |
 | [Dependency watch](https://github.com/taxiway-sh/taxiway/blob/main/.agents/agents/dependency-watch.prompt.md) | Mondays 03:40 | Compares pinned dependencies with upstream releases and follows tracked upstream fixes | Issues for bumps or workaround removals, status comments |
 | [Model catalog](https://github.com/taxiway-sh/taxiway/blob/main/.agents/agents/model-catalog.prompt.md) | Daily 03:50 | Reviews the automated model catalog PR and brings it to green | Pushes to that PR's branch, marking it ready, merging it, issues |
 | [Contributions](https://github.com/taxiway-sh/taxiway/blob/main/.agents/agents/contributions.prompt.md) | Weekdays 07:20, 10:20, 13:20, 16:20 | Drafts replies, reviews and follow-ups for external contributors with [`taxiway-contributions`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-contributions/SKILL.md) | Comments, PR reviews, assignments, labels, closures |
 | [Improvement](https://github.com/taxiway-sh/taxiway/blob/main/.agents/agents/improvement.prompt.md) | Mondays 03:45 | Turns the week's frictions, review findings and learnings into proposed changes of the agentic system | Draft PRs on skills and declarations, issues, trials, promotions and demotions |
-| [Machine](https://github.com/taxiway-sh/taxiway/blob/main/.agents/agents/machine.prompt.md) | On request, and at least every 12 hours | Runs queued checks a cloud session cannot (Lima, macOS host, installed releases, real accounts) on a machine the maintainer operates, and publishes sanitized reports | Nothing: it only serves its queue |
+| [Machine](https://github.com/taxiway-sh/taxiway/blob/main/.agents/agents/machine.prompt.md) | On request, and at least every 12 hours | Runs queued checks a cloud session cannot, such as Lima, a macOS host, installed releases, real accounts or long E2E runs, on a machine the maintainer operates, and publishes sanitized reports | Nothing: it only serves its queue |
 
-How agents are installed and checked, and the install and check commands that
-do it, are in
+How agents are installed and checked is in
 [`taxiway-agents`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-agents/SKILL.md#install).
 The machine agent's queue, approval rule and public report format are in
 [Machine agent and queue](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-agents/SKILL.md#machine-agent-and-queue).
@@ -171,9 +172,10 @@ scheduled.
 The [run contract](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-agents/SKILL.md#every-run)
 is the same for every scheduled agent:
 
-1. **Bootstrap.** The scheduled task sends the same short prompt every time:
-   update the clones to `main`, then read the agent's prompt file and follow
-   it. The run reads its instructions and autonomy levels from `main`, and
+1. **Bootstrap.** For a cloud agent, the scheduled task sends the same short
+   prompt every time: update the clones to `main`, then read the agent's
+   prompt file and follow it. The machine agent gets the same prompt by
+   message or from its local schedule. The run reads its instructions and autonomy levels from `main`, and
    records which commit it read.
 2. **Job.** The agent does the job in its prompt file, records the
    maintainer's answers to its previous proposals, and notes any friction: a
@@ -191,14 +193,10 @@ is the same for every scheduled agent:
 
 Each scheduled agent declares a level per
 [action class](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-agents/SKILL.md#action-classes),
-such as commenting, labelling, reviewing or pushing to a PR branch
-([Autonomy](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-agents/SKILL.md#autonomy)):
-
-| Level | The agent |
-|---|---|
-| `propose` | describes the action; the maintainer acts |
-| `ask` | takes it only after the maintainer's OK |
-| `auto` | takes it, then reports it with a way to undo it |
+such as commenting, labelling, reviewing or pushing to a PR branch: `propose`
+(the maintainer acts), `ask` (the agent acts after the maintainer's OK) or
+`auto` (it acts, then reports how to undo it), as
+[Autonomy](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-agents/SKILL.md#autonomy) defines.
 
 - Every action class an agent declares starts at `ask`; the watchdog and the
   machine agent declare none.
@@ -227,36 +225,21 @@ owns the rules.
   it and never execute it.
 - No agent pushes to `main`: every change goes through a branch and a
   reviewed PR, including changes to the agents themselves.
-- A machine check of a commit that is not on `main` runs only with the
-  maintainer's
-  [approval](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-agents/SKILL.md#approval).
+- A machine check of a commit that is not on `main` runs under the
+  [approval rule](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-agents/SKILL.md#approval).
 - The state repository is
   [public](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-security/SKILL.md#public-writing):
-  it carries no secrets, host details, private paths, session identifiers or
-  raw logs.
+  it carries no secrets, host details, private paths, session or scheduled
+  task IDs, or raw logs.
 
 ## What contributors see
 
-If you open an issue or a PR, [`CONTRIBUTING.md`](https://github.com/taxiway-sh/taxiway/blob/main/CONTRIBUTING.md#what-to-expect)
+If you open an issue or a PR, some replies and reviews are drafted by an agent
+and approved by the maintainer before they are posted.
+[`CONTRIBUTING.md`](https://github.com/taxiway-sh/taxiway/blob/main/CONTRIBUTING.md#what-to-expect)
 says what to expect, and
 [`taxiway-contributions`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-contributions/SKILL.md)
-is how agents handle it:
-
-- **Replies and reviews** may be drafted by an agent; the maintainer approves
-  each one before it is posted, and it is written in your language.
-- **Labels** are applied at triage, as
-  [Issues](issues.md#labels) describes.
-- **CI** on your fork PR runs after the maintainer has read the changes and
-  approved the run.
-- **Merge path.** When your change affects lifecycle
-  [E2E scenarios](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-testing/SKILL.md#e2e-scenarios),
-  which do not run on PRs, the maintainer may reimplement it on a Taxiway
-  branch to run them before merging
-  ([External PR](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-contributions/SKILL.md#external-pr)).
-- **Credit.** You stay the commit author, or a co-author when the change was
-  reworked, and merged contributions are
-  [credited](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-contributions/SKILL.md#credit)
-  in the release notes.
+is how agents handle it.
 
 ## Reusing the pattern
 
