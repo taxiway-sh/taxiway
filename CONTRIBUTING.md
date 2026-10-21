@@ -23,17 +23,18 @@ full guide lives in [docs/contributing](docs/contributing/README.md).
 - **Acknowledgement.** A new issue, claim or PR gets a first answer, usually
   within a few working days. Answers are in the language you wrote in.
 - **Review.** Each PR gets a review against its linked issue: comments to
-  address, or an approval. Some replies are drafted by an AI agent; reviews
-  are approved by the maintainer before they are posted.
+  address, or an approval. Some replies and reviews are drafted by an AI
+  agent; the maintainer approves them before they are posted.
 - **CI approval.** For first-time contributors, GitHub runs CI on a fork PR
   only after a maintainer approves it, so the first run may wait for that.
   Lifecycle [E2E scenarios](AGENTS.md#e2e-scenarios) do not run on PRs; the
-  maintainer runs the affected ones before merging.
+  maintainer runs the affected ones on GitHub-hosted runners before merging.
 - **Follow-up.** If a PR or claim waits on you for two weeks, you get a
-  friendly reminder; after another month without an answer, it may be closed
-  with thanks and can be reopened at any time.
-- **Credit.** Your commits keep you as author, and release notes thank each
-  external contributor.
+  friendly reminder. After another month without an answer, a claim is
+  released so someone else can take it, and a PR may be closed with thanks;
+  you can reopen it at any time.
+- **Credit.** Your commits keep you as author. Merged contributions are
+  thanked on the PR and credited in the notes of the release that ships them.
 
 ## Pull requests
 
