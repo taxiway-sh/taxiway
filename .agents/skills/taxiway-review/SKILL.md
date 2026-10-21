@@ -40,10 +40,8 @@ Review adversarially: look for what is wrong, not for confirmation.
   Each new assertion can fail and is mapped to the test that ran it (no early
   returns, no absence-only checks without a positive counterpart); E2E
   assertions follow [Writing E2E scenarios](../../../docs/contributing/testing.md#writing-e2e-scenarios).
-- **Workarounds.** A workaround is tracked per
-  [upstream dependency fixes](../taxiway-intake/SKILL.md#upstream-dependency-fixes)
-  and never presents the underlying issue as fixed; upstream claims follow the
-  [upstream procedure](../../../docs/contributing/development.md#upstream-dependency-bugs).
+- **Workarounds.** A workaround and any upstream claim follow
+  [`taxiway-upstream`](../taxiway-upstream/SKILL.md#workaround-and-tracking-issue).
 - **Leftovers.** After a removal or rename, no stale hint, help text or doc
   still points to the old name.
 - **Commit hygiene.** [Conventional Commits](../../../docs/contributing/development.md#commit-messages)

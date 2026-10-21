@@ -68,17 +68,6 @@ give evidence, impact and a suggested scope; then follow the approval step.
 
 ## Upstream dependency fixes
 
-Investigate and prepare upstream reports with the
-[upstream procedure](../../../docs/contributing/development.md#upstream-dependency-bugs).
-When Taxiway keeps a workaround for an upstream bug, propose one local tracking
-issue (pattern: [#178](https://github.com/taxiway-sh/taxiway/issues/178)) that:
-
-- links the upstream report or PR, which is the reference, and its status;
-- describes the local workaround and where it lives (code, comment, doc
-  limitation);
-- states the removal criteria: the release that must contain the fix, the pin
-  to bump, what to delete and the checks to rerun.
-
-Without a workaround, record the approved upstream link and status in the
-related Taxiway issue or PR. Upstream publication follows the
-[approvals](../taxiway-workflow/SKILL.md#approvals).
+A suspected dependency bug, or a workaround that needs a local tracking issue,
+follows [`taxiway-upstream`](../taxiway-upstream/SKILL.md); the tracking issue
+it proposes is created with this procedure.

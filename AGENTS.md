@@ -58,7 +58,8 @@ scenarios, Makefile targets and CI matrix entries. Do not add other parallel sui
 | Working a selected issue: worktree, branch, commits, checks, PR, merge, post-merge cleanup | [`taxiway-issue` skill](.agents/skills/taxiway-issue/SKILL.md) |
 | Independent review of a change, review findings | [`taxiway-review` skill](.agents/skills/taxiway-review/SKILL.md) |
 | PR follow-up: CI, E2E results, conflicts, stacked PRs; PR template | [`steward` skill](.agents/skills/steward/SKILL.md), [PR template](.github/pull_request_template.md) |
-| Build, commit messages, upstream dependency bugs | [Development](docs/contributing/development.md) |
+| Build, commit messages | [Development](docs/contributing/development.md) |
 | Secrets, gateway keys, untrusted input, contributor code, security reports, private security review | [`taxiway-security` skill](.agents/skills/taxiway-security/SKILL.md) |
-| Releases, release and installation qualification, model catalog | [`taxiway-release` skill](.agents/skills/taxiway-release/SKILL.md), [Installation qualification](docs/contributing/installation-qualification.md), [Model catalog](docs/contributing/model-catalog.md) |
+| Upstream dependency bugs, workarounds, dependency bumps, model catalog review | [`taxiway-upstream` skill](.agents/skills/taxiway-upstream/SKILL.md), [Model catalog](docs/contributing/model-catalog.md) |
+| Releases, release and installation qualification | [`taxiway-release` skill](.agents/skills/taxiway-release/SKILL.md), [Installation qualification](docs/contributing/installation-qualification.md) |
 | Where documentation lives | User docs in `docs/`, contributor docs in [`docs/contributing/`](docs/contributing/README.md) |
