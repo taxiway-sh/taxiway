@@ -52,13 +52,14 @@ a new session on `taxiway`; it needs nothing from earlier sessions.
 2. Attach `taxiway-sh/agents` with push (`add_repo`, `access: push`) and clone
    it next to `taxiway` on `main`; the maintainer approves the attachment in
    this session. When it does not exist,
-   [Bootstrapping](../taxiway-agents/SKILL.md#bootstrapping) applies.
+   [Bootstrapping](../taxiway-agents/SKILL.md#bootstrapping) applies and the
+   coordinator stops there.
 3. Reconcile as [Intake and reconciliation](#intake-and-reconciliation) says,
    without its opening question, then run the
    [Check](../taxiway-agents/SKILL.md#check) of scheduled agents.
-4. For the agents whose Check findings [Install](../taxiway-agents/SKILL.md#install)
-   repairs, present Install's [Plan](../taxiway-agents/SKILL.md#plan); the
-   maintainer's OK on it is the approval. A machine agent with no heartbeat
+4. When the Check finds something [Install](../taxiway-agents/SKILL.md#install)
+   repairs, present Install's [Plan](../taxiway-agents/SKILL.md#plan) in its
+   default mode; the maintainer's OK on it is the approval. A machine agent with no heartbeat
    yet waits for a maintainer's [Machine setup](../taxiway-agents/SKILL.md#machine-setup);
    an [offline](../taxiway-agents/SKILL.md#heartbeat-offline-machine-and-metrics)
    one waits for a maintainer to bring it back.
