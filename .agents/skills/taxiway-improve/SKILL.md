@@ -38,18 +38,21 @@ For one practice, skill or agent:
    them. A proposal with weak evidence and a plausible gain becomes a
    [trial](#trials); one with no evidence is not proposed.
 5. **Deliver** the ranked list to the maintainer and wait for their pick. A
-   kept rule or skill change becomes a draft PR on its owner through
-   [`taxiway-issue`](../taxiway-issue/SKILL.md); a new capability, tool or
-   agent becomes an issue proposal through
-   [`taxiway-intake`](../taxiway-intake/SKILL.md). A refused one is recorded as
-   a [rejected proposal](#rejected-proposals).
+   kept rule or skill change becomes a PR on its owner through
+   [`taxiway-issue`](../taxiway-issue/SKILL.md), on the issue the evidence came
+   from, or on an issue proposed through
+   [`taxiway-intake`](../taxiway-intake/SKILL.md) when there is none; the
+   maintainer's pick is the selection, and the PR is opened as a draft. A new
+   capability, tool or agent becomes an issue proposal through `taxiway-intake`.
+   A refused one is recorded as a [rejected proposal](#rejected-proposals).
 
 ## Trials
 
 A trial tests one change for a bounded time, for example "for two weeks,
 agent A does Y". Declaring, starting and ending one follows the
-[approvals](../taxiway-workflow/SKILL.md#approvals) like any change to the
-agentic system.
+[approvals](../taxiway-workflow/SKILL.md#approvals) rows for pushing a branch
+or publishing a PR (the trial's change is a draft PR) and, when it applies to
+an agent, for changing a scheduled agent.
 
 - **Declaration:** the change, the practice or agent it applies to, the start
   and end dates, the indicators to compare, the baseline values measured over a
@@ -68,12 +71,20 @@ reason, and is not proposed again unless there is new evidence, which the new
 proposal names. Before proposing, check the record for the same change in other
 words.
 
+Until `improvement/rejected.json` exists in the [state layout](#state-layout),
+record a rejection as a comment on the issue or PR it came from, with the
+reason; the check above and step 6 of
+[`taxiway-learn`](../taxiway-learn/SKILL.md#analysis) search those comments
+too. Writing the file, like every file of the state layout, is a push to
+`taxiway-sh/agents` and follows the
+[approvals](../taxiway-workflow/SKILL.md#approvals).
+
 ## State layout
 
 Trials and rejections live in the public
 [state repository](../taxiway-agents/SKILL.md#state-repository)
-`taxiway-sh/agents`, under the same rule: no secrets, host details, private
-paths, session links or raw logs.
+`taxiway-sh/agents`, under its public-content rule; in addition, they hold no
+session identifiers or links, transcript content or other projects.
 
 - `improvement/trials/<id>.json`: one trial, with `id`, `change`, `owner` (the
   skill, doc or agent it changes), `start`, `end`, `indicators`, `baseline`,
@@ -81,10 +92,8 @@ paths, session links or raw logs.
   and `decision` (the link to the PR or the reason).
 - `improvement/rejected.json`: a list of rejections, each with `date`,
   `proposal` (one sentence), `owner`, `reason` (the maintainer's, paraphrased),
-  `evidence` (the links it was based on) and `source` (`improve` or `learn`).
-
-These files are not created yet. Until they exist, a rejection or trial result
-is listed in the session's final report.
+  `evidence` (links to PRs, issues or commits; for a session, its date only,
+  never a session identifier or link) and `source` (`improve` or `learn`).
 
 ## Guardrails
 
