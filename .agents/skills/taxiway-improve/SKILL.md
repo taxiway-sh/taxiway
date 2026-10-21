@@ -11,6 +11,17 @@ described is [`taxiway-learn`](../taxiway-learn/SKILL.md); this skill weighs
 whether a described practice should change. It runs on demand ("how could we
 do this better?") or from a scheduled agent whose prompt applies it.
 
+## Earned autonomy
+
+The agentic system starts with little autonomy and earns more as it proves
+itself. An action, by a scheduled agent or an interactive session, merging a
+PR included, keeps the maintainer's approval until recorded results show it
+works; the maintainer then grants more through a reviewed change to the rule
+that holds it, such as an agent's declaration or the
+[approvals](../taxiway-workflow/SKILL.md#approvals) matrix. When it stops
+working, autonomy is withdrawn the same way. Proposals to grant or withdraw it
+follow [Steps](#steps).
+
 ## Steps
 
 For one practice, skill or agent:
