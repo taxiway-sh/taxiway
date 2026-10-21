@@ -164,6 +164,7 @@ func TestDiscoverRejectsEffectiveNoticeUnderAnotherHeading(t *testing.T) {
 		{"postponed heading", "# Models\n## GPT-5.5 retirement (postponed, dates below are no longer valid)\n" + effectiveSentences + "## Choose a model\nchoose `gpt-6-sol` when available.\n"},
 		{"tentative heading", "# Models\n## Tentative Codex plan, subject to change\n" + effectiveSentences + "## Choose a model\nchoose `gpt-6-sol` when available.\n"},
 		{"preamble before any heading", "Draft, not yet confirmed:\n" + effectiveSentences + "# Models\n## Choose a model\nchoose `gpt-6-sol` when available.\n"},
+		{"preamble opening like a heading", "GPT-5.5 retirement\n" + effectiveSentences + "# Models\n## Choose a model\nchoose `gpt-6-sol` when available.\n"},
 		{"notice split across paragraphs", "# Models\n## Codex updates\nEffective October 14, 2026.\n\nGPT-5.5 retires from Codex for users signed in with ChatGPT.\n## Choose a model\nchoose `gpt-6-sol` when available.\n"},
 		{"zero-width space in effective", "# Models\n## Codex updates\nEffec" + string(rune(0x200b)) + "tive October 14, 2026, GPT-5.5 retires from Codex for users signed in with ChatGPT.\n## Choose a model\nchoose `gpt-6-sol` when available.\n"},
 	} {
