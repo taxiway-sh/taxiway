@@ -154,6 +154,7 @@ Use these feature-independent names within each dev worktree:
 | `test-claude` | `claude-code` | Manual Claude checks and reusable reference authentication |
 | `test-codex` | `codex` | Manual Codex checks using host authentication through the gateway |
 | `test-gastown` | `gastown` | Manual Gas Town checks using a copy of the reference Claude login |
+| `test-gascity` | `gascity` | Manual Gas City checks using a copy of the reference Claude login |
 
 The runtime context isolates these names between worktrees. Existing labs may
 have older names: pass their actual names to the scripts and keep using them;
@@ -169,7 +170,14 @@ direnv exec . ./taxiway up test-gastown --driver docker --type gastown \
   --repo https://github.com/octocat/Hello-World --prepare-only --skip-auth-check
 direnv exec . python3 tests/live/taxiway_live.py auth --source test-claude --target test-gastown
 direnv exec . ./taxiway run test-gastown
+direnv exec . ./taxiway up test-gascity --driver docker --type gascity \
+  --repo https://github.com/octocat/Hello-World --prepare-only --skip-auth-check
+direnv exec . python3 tests/live/taxiway_live.py auth --source test-claude --target test-gascity
+direnv exec . ./taxiway run test-gascity
 ```
+
+An idle Gas City city keeps calling the model: pause it between checks as
+[Pause the City](../orchestrators/gascity.md#pause-the-city) says.
 
 Prepare Gas Town before copying authentication so its roles first start with
 a usable login. If a lab already exists, inspect and reuse it instead of
@@ -177,7 +185,8 @@ creating a replacement or overwriting its authentication automatically.
 
 Leave persistent labs available after automated checks for the user's manual
 validation. Connect with `direnv exec . ./taxiway shell <lab>`; in Gas Town,
-use `gt status` and `gt mayor attach`. Remove persistent labs only when their
+use `gt status` and `gt mayor attach`; in Gas City, `gc status` and
+`gc session attach gastown.mayor`. Remove persistent labs only when their
 validation work is finished and removal is requested.
 
 Automatically owned scenarios continue to use unique `live-test-<random>`
