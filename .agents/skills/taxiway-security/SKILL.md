@@ -61,7 +61,9 @@ Contributor code (a fork branch, a patch, a script from an issue or PR) runs
 only in fork-PR CI on GitHub-hosted runners, which get a read-only token and no
 secrets. The maintainer approves each run after reading the diff of everything
 CI executes: `.github/workflows/`, `Makefile`, `scripts/`, `tests/`,
-`*_test.go` and what they call.
+`*_test.go`, the site's `package.json`, `package-lock.json` (whose packages
+`npm ci` installs and whose install scripts it runs), configuration files and
+tests under `site/`, and what they call.
 
 - This requires the repository's Actions setting "Approval for running fork
   pull request workflows from contributors" to require approval for all
