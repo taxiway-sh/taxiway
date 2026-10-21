@@ -48,7 +48,7 @@ Skills are named `taxiway-<topic>`; `steward` keeps the name Claude Code reads f
 | Backlog ranking, label hygiene, external and bot PRs | [`taxiway-triage` skill](.agents/skills/taxiway-triage/SKILL.md) |
 | External contributors: replies, claims, external PR reviews, follow-up, credit | [`taxiway-contributions` skill](.agents/skills/taxiway-contributions/SKILL.md), [CONTRIBUTING](CONTRIBUTING.md) |
 | Learnings from a session, PR, issue, git history or past transcripts | [`taxiway-learn` skill](.agents/skills/taxiway-learn/SKILL.md) |
-| Improving a practice, skill or agent; trials and rejected proposals | [`taxiway-improve` skill](.agents/skills/taxiway-improve/SKILL.md) |
+| Improving a practice, skill or agent; earned autonomy, trials and rejected proposals | [`taxiway-improve` skill](.agents/skills/taxiway-improve/SKILL.md) |
 | Scheduled agents: declarations, install, check, run contract; machine-bound checks queue | [`taxiway-agents` skill](.agents/skills/taxiway-agents/SKILL.md) (invoked with [`/taxiway-install-agents`](.agents/skills/taxiway-install-agents/SKILL.md) and [`/taxiway-check-agents`](.agents/skills/taxiway-check-agents/SKILL.md)) |
 | Choosing checks, E2E scope, Docker or Lima, installation qualification scope, cloud sessions | [`taxiway-testing` skill](.agents/skills/taxiway-testing/SKILL.md) |
 | Running tests, E2E style, CI | [Testing](docs/contributing/testing.md) |

@@ -159,7 +159,9 @@ They must not operate on real Docker or Lima resources.
 Shell tests live under `tests/scripts/`. They cover the standalone installer,
 workspace trust, script output, reset behavior, event emission, Git cloning,
 and orchestrator workspace/start scripts. `make test-scripts` discovers
-`test_*.sh` files recursively.
+`test_*.sh` files recursively. Under `set -o pipefail`, do not cut a pipe
+short (`cmd | head` can fail with SIGPIPE); read the needed lines another way,
+such as `sed -n` on a captured output.
 
 ### End-to-end
 

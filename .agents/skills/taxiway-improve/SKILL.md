@@ -11,6 +11,19 @@ described is [`taxiway-learn`](../taxiway-learn/SKILL.md); this skill weighs
 whether a described practice should change. It runs on demand ("how could we
 do this better?") or from a scheduled agent whose prompt applies it.
 
+## Earned autonomy
+
+The agentic system starts with little autonomy and earns more as it proves
+itself. An action, by a scheduled agent or an interactive session, merging a
+PR included, keeps the maintainer's approval until recorded results show it
+works; the maintainer then grants more through a reviewed change to the rule
+that holds it, such as `AGENTS.md`, the
+[approvals](../taxiway-workflow/SKILL.md#approvals) matrix or an agent's
+declaration. When it stops working, autonomy is withdrawn the same way. A
+scheduled agent's level follows
+[Promotion and demotion](../taxiway-agents/SKILL.md#promotion-and-demotion);
+other proposals follow [Steps](#steps).
+
 ## Steps
 
 For one practice, skill or agent:
@@ -66,7 +79,7 @@ before the period starts, never `--paginate`.
 | Approval rate | `ok` answers over all answers, overall and per agent and action class | `approvals` in heartbeats |
 | Time with red CI | Hours during which the latest completed `ci.yml` run on `main` did not succeed; nightly `e2e.yml` and `install.yml` runs that failed | `actions/workflows/<file>/runs?branch=main` |
 | Time to merge | Median and longest time from opening to merge of PRs merged in the period; bot PRs (`automation/*`) apart | merged PRs, `created_at` and `merged_at` |
-| Review rounds per PR | Median of N in the `Independent review: N rounds` line of each merged PR's Validation section ([Review reports](../taxiway-review/SKILL.md#review-reports)); a PR without it counts as unknown | PR bodies |
+| Review rounds per PR | Median of N in the `Independent review: N rounds` line of each merged PR's Validation section ([Review reports](../taxiway-review/SKILL.md#review-reports)); a PR without it counts as unknown. Under [convergence](../taxiway-review/SKILL.md#findings), a small documentation PR normally shows one round | PR bodies |
 
 Questions and corrections in interactive sessions are not in these sources:
 they are left out and the report says so.

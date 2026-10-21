@@ -16,7 +16,10 @@ Three principles shape it:
 - **Humans approve.** Agents propose; the maintainer approves pushes, PRs,
   merges, comments, labels and releases, as the
   [approvals matrix](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-workflow/SKILL.md#approvals)
-  says. Scheduled agents earn more autonomy only class by class, through
+  says. Autonomy is
+  [earned](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-improve/SKILL.md#earned-autonomy):
+  the system starts with little, gains more as recorded results prove it, and
+  loses it when they stop. Scheduled agents gain it class by class, through
   reviewed PRs.
 - **Everything is visible.** Declarations are in this repository, and run
   state is in a public repository.

@@ -100,8 +100,10 @@ issue is summarized for the maintainer; a new problem goes through
 5. **Fork CI.** For each fork run waiting for approval, ask the maintainer to
    approve it as the
    [contributor-code rule](../taxiway-security/SKILL.md#contributor-code)
-   says. Lifecycle E2Es do not run on PRs
-   ([CI structure](../../../docs/contributing/testing.md#ci-structure)).
+   says. When that approval request has expired, the contributions agent lists
+   it in its heartbeat's `waiting` with its link and the action "read the diff, then re-run the
+   CI"; rerun nothing and write nothing to the contributor. Lifecycle E2Es do
+   not run on PRs ([CI structure](../../../docs/contributing/testing.md#ci-structure)).
 6. **Merge path.** When the change affects lifecycle scenarios that could not
    run, the [E2E merge rule](../taxiway-testing/SKILL.md#e2e-scenarios) is unmet: the
    maintainer either reimplements the change on a maintainer branch,
