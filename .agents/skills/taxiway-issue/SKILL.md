@@ -56,8 +56,9 @@ git worktree add -b <type>/<n>-<subject> .worktrees/issue-<n>-<subject> origin/m
 ## 3. Implementation
 
 Commit by intention with [Conventional Commits](../../../docs/contributing/development.md#commit-messages),
-within the [scope rule](../taxiway-workflow/SKILL.md#execution). Each commit
-body references the issue with `Refs #<issue>`. While the branch is unpushed,
+within the [scope rule](../taxiway-workflow/SKILL.md#execution). Commits do
+not reference the issue: the PR description links it, as
+[Pull request](#6-pull-request) says. While the branch is unpushed,
 fold review fixes into the commit they belong to (`git commit --fixup=<sha>`,
 then `GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash <base>`, which needs no
 editor); once it is pushed, fixes are new commits,
