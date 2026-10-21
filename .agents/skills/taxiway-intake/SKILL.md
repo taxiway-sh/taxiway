@@ -34,9 +34,11 @@ maintainer's OK.
    `gh api -X GET search/issues -f q="repo:taxiway-sh/taxiway <words>"` also
    works. Without either, scan
    `repos/taxiway-sh/taxiway/issues?state=all&per_page=100&page=N` (it
-   includes PRs), with an explicit `page=N` per request. If a duplicate exists,
-   propose a comment or reopening on it instead of a new issue; a closed PR
-   may already contain the fix or the reason it was declined.
+   includes PRs), with an explicit `page=N` per request. If an open duplicate
+   exists, propose enriching it instead of a new issue. If the match is a
+   closed issue whose delivered work is defective, propose a new issue linking
+   it, as in [Issue format](../../../docs/contributing/issues.md#issue-format).
+   A closed PR may already contain the fix or the reason it was declined.
 3. **Scope.** Group or split following
    [Scope of an issue](../../../docs/contributing/issues.md#scope-of-an-issue).
 4. **Draft.** Use the shape of the matching

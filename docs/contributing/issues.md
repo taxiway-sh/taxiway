@@ -40,8 +40,16 @@ They follow a common shape so issues stay comparable:
 - **Problem** — the symptom and, where known, the root cause.
 - **Current behavior** *(optional)* — reproduction, logs, observed failure.
 - **Expected behavior** — the contract once fixed.
-- **Proposed direction** *(optional)* — a lead, kept open.
+- **Possible directions** *(optional)* — leads, kept open and unranked. An issue
+  records a preferred option only once the maintainer has decided it
+  (see the intake *Decisions* step).
 - **Acceptance criteria** — verifiable conditions, ideally including a test.
+
+An issue centers on the problem or the need, with evidence; it carries no
+session narrative and no release-status remarks such as "not blocking the
+release". New facts enrich the existing issue instead of opening a duplicate.
+A defect found in delivered work gets a new issue that links the closed one;
+the closed issue is neither reopened nor commented on.
 
 Reference real commands, files, and symbols. Avoid step-by-step exploitation
 details for security-sensitive reports — describe what to harden and the impact.
