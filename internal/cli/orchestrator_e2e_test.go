@@ -1195,8 +1195,11 @@ func captureE2EDryRunRuntime(t *testing.T, state *RootState, frozenTmux bool) ma
 			Argv: []string{"bash", "-c", `set -euo pipefail
 operation=initialization
 trap 'printf "snapshot operation=%s exit=%s\n" "$operation" "$?" >&2' ERR
-# GasTown's running database and daemon logs change independently of previews.
-runtime=(-path /lab/work/gt/.dolt-data -o -path /lab/work/gt/daemon)
+# GasTown's running database and daemon logs, and Codex's scratch directory,
+# change independently of previews; so do Codex's log databases and SQLite
+# journals, excluded below.
+runtime=(-path /lab/work/gt/.dolt-data -o -path /lab/work/gt/daemon -o -path "$HOME/.codex/.tmp")
+volatile=(! -path "$HOME/.codex/logs_*.sqlite*" ! -path "$HOME/.codex/*.sqlite-wal" ! -path "$HOME/.codex/*.sqlite-shm")
 if [[ "$2" == gascity ]]; then
   # Gas City's controller, bead stores and its agents' Claude transcripts also
   # change on their own schedules (patrols, orders, dogs).
@@ -1209,9 +1212,9 @@ for path in "$HOME/.config/taxiway" "$HOME/.codex" "$HOME/.claude" /lab/work; do
   if [ -d "$path" ]; then
     # Keep runtime directory presence while hashing persistent configuration and workspace files.
     operation=directory-modes
-    find "$path" \( "${runtime[@]}" \) -printf 'mode|%m|%p\n' -prune -o -printf 'mode|%m|%p\n'
+    find "$path" \( "${runtime[@]}" \) -printf 'mode|%m|%p\n' -prune -o "${volatile[@]}" -printf 'mode|%m|%p\n'
     operation=file-digests
-    find "$path" \( "${runtime[@]}" \) -prune -o -type f ! -path /lab/work/gt/.runtime/doctor-fix.log -exec sha256sum {} +
+    find "$path" \( "${runtime[@]}" \) -prune -o -type f ! -path /lab/work/gt/.runtime/doctor-fix.log "${volatile[@]}" -exec sha256sum {} +
   fi
 done
 if [[ "$1" != frozen ]] && command -v tmux >/dev/null 2>&1; then
