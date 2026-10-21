@@ -12,9 +12,8 @@ one-line prohibitions; this skill explains how to apply them. Read
 
 ## Secrets and credentials
 
-- Authentication belongs to the local environment: never log in, change GitHub
-  or git credential configuration, or set or print tokens, API keys, OAuth
-  credentials, private keys or passwords.
+- When a command or a tool asks for a token, a login or a credential change,
+  stop and ask the maintainer; never paste, print or work around it.
 - Refer to a secret by its variable or file name, never by its value: not in
   commands, arguments, notes, filenames, diagnostics, traces, issues or PRs.
   Do not dump environment variables or raw credential files, account journals
@@ -37,8 +36,8 @@ one-line prohibitions; this skill explains how to apply them. Read
 - The Docker or Lima guest is the isolation boundary, with the limits listed
   in [Guest capabilities](../../../docs/contributing/live-tests.md#guest-capabilities):
   network access and provisioned credentials reach external services, and
-  writable host directories can be modified. A lab is not a sandbox for
-  untrusted code while it holds credentials.
+  writable host directories can be modified. A lab is never a sandbox for
+  [contributor code](#contributor-code).
 - A known exposure of a key inside a lab is documented as a limitation of its
   adapter, as in [Gas City](../../../docs/orchestrators/gascity.md#gateway-key-exposure),
   with a tracking issue; it is never silently accepted or widened.
@@ -55,14 +54,20 @@ one-line prohibitions; this skill explains how to apply them. Read
 
 ## Contributor code
 
-- Never run a contributor's code (a fork branch, a patch, a script from an
-  issue) on the host, or anywhere it can reach credentials: no host
-  authentication, no gateway key, no provider credentials, no `GH_TOKEN`.
-- Run it only after reading the diff, in a temporary isolated lab you own that
-  was created without credentials, and destroy that lab afterwards.
-- Approving CI for a fork PR runs its code in CI: before proposing it, read the
-  diff for changes to workflows, scripts, tests or anything that reads secrets,
-  and leave the approval to the maintainer.
+Contributor code (a fork branch, a patch, a script from an issue or PR) runs
+only on GitHub-hosted runners:
+
+- fork CI, after the maintainer approves the run; or
+- `e2e.yml` through `workflow_dispatch` on a copy of the PR head that the
+  maintainer pushed.
+
+Before either is proposed, read the diff of everything CI executes:
+`.github/workflows/`, `Makefile`, `scripts/`, `tests/`, `*_test.go` and what
+they call. Never run it on a workstation, and never in a Taxiway lab: every lab
+carries credentials (its gateway key, and the provider login in subscription
+mode) and writable host mounts (`/lab/git`, `/lab/recordings`) that outlive
+the lab. Agents never execute contributor code themselves; they read it and
+propose the run.
 
 ## Public writing
 
@@ -112,5 +117,5 @@ reports in this shape:
 3. **Proposals.** Hardening issues drafted without exploitation details,
    through [`taxiway-intake`](../taxiway-intake/SKILL.md).
 4. **Needs the maintainer.** Secret rotation, private remediation, running
-   untrusted code, approving fork CI, and any issue, PR or comment, each
+   [contributor code](#contributor-code) on CI, and any issue, PR or comment, each
    waiting for approval ([approvals](../taxiway-workflow/SKILL.md#approvals)).
