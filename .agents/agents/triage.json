@@ -2,6 +2,7 @@
   "id": "triage",
   "title": "Backlog triage",
   "schedule": "15 4 * * 1-5",
+  "model": "default",
   "repositories": {
     "taxiway-sh/taxiway": "read",
     "taxiway-sh/agents": "write"

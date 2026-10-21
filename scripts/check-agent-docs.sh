@@ -123,7 +123,7 @@ def check_skills():
             errors.append(f".claude/skills/{entry.name}: no matching .agents/skills/{entry.name}")
 
 
-AGENT_FIELDS = {"id", "title", "schedule", "repositories", "workdir", "skills", "outputs", "autonomy"}
+AGENT_FIELDS = {"id", "title", "schedule", "model", "repositories", "workdir", "skills", "outputs", "autonomy"}
 AUTONOMY = {"ask"}
 HEARTBEAT_SCHEMA = "status.schema.json"
 
@@ -172,7 +172,7 @@ def check_agents():
             errors.append(f"{name}: repositories must map each repository to read or write")
         elif repos.get("taxiway-sh/taxiway") != "read":
             errors.append(f"{name}: taxiway-sh/taxiway access must be read")
-        for field in ("title", "workdir"):
+        for field in ("title", "workdir", "model"):
             if not isinstance(data.get(field), str) or not data.get(field):
                 errors.append(f"{name}: {field} must be a non-empty string")
         for field in ("skills", "outputs"):

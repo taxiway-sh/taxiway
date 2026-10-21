@@ -55,7 +55,7 @@ MD
   ln -s ../../.agents/skills/demo "$tree/.claude/skills/demo"
   mkdir -p "$tree/.agents/agents"
   cat > "$tree/.agents/agents/watch.json" <<'JSON'
-{"id": "watch", "title": "Watch", "schedule": "0 4 * * *",
+{"id": "watch", "title": "Watch", "schedule": "0 4 * * *", "model": "default",
  "repositories": {"taxiway-sh/taxiway": "read", "taxiway-sh/agents": "write"},
  "workdir": "taxiway", "skills": ["demo"], "outputs": ["report"], "autonomy": "ask"}
 JSON
