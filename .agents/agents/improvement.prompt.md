@@ -70,12 +70,11 @@ This agent never changes its own declaration or prompt, the skills it uses,
 followed directly or through another skill, [`AGENTS.md`](../../AGENTS.md),
 contributor docs ([`docs/contributing/`](../../docs/contributing/)), nor
 anything on the [never list](../skills/taxiway-agents/SKILL.md#never): a
-proposal about them is
-an issue proposal for the maintainer, and its own level changes are reported
-for the maintainer to make. A refused proposal is
-recorded as a [rejection](../skills/taxiway-improve/SKILL.md#rejected-proposals)
-with the maintainer's reason, after their OK for that write (`comment-issue`
-or `write-state`).
+proposal about them is an issue proposal for the maintainer, and its own level
+changes are reported for the maintainer to make. A refused proposal is recorded
+as a [rejection](../skills/taxiway-improve/SKILL.md#rejected-proposals) with
+the maintainer's reason, after their OK for that write (`comment-issue` or
+`write-state`).
 
 ## Report
 

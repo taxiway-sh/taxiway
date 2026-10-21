@@ -38,11 +38,12 @@ never rules:
 - `status/<id>.json`, the heartbeat written at the end of every run:
   `id`, `date` (UTC, ISO 8601), `result` (`ok`, `partial` or `failed`),
   `summary` (one sentence), `waiting` (items that need the maintainer, each with
-  a link and the action, which names the proposal id when there is one), `promptVersion` (the `taxiway` `main` SHA the run
-  read) and, optionally, `approvals`: the maintainer's answers this run
-  recorded, each with `class` (an [action class](#action-classes)),
-  `proposal` (its id or link), `answer` (`ok`, `refused` or `corrected`),
-  `date` (of the answer) and `link` (the GitHub item or the action taken).
+  a link and the action, which names the proposal id when there is one),
+  `promptVersion` (the `taxiway` `main` SHA the run read) and, optionally,
+  `approvals`: the maintainer's answers this run recorded, each with `class`
+  (an [action class](#action-classes)), `proposal` (its id or link), `answer`
+  (`ok`, `refused` or `corrected`), `date` (of the answer) and `link` (the
+  GitHub item or the action taken).
   A heartbeat holds at most 50 answers; the rest are carried to the next run.
   Optionally, `frictions`: what got in the run's way, at most 20, each with
   `kind` (`missing-rule`, `ambiguous-rule`, `contradictory-rule`,
