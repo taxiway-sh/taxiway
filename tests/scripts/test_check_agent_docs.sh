@@ -160,7 +160,7 @@ expect_fail 'orphan discovery entry' "$tree" '.claude/skills/gone: no matching .
 
 tree="$(fixture agent-write-taxiway)"
 sed -i.bak 's/"taxiway-sh\/taxiway": "read"/"taxiway-sh\/taxiway": "write"/' "$tree/.agents/agents/watch.json"
-expect_fail 'write on taxiway without a pushing class' "$tree" "write on taxiway-sh/taxiway requires ['change-agent-system', 'push-pr-branch'] at ask or auto"
+expect_fail 'write on taxiway without a pushing class' "$tree" "write on taxiway-sh/taxiway requires one of ['change-agent-system', 'push-pr-branch'] at ask or auto"
 
 tree="$(fixture agent-no-prompt)"
 rm "$tree/.agents/agents/watch.prompt.md"
@@ -278,6 +278,20 @@ expect_fail 'malformed approval log' "$tree" 'status.schema.json: approvals must
 if grep -q 'unreadable heartbeat schema' "$test_dir/out"; then
   echo 'FAIL: malformed approval log reported as unreadable' >&2; exit 1
 fi
+
+for target in top items; do
+  tree="$(fixture "heartbeat-required-$target")"
+  python3 - "$tree/.agents/agents/status.schema.json" "$target" <<'PY2'
+import json, sys
+data = json.load(open(sys.argv[1]))
+node = data if sys.argv[2] == "top" else data["properties"]["approvals"]["items"]
+node["required"] = 1
+json.dump(data, open(sys.argv[1], "w"))
+PY2
+  if [ "$target" = top ]; then message='status.schema.json: required must be a list'; else message='status.schema.json: approvals items must require exactly'; fi
+  expect_fail "heartbeat schema with a non-list required ($target)" "$tree" "$message"
+  if grep -q 'Traceback' "$test_dir/out"; then echo "FAIL: non-list required ($target) crashed" >&2; exit 1; fi
+done
 
 tree="$(fixture heartbeat-approvals-fields)"
 sed -i.bak 's/"required": \["class", "proposal", "answer", "date", "link"\]/"required": ["class", "answer"]/' "$tree/.agents/agents/status.schema.json"

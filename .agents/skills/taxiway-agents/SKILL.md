@@ -133,10 +133,11 @@ changes the agentic system or is reserved to the maintainer by
 ### Never
 
 No level allows these actions and none is an action class: `make lint` rejects
-them in a declaration. The checker locks this list, and the never-`auto`
-classes, by id: it fails unless the ids here match its own. It cannot check
-what an id covers, so changing a description changes this list and needs the
-maintainer's review.
+them in a declaration. The checker holds the same ids and fails unless this
+list matches them exactly. It also pins the never-`auto` classes by id, and
+fails if one is missing from [Action classes](#action-classes) or has a highest
+level above `ask`. It cannot check what an id covers, so changing a
+description changes this list and needs the maintainer's review.
 
 | Action | Never |
 |---|---|

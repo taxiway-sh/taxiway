@@ -208,6 +208,9 @@ def check_heartbeat_schema(schema):
         errors.append(f"{rel(schema)}: must be a JSON object")
         return
     required = data.get("required", [])
+    if not isinstance(required, list):
+        errors.append(f"{rel(schema)}: required must be a list")
+        required = []
     if "promptVersion" not in required:
         errors.append(f"{rel(schema)}: must require promptVersion")
     if "approvals" in required:
@@ -221,7 +224,7 @@ def check_heartbeat_schema(schema):
     if not isinstance(items, dict) or items.get("additionalProperties") is not False:
         errors.append(f"{rel(schema)}: approvals items must be objects without additional properties")
         return
-    if set(items.get("required", [])) != APPROVAL_FIELDS:
+    if not isinstance(items.get("required"), list) or set(items["required"]) != APPROVAL_FIELDS:
         errors.append(f"{rel(schema)}: approvals items must require exactly {sorted(APPROVAL_FIELDS)}")
     fields = items.get("properties")
     answer = fields.get("answer") if isinstance(fields, dict) else None
@@ -278,7 +281,7 @@ def check_agents():
             autonomy = data.get("autonomy") if isinstance(data.get("autonomy"), dict) else {}
             pushes = sorted(c for c in PUSH_CLASSES if autonomy.get(c) in ("ask", "auto"))
             if repos["taxiway-sh/taxiway"] == "write" and not pushes:
-                errors.append(f"{name}: write on taxiway-sh/taxiway requires"
+                errors.append(f"{name}: write on taxiway-sh/taxiway requires one of"
                               f" {sorted(PUSH_CLASSES)} at ask or auto")
             elif repos["taxiway-sh/taxiway"] == "read" and pushes:
                 errors.append(f"{name}: {pushes} at ask or auto requires write on taxiway-sh/taxiway")
