@@ -183,6 +183,11 @@ Docker socket, and Taxiway does not fake a systemd user manager for them
 (system-manager calls remain logged no-ops only for the Docker engine install
 during bootstrap).
 
+Adding an orchestrator follows the
+[`taxiway-orchestrator` skill](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-orchestrator/SKILL.md),
+which owns the procedure, the file checklist and the installation principles
+per environment type.
+
 Agents can optionally provide `trust-workspace.sh`. Taxiway calls this hook
 after agent installation for `/lab/work`, then again after repository
 provisioning for the resolved workspace. The lifecycle owns when trust is

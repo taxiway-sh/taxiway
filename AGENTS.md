@@ -46,6 +46,7 @@ scenarios, Makefile targets and CI matrix entries. Do not add other parallel sui
 | Scheduled agents: declarations, install, check, run contract | [`taxiway-agents` skill](.agents/skills/taxiway-agents/SKILL.md) |
 | Choosing and writing tests, E2E style, CI | [Testing](docs/contributing/testing.md) |
 | Live validation on Docker or Lima, live authentication | [Live validation](docs/contributing/live-tests.md), [`tests/live/AGENTS.md`](tests/live/AGENTS.md), [model gateway](docs/contributing/model-gateway-tests.md) |
+| Adding an orchestrator adapter: recipe, file checklist, installation principles, gateway wiring | [`taxiway-orchestrator` skill](.agents/skills/taxiway-orchestrator/SKILL.md) |
 | Working a selected issue: worktree, branch, commits, checks, PR, merge, post-merge cleanup | [`taxiway-issue` skill](.agents/skills/taxiway-issue/SKILL.md) |
 | Independent review of a change, review findings | [`taxiway-review` skill](.agents/skills/taxiway-review/SKILL.md) |
 | PR follow-up: CI, E2E results, conflicts, stacked PRs; PR template | [`steward` skill](.agents/skills/steward/SKILL.md), [PR template](.github/pull_request_template.md) |
