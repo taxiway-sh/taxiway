@@ -59,8 +59,9 @@ never rules:
   frictions of the same kind and cause are merged into one, and the 20 that
   cost the run most are kept.
   The history of `status/<id>.json` is the approval log and the friction log;
-- `deployed.json`: for each installed agent, its schedule, `model`, the
-  `promptVersion` it was installed from and, while an old session waits for
+- `deployed.json`: an object whose `agents.<id>` entry holds, for each
+  installed agent, its schedule, `model`, the `promptVersion` it was
+  installed from and, while an old session waits for
   archive, `replaced`: the UTC date-time its old scheduled task was deleted
   ([Replacing an agent](#replacing-an-agent)). Session and scheduled task IDs stay
   out of it: install and check look them up as [Install](#steps) step 1
@@ -230,7 +231,7 @@ ask the maintainer to create it, public, with a `main` branch, and stop. The
 Install session itself needs `taxiway-sh/agents` attached with push
 (`add_repo`, `access: push`) to write `deployed.json` and `status/`. When
 `deployed.json` or `status/` is missing from it, the plan creates them:
-`deployed.json` as an empty object and `status/` with an empty `.gitkeep`.
+`deployed.json` as `{"agents": {}}` and `status/` with an empty `.gitkeep`.
 
 ### Plan
 
@@ -239,7 +240,9 @@ agent what will be created, renamed, updated, replaced or removed (session,
 scheduled task, `deployed.json` entry), the old sessions to
 [archive](#replacing-an-agent), the dry runs of [Verification](#verification),
 each awaiting the maintainer's OK before its scheduled task is created or
-updated, the real test runs, and the agents left unchanged. Undeclared
+updated, the scheduled tasks of existing agents whose prompt changed,
+disabled before their dry run and re-enabled after the OK, the real test
+runs, and the agents left unchanged. Undeclared
 agents found in the default mode are listed as removable with `remove`. Wait
 for one maintainer OK covering the whole plan, as the
 [approvals](../taxiway-workflow/SKILL.md#approvals) require; a step that
@@ -281,14 +284,18 @@ For each cloud agent in the approved plan:
    session, so the maintainer approves that one `add_repo` call in the
    agent's session; the repository then stays attached as a source of the
    session.
-3. For a new session or a prompt change, run the [dry run](#verification)
-   and wait for the maintainer's OK on its report.
+3. When the model changed, or in `reinstall`,
+   [replace](#replacing-an-agent) the agent, which runs its own dry run in
+   the new session, then go to step 5. Otherwise, for a new session or a
+   prompt change, run the [dry run](#verification) and wait for the
+   maintainer's OK on its report. For a prompt change of an existing agent,
+   first disable its scheduled task (`update_trigger`, `enabled: false`), so
+   the dry run gates the change.
 4. Only then create a scheduled task named with the declared `title`, bound
    to that session, with the declared schedule and the bootstrap prompt, or
    update the existing scheduled task when the schedule or the bootstrap
-   prompt changed. Never use a new session per run: such a session has no
-   repository access. When the model changed,
-   [replace](#replacing-an-agent) the agent instead.
+   prompt changed, and re-enable it if step 3 disabled it. Never use a new
+   session per run: such a session has no repository access.
 5. Record the schedule, `model` and `promptVersion` in `deployed.json`.
 
 ### Replacing an agent
@@ -303,9 +310,11 @@ model change replace both:
    same `title`, schedule and bootstrap prompt;
 4. delete the old scheduled task with `delete_trigger`, and record `replaced`,
    the UTC date-time of that deletion, in the agent's `deployed.json` entry;
-5. rename the old session `OLD session – <title>` with `set_session_title`
+5. run the real test of [Verification](#verification) step 3 on the new
+   scheduled task;
+6. rename the old session `OLD session – <title>` with `set_session_title`
    and remove its `taxiway-agent:<id>` tag, so lookups find only the new one;
-6. archive the old session with `archive_session` once it is ready to
+7. archive the old session with `archive_session` once it is ready to
    archive: an `ok` `status/<id>.json` dated after `replaced`. Then clear
    `replaced`. The Install run that sees that heartbeat archives it,
    otherwise the next `/taxiway-install-agents` run does, listed in that run's plan;
@@ -328,7 +337,8 @@ needs no dry run and no test run. In order:
    sent to the agent's session with `send_message`. Show its report to the
    maintainer and wait for their OK; the scheduled task is created or updated
    only after it;
-3. once the scheduled task exists, the real test run: fire it
+3. once the scheduled task exists (in a replacement, after
+   [Replacing an agent](#replacing-an-agent) step 4), the real test run: fire it
    (`fire_trigger`), which tests its prompt and its binding. If, after about
    10 minutes, `get_session` shows the session idle and no turn started from
    the fire, send the bootstrap prompt with `send_message` and report that the
@@ -365,10 +375,11 @@ when it has more than one session or scheduled task, then report:
 - a `promptVersion` behind `main`, which shows the run read older
   instructions;
 - an old session (`OLD session – <title>`, not archived): `old session ready
-  to archive: run /taxiway-install-agents` when the agent's `deployed.json` entry has
-  `replaced` and an `ok` heartbeat is dated after it
-  ([ready to archive](#replacing-an-agent)), otherwise waiting for that
-  heartbeat.
+  to archive: run /taxiway-install-agents` when the agent's `deployed.json`
+  entry has `replaced` and an `ok` heartbeat is dated after it
+  ([ready to archive](#replacing-an-agent)), waiting for that heartbeat when
+  it has `replaced` and none is dated after it, and a finding for the
+  maintainer when the entry has no `replaced`.
 
 A check writes nothing. Repairs go through [Install](#install).
 
