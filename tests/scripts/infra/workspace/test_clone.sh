@@ -89,11 +89,11 @@ chmod +x "$fake_bin/git"
 workspace="$tmp_dir/work/internal-file-remote"
 log="$tmp_dir/git-file-remote.log"
 HOME="$tmp_dir/home" PATH="$fake_bin:$PATH" GIT_LOG="$log" \
-TAXIWAY_REPO_URL='file:///lab/git/agreement-hub.git' \
+TAXIWAY_REPO_URL='file:///lab/git/e2e-fixture.git' \
 TAXIWAY_WORKSPACE_DIR="$workspace" \
 workspace_clone >/dev/null 2>&1
 
-if grep -q -- "-c protocol.file.allow=always clone file:///lab/git/agreement-hub.git" "$log"; then
+if grep -q -- "-c protocol.file.allow=always clone file:///lab/git/e2e-fixture.git" "$log"; then
     echo "  PASS: workspace_clone allows Taxiway-managed file remotes"
     ((pass++)) || true
 else
@@ -124,7 +124,7 @@ existing="$tmp_dir/existing/repo"
 mkdir -p "$existing/.git"
 log="$tmp_dir/git-existing.log"
 HOME="$tmp_dir/home" PATH="$fake_bin:$PATH" GIT_LOG="$log" \
-TAXIWAY_REPO_URL='file:///lab/git/agreement-hub.git' \
+TAXIWAY_REPO_URL='file:///lab/git/e2e-fixture.git' \
 TAXIWAY_REPO_REF='main' \
 TAXIWAY_WORKSPACE_DIR="$existing" \
 workspace_clone >/dev/null 2>&1

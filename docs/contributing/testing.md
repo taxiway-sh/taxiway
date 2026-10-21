@@ -162,7 +162,7 @@ Keep Lab lifecycle checks independent of orchestrator-specific expectations.
 Agent checks follow the agents declared in the orchestrator manifest: the same
 Claude Code trust assertion applies to both the Claude Code and Gas Town
 orchestrators. Orchestrator expectations select the workspace paths and when
-they should be trusted. Standalone agents use `/lab/work/agreement-hub`; Gas
+they should be trusted. Standalone agents use `/lab/work/e2e-fixture`; Gas
 Town uses its rig's crew workspace, trusted when the agent is launched.
 `/lab/work` is checked after installation for every declared agent supported
 by these scenarios. Gas Town session diagnostics remain separate from the
@@ -173,7 +173,7 @@ the Docker driver, using their real orchestrator and agent assets.
 
 The scenarios cover installation and verification inside the lab, gateway
 access, workspace preparation, start, stop, restart, diagnosis, reset, and
-removal. They mirror the public `manufacture-dev/agreement-hub` fixture into a
+removal. They mirror the public `taxiway-sh/e2e-fixture` fixture into a
 lab-local bare Git repository, then clone the working tree from that isolated
 remote. After start and restart, `taxiway shell <lab> --check` verifies that
 the session target is ready without opening an interactive shell.

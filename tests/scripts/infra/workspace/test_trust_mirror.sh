@@ -41,14 +41,14 @@ mkdir -p "$HOME"
 
 echo "=== trust-mirror.sh ==="
 
-TAXIWAY_REPO_FORK_URL='file:///lab/git/agreement-hub.git' bash "$SCRIPT" >/dev/null
-TAXIWAY_REPO_FORK_URL='file:///lab/git/agreement-hub.git' bash "$SCRIPT" >/dev/null
+TAXIWAY_REPO_FORK_URL='file:///lab/git/e2e-fixture.git' bash "$SCRIPT" >/dev/null
+TAXIWAY_REPO_FORK_URL='file:///lab/git/e2e-fixture.git' bash "$SCRIPT" >/dev/null
 
-configured_count="$(git config --global --get-all safe.directory | grep -Fxc '/lab/git/agreement-hub.git')"
+configured_count="$(git config --global --get-all safe.directory | grep -Fxc '/lab/git/e2e-fixture.git')"
 assert_eq "adds the exact Taxiway mirror once" "$configured_count" "1"
 
 git config --global --add safe.directory '/lab/git/another.git'
-TAXIWAY_REPO_FORK_URL='file:///lab/git/agreement-hub.git' bash "$SCRIPT" >/dev/null
+TAXIWAY_REPO_FORK_URL='file:///lab/git/e2e-fixture.git' bash "$SCRIPT" >/dev/null
 preserved_count="$(git config --global --get-all safe.directory | grep -Fxc '/lab/git/another.git')"
 assert_eq "preserves existing safe directories" "$preserved_count" "1"
 

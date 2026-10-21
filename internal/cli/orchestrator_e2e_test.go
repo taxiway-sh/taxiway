@@ -33,7 +33,7 @@ import (
 	"github.com/taxiway-sh/taxiway/internal/recording"
 )
 
-const e2eFixtureRepoURL = "https://github.com/manufacture-dev/agreement-hub.git"
+const e2eFixtureRepoURL = "https://github.com/taxiway-sh/e2e-fixture.git"
 const e2eFakeModelResponse = "taxiway e2e fake upstream"
 
 // Orchestrators own workspace layout and session behavior. Agent assertions are
@@ -1965,8 +1965,8 @@ func runE2EGastownReadinessActions(t *testing.T, state *RootState, id, stage str
 		// Exercise the adapter's normal launcher in a directory created after
 		// startup. Trust at install time cannot accidentally satisfy this case.
 		crew := fmt.Sprintf("readiness%x", time.Now().UnixNano())
-		run(t, false, "gt", "crew", "add", crew, "--rig", "agreement_hub")
-		run(t, false, "gt", "crew", "start", "agreement_hub", crew)
+		run(t, false, "gt", "crew", "add", crew, "--rig", "e2e_fixture")
+		run(t, false, "gt", "crew", "start", "e2e_fixture", crew)
 		newSessions := strings.Fields(run(t, false, "tmux", "-L", status.Tmux.Socket, "list-sessions", "-F", "#{session_name}"))
 		for _, session := range newSessions {
 			if strings.HasSuffix(session, "-crew-"+crew) {
@@ -1977,7 +1977,7 @@ func runE2EGastownReadinessActions(t *testing.T, state *RootState, id, stage str
 		runE2EAssert(t, "assert:fresh-crew-configured-and-trusted", func(t *testing.T) {
 			require.NotEmpty(t, newSession, "new crew must start an actual agent session")
 			assertE2EClaudeEnvironment(t, state, id, status.Tmux.Socket, newSession)
-			assertE2EAgentWorkspaceTrusted(t, state, id, "claude-code", "/lab/work/gt/agreement_hub/crew/"+crew)
+			assertE2EAgentWorkspaceTrusted(t, state, id, "claude-code", "/lab/work/gt/e2e_fixture/crew/"+crew)
 		})
 	})
 	runE2EStep(t, "agent:send[fresh-crew-readiness-probe]@"+stage, func(t *testing.T) {
@@ -2030,7 +2030,7 @@ func runE2EGastownHandoff(t *testing.T, state *RootState, id string) {
 	for attempt, target := range []string{"ah-refinery", "ah-refinery", "hq-mayor"} {
 		runE2EStep(t, fmt.Sprintf("gt:handoff[%s,attempt=%d]", target, attempt+1), func(t *testing.T) {
 			before := run(t, "tmux", "-L", status.Tmux.Socket, "display-message", "-p", "-t", target, "#{pane_pid}")
-			role := "agreement_hub/refinery"
+			role := "e2e_fixture/refinery"
 			if target == "hq-mayor" {
 				role = "mayor"
 			}
@@ -2469,7 +2469,7 @@ func e2eGastownFixtureWorkspace(t *testing.T) e2eFixtureWorkspace {
 	require.NoError(t, err)
 	crewName := sanitizeIdentifier(rawCrew)
 	hqMarker := "/lab/work/gt/.taxiway-hq-initialized"
-	rigDir := "/lab/work/gt/agreement_hub"
+	rigDir := "/lab/work/gt/e2e_fixture"
 	crewDir := rigDir + "/crew/" + crewName
 	return e2eFixtureWorkspace{
 		checkCommand: strings.Join([]string{
@@ -2485,7 +2485,7 @@ func e2eGastownFixtureWorkspace(t *testing.T) e2eFixtureWorkspace {
 
 func e2ePlainFixtureWorkspace(t *testing.T) e2eFixtureWorkspace {
 	t.Helper()
-	const workspaceDir = "/lab/work/agreement-hub"
+	const workspaceDir = "/lab/work/e2e-fixture"
 	return e2eFixtureWorkspace{
 		checkCommand: "test -d '" + workspaceDir + "/.git'",
 		description:  workspaceDir + "/.git",
