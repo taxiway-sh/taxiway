@@ -36,7 +36,11 @@ When something needs the maintainer, send one `PushNotification` titled
    issue otherwise);
 2. demotion incidents: agent, action class and the corrected action's link;
 3. failed, late or missing agents and workflows, with the evidence link;
-4. agents not installed, each linked to its declaration on `main`.
+4. an offline machine, with the number of pending queue items and the oldest
+   one's age, notified only once as
+   [Heartbeat, offline machine and metrics](../skills/taxiway-agents/SKILL.md#heartbeat-offline-machine-and-metrics)
+   says;
+5. agents not installed, each linked to its declaration on `main`.
 
 An agent not installed is listed in the reply and in `waiting` at every run,
 but calls for a `PushNotification` only on the first day it appears; when it
