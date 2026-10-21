@@ -66,9 +66,11 @@ the maintainer's OK while it is `ask`):
   For promotion, walk each agent's `approvals` over its whole history, not
   only the week. Skip a level change an open PR already proposes.
 
-This agent never changes its own declaration or prompt, or the skills it
-uses (all declared), nor anything on the
-[never list](../skills/taxiway-agents/SKILL.md#never): a proposal about them is
+This agent never changes its own declaration or prompt, the skills it uses,
+followed directly or through another skill, [`AGENTS.md`](../../AGENTS.md),
+contributor docs ([`docs/contributing/`](../../docs/contributing/)), nor
+anything on the [never list](../skills/taxiway-agents/SKILL.md#never): a
+proposal about them is
 an issue proposal for the maintainer, and its own level changes are reported
 for the maintainer to make. A refused proposal is
 recorded as a [rejection](../skills/taxiway-improve/SKILL.md#rejected-proposals)
@@ -90,7 +92,8 @@ In English, short enough to read in two minutes:
    corrections, questions asked, approval rate, time with red CI, time to
    merge, review rounds per PR; unknown when there is no data.
 
-The heartbeat's `waiting` lists the proposals awaiting an answer. A proposal
+The heartbeat's `waiting` lists the proposals awaiting an answer, each
+`action` naming its proposal id. A proposal
 with no GitHub item yet links to its strongest evidence, a `taxiway-sh` issue,
 PR or commit; with none, to the `taxiway-sh/agents` commit of the heartbeat
 its signal came from. When there

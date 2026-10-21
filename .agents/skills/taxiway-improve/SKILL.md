@@ -56,13 +56,13 @@ Heartbeats are read from the git history of `status/` in the
 (`git log -p`), since each run overwrites its file; GitHub is read with
 bounded REST results, as [`taxiway-triage`](../taxiway-triage/SKILL.md#inputs)
 does: merged PRs from `pulls?state=closed&sort=updated&direction=desc` with an
-explicit `page=N`, stopping at the first page updated before the period, never
-`--paginate`.
+explicit `page=N`, stopping after the first page whose last PR was updated
+before the period starts, never `--paginate`.
 
 | Indicator | Counted as | Source |
 |---|---|---|
 | Maintainer corrections | `corrected` answers, plus changes requested by the maintainer on PRs merged in the period; corrections given in comments or sessions are not counted, so this undercounts | `approvals` in heartbeats; `pulls/<n>/reviews` with state `CHANGES_REQUESTED` |
-| Questions asked | Distinct `waiting` links per agent, first listed in the period; the watchdog's items repeat other agents' and are left out | `waiting` in heartbeats |
+| Questions asked | Distinct `waiting` items per agent, by link and the proposal id named in `action`, first listed in the period; the watchdog's items repeat other agents' and are left out | `waiting` in heartbeats |
 | Approval rate | `ok` answers over all answers, overall and per agent and action class | `approvals` in heartbeats |
 | Time with red CI | Hours during which the latest completed `ci.yml` run on `main` did not succeed; nightly `e2e.yml` and `install.yml` runs that failed | `actions/workflows/<file>/runs?branch=main` |
 | Time to merge | Median and longest time from opening to merge of PRs merged in the period; bot PRs (`automation/*`) apart | merged PRs, `created_at` and `merged_at` |

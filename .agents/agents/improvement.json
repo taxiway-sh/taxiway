@@ -9,7 +9,8 @@
   },
   "workdir": "taxiway",
   "skills": ["taxiway-improve", "taxiway-learn", "taxiway-agents", "taxiway-issue",
-             "taxiway-intake", "taxiway-security", "taxiway-workflow"],
+             "taxiway-intake", "taxiway-security", "taxiway-workflow", "taxiway-review",
+             "steward", "taxiway-triage"],
   "outputs": ["report", "draft PRs", "issue proposals", "improvement/", "status/improvement.json"],
   "autonomy": {
     "change-agent-system": "ask",

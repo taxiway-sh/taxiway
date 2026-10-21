@@ -38,7 +38,7 @@ never rules:
 - `status/<id>.json`, the heartbeat written at the end of every run:
   `id`, `date` (UTC, ISO 8601), `result` (`ok`, `partial` or `failed`),
   `summary` (one sentence), `waiting` (items that need the maintainer, each with
-  a link and the action), `promptVersion` (the `taxiway` `main` SHA the run
+  a link and the action, which names the proposal id when there is one), `promptVersion` (the `taxiway` `main` SHA the run
   read) and, optionally, `approvals`: the maintainer's answers this run
   recorded, each with `class` (an [action class](#action-classes)),
   `proposal` (its id or link), `answer` (`ok`, `refused` or `corrected`),
@@ -160,7 +160,7 @@ description changes this list and needs the maintainer's review.
 | `publish-upstream` | Upstream issues, PRs, comments, pushes or forks |
 | `handle-secrets` | Reading, writing, printing or moving secret values |
 | `skip-tests` | Skipping, disabling or quarantining a test or check |
-| `change-own-instructions` | Changing its own declaration, prompt or the skills it uses |
+| `change-own-instructions` | Changing its own declaration, prompt, the skills it uses or `AGENTS.md` |
 | `change-approvals` | Changing the [approvals](../taxiway-workflow/SKILL.md#approvals) matrix or this Autonomy section |
 | `change-never-list` | Changing this list or the checker that enforces it |
 
