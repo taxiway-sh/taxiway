@@ -23,7 +23,6 @@ Each rule has one owner; link to it instead of restating it. This file and the s
 - Conventional Commits, split by intention. An agent other than the implementer reviews each change.
 - Prefer the existing code and documentation structure; no PRDs, ADRs, approval gates, run manifests or agent workflow docs unless requested.
 - Before claiming work is complete, run the narrowest meaningful checks and report what passed or could not be run.
-- Lifecycle regressions are covered by enriching each orchestrator's existing E2E scenarios, as the [E2E scenario rule](.agents/skills/taxiway-testing/SKILL.md#e2e-scenarios) says.
 - Never commit lab state, recordings, run logs, working plans, scratch files or private notes.
 
 ## Security

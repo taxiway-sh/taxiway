@@ -32,7 +32,11 @@ for the PR's Validation section. `make lint` applies to every change.
 Test product behavior directly: no separate test layer for E2E assertions, no
 committed feature-specific live suite. A process being alive, a successful exit
 or a gateway health check does not prove configuration, model selection or the
-effect of an agent action; assert observable results.
+effect of an agent action; assert observable results. Keep expected values
+independent of the production code that selects or renders them, and include
+restart and handoff paths when the behavior must survive session renewal.
+Real-provider live validation adds evidence; it never replaces the
+credential-free E2E assertions.
 
 ## E2E scenarios
 
@@ -53,7 +57,8 @@ Decided in [#177](https://github.com/taxiway-sh/taxiway/issues/177).
   shared by several orchestrators covers each of them), and all three when the
   Up, PrepareRun and PhaseByPhase paths are all affected.
 - Merge criterion: the affected scenarios ran and passed on the proposed code.
-  Core CI does not run them; a skipped or blocked run is not validation.
+  Core CI does not run them; a skipped or blocked run is not validation: report
+  it and resolve it before claiming E2E validation.
 
 ## Live validation: Docker or Lima
 
@@ -87,8 +92,8 @@ archive layout or runtime assets, `taxiway init`, host prerequisites (Docker,
 Compose, Lima versions), supported runner platforms, or the guest runtime
 contract checked after `create`.
 
-- Extend the existing jobs and their common steps; keep one job per platform ×
-  driver and no new workflow.
+- Extend the existing `linux`, `macos` and `windows` jobs, their driver matrix
+  and their common steps; no new workflow.
 - A check for behavior not yet released is gated on the first release that
   ships it and logs an explicit skip for older releases, as the guest runtime
   contract does.
