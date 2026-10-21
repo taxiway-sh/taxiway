@@ -84,15 +84,19 @@ tests under `site/`, and what they call.
 
 ## Agent permission files
 
-These files are sensitive: a change to them changes what agents may run
-without a permission prompt, so it needs the maintainer's careful review of
-every line:
+[`.claude/settings.json`](../../../.claude/settings.json) and
+[`scripts/agents/push-heartbeat.sh`](../../../scripts/agents/push-heartbeat.sh)
+are sensitive: the first lets Claude Code run the second without a permission
+prompt and without the auto mode classifier. A change to either changes what
+agents may run unreviewed, so it needs the maintainer's careful review of every
+line, and any new allow rule needs their explicit decision.
 
-- `.claude/settings.json`: its `permissions.allow` holds only
-  `Bash(scripts/agents/push-heartbeat.sh:*)`; a broader rule, or one for
-  another command, needs the maintainer's explicit decision;
-- `scripts/agents/push-heartbeat.sh`: the command that rule allows, which
-  commits and pushes to `main` of `taxiway-sh/agents`.
+The rule approves whatever that path holds in the agent's clone when it runs.
+An agent that edits the script in its clone, which the classifier does not
+review, could run any code under the rule. The
+[run contract](../taxiway-agents/SKILL.md#every-run) forbids it; the script
+runs the state validator from `origin/main` and disables git hooks, but it
+cannot protect itself.
 
 ## Public writing
 
