@@ -64,5 +64,5 @@ Review adversarially: look for what is wrong, not for confirmation.
 - Problems that are global or outside the change become issue proposals
   through [`taxiway-intake`](../taxiway-intake/SKILL.md), not fixes in this
   change.
-- The PR's Validation section states the review rounds and that findings were
-  addressed.
+- The PR's Validation section states the review rounds, as the line
+  `Independent review: N rounds`, and that findings were addressed.

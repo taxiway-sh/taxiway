@@ -55,16 +55,18 @@ Heartbeats are read from the git history of `status/` in the
 [state repository](../taxiway-agents/SKILL.md#state-repository)
 (`git log -p`), since each run overwrites its file; GitHub is read with
 bounded REST results, as [`taxiway-triage`](../taxiway-triage/SKILL.md#inputs)
-does.
+does: merged PRs from `pulls?state=closed&sort=updated&direction=desc` with an
+explicit `page=N`, stopping at the first page updated before the period, never
+`--paginate`.
 
 | Indicator | Counted as | Source |
 |---|---|---|
-| Maintainer corrections | `corrected` answers, plus changes requested by the maintainer on PRs merged in the period | `approvals` in heartbeats; `pulls/<n>/reviews` with state `CHANGES_REQUESTED` |
-| Questions asked | Distinct items (by link and action) first listed in `waiting` in the period | `waiting` in heartbeats |
+| Maintainer corrections | `corrected` answers, plus changes requested by the maintainer on PRs merged in the period; corrections given in comments or sessions are not counted, so this undercounts | `approvals` in heartbeats; `pulls/<n>/reviews` with state `CHANGES_REQUESTED` |
+| Questions asked | Distinct `waiting` links per agent, first listed in the period; the watchdog's items repeat other agents' and are left out | `waiting` in heartbeats |
 | Approval rate | `ok` answers over all answers, overall and per agent and action class | `approvals` in heartbeats |
 | Time with red CI | Hours during which the latest completed `ci.yml` run on `main` did not succeed; nightly `e2e.yml` and `install.yml` runs that failed | `actions/workflows/<file>/runs?branch=main` |
-| Time to merge | Median and longest time from opening to merge of PRs merged in the period; bot PRs (`automation/*`) apart | `pulls?state=closed`, `created_at` and `merged_at` |
-| Review rounds per PR | Median of the review rounds stated in each merged PR's Validation section; a PR that states none counts as unknown | PR bodies |
+| Time to merge | Median and longest time from opening to merge of PRs merged in the period; bot PRs (`automation/*`) apart | merged PRs, `created_at` and `merged_at` |
+| Review rounds per PR | Median of N in the `Independent review: N rounds` line of each merged PR's Validation section ([Findings](../taxiway-review/SKILL.md#findings)); a PR without it counts as unknown | PR bodies |
 
 Questions and corrections in interactive sessions are not in these sources:
 they are left out and the report says so.
