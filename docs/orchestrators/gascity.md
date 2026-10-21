@@ -175,11 +175,31 @@ directory (or the city without `--repo`). From this shell:
 | `gc session list` | Agent sessions and their state |
 | `gc session attach gastown.mayor` | Join the Mayor session |
 | `gc session submit gastown.mayor "<message>"` | Send a message to a session |
+| `gc suspend` / `gc resume` | Pause the city between uses, then resume it; see [Pause the City](#pause-the-city) |
 | `Ctrl-b d` | Detach and return to the shell while preserving the session |
 
 On Lima, Taxiway forwards the supervisor dashboard and API (guest port `8372`)
 to a per-lab host port and prints it when the city starts. Docker labs do not
 publish it.
+
+## Pause the City
+
+An idle `gastown` city keeps calling the model (see
+[Limitations](#limitations)). Pause it whenever it is not in use, from
+`taxiway shell <lab>`:
+
+```bash
+cd /lab/work/gc && gc suspend
+cd /lab/work/gc && gc resume
+```
+
+`gc suspend` records the city as suspended in
+`/lab/work/gc/.gc/runtime/suspension-state.json`: the supervisor drains the
+running agent sessions and starts no new ones until `gc resume`. The state
+stays in the city, and `taxiway start` waits for active agent sessions, so run
+`gc resume` before restarting the lab: on a suspended city, `taxiway start`
+times out. `taxiway start --force` and `taxiway reset` delete the city and its
+suspension state.
 
 ## Reset
 
@@ -198,6 +218,25 @@ fails without deleting anything.
 - On Lima, the gateway key is also stored in Gas City's supervisor unit, and
   sessions receive it through `tmux -e` arguments; see
   [Gateway key exposure](#gateway-key-exposure) (tracked in #180).
+- An idle `gastown` city keeps calling the model. Gas City 1.5.0 pins the Gas
+  Town pack at commit `33d3a43`, whose always-on patrol agents restart instead
+  of backing off and reload their full prompt on each fresh start
+  ([gastownhall/gascity#5727](https://github.com/gastownhall/gascity/issues/5727),
+  [gastownhall/gascity#4911](https://github.com/gastownhall/gascity/issues/4911),
+  [gastownhall/gascity#1751](https://github.com/gastownhall/gascity/issues/1751),
+  [gastownhall/gascity-packs#268](https://github.com/gastownhall/gascity-packs/issues/268));
+  the boot fix [gastownhall/gascity-packs#261](https://github.com/gastownhall/gascity-packs/pull/261)
+  and its follow-up [gastownhall/gascity-packs#420](https://github.com/gastownhall/gascity-packs/pull/420)
+  are not in that pack. On an idle Lima lab with the default model and
+  `effort=high`, boot started a fresh session about every 30 seconds and the
+  witness ran back-to-back patrol cycles, for about $40 of gateway spend per
+  hour. [Pause the City](#pause-the-city) when it is not in use; tracked in
+  #259.
+- Every `gc` command prints a `named_session ... mode "always" with wake_mode
+  "fresh"` warning for the mayor, deacon, boot and witness. The pack chooses
+  this lifecycle on purpose and Gas City cannot acknowledge it yet
+  ([gastownhall/gascity#7674](https://github.com/gastownhall/gascity/issues/7674));
+  tracked in #259.
 - A full `gastown` city uses about 2.2 GiB of memory and more than 200
   processes; size the lab accordingly. Starting or restarting the city takes
   one to two minutes.
