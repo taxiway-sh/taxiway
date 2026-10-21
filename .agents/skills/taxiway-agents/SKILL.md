@@ -268,7 +268,7 @@ report `link` and one `outcome` per requested kind). Dates are UTC,
 | `macos` | Behavior on a macOS host: Docker Desktop, Lima `vz` | [Live validation](../../../docs/contributing/live-tests.md), [Testing](../../../docs/contributing/testing.md) |
 | `install` | Installed release archives on the Mac | [`taxiway-release`](../taxiway-release/SKILL.md) |
 | `real-account` | Live validation with a reference login; `approval` links the maintainer's comment approving the paid check | [Live validation](../../../docs/contributing/live-tests.md), [approvals](../taxiway-workflow/SKILL.md#approvals) |
-| `e2e` | Lifecycle E2E scenarios a cloud session cannot finish | [E2E scenarios](../../../AGENTS.md#e2e-scenarios) |
+| `e2e` | Lifecycle E2E scenarios a cloud session cannot finish | [E2E scenarios](../taxiway-testing/SKILL.md#e2e-scenarios) |
 | `campaign` | A bounded campaign over data that stays on the machine, such as local transcripts in a [history campaign](../taxiway-learn/SKILL.md#history-campaigns) | Its skill |
 
 Status moves only forward:

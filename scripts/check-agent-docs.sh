@@ -18,10 +18,12 @@ BLOB = "https://github.com/taxiway-sh/taxiway/blob/main/"
 
 # Normative phrases and the only file allowed to contain them. Each rule has
 # one owner; other files link to it. Matching ignores case and line wrapping.
+TESTING = ".agents/skills/taxiway-testing/SKILL.md"
 OWNED_PHRASES = [
-    ("`TestE2E_` entry point", "AGENTS.md"),
-    ("parallel suite", "AGENTS.md"),
-    ("three lifecycle E2E scenarios", "AGENTS.md"),
+    ("`TestE2E_` entry point", TESTING),
+    ("parallel suite", TESTING),
+    ("three lifecycle E2E scenarios", TESTING),
+    ("adds its own three scenarios", TESTING),
     ("Each rule has one owner", "AGENTS.md"),
 ]
 
