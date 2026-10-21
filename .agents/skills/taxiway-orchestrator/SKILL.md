@@ -58,8 +58,7 @@ Derived from the categories #185 touched. `<name>` is the orchestrator type.
   `doctor.sh`, and `stop.sh` when the adapter starts services; shared helpers
   in `orchestrators/<name>/lib.sh`.
 - `infra/commands/reset.sh` names no orchestrator: stopping belongs in
-  `stop.sh`, which `taxiway reset` runs first. `infra/commands/bootstrap.sh`
-  changes only for a guest runtime change that every adapter shares.
+  `stop.sh`, which `taxiway reset` runs first.
 
 **Go touch points** (debt tracked in
 [#181](https://github.com/taxiway-sh/taxiway/issues/181); add nothing beyond
@@ -72,9 +71,24 @@ these)
   workspace variables the shared environment lacks; prefer the manifest and
   propose the missing contract field under #181.
 - `internal/discover/discover_test.go`: discovery of the new manifest.
-- A guest runtime change (#185 added `Driver.GuestKind()`) touches
-  `internal/driver/` and `internal/cli/labops.go`; it is a driver change shared
-  by all adapters, not part of the adapter.
+
+**Shared changes** (not part of the adapter; each is its own commit and serves
+every adapter)
+
+- *Contract extension*, such as the `stop.sh` hook #185 added: the script
+  lookup in `internal/config/config.go` (`StopScript`), the `internal/cli`
+  command that calls the hook (`aliases.go` for `reset`) and its tests
+  (`aliases_test.go`), the shared script tests under
+  `tests/scripts/infra/commands/` (`test_reset.sh`), and the hook in existing
+  adapters when they need it, with its test (`orchestrators/gastown/stop.sh`,
+  `tests/scripts/orchestrators/gastown/test_stop.sh`).
+- *Guest runtime change*, such as `Driver.GuestKind()` and
+  `TAXIWAY_GUEST_KIND`: the drivers (`internal/driver/driver.go`,
+  `docker.go`, `lima.go`, `mock.go`, `dryrun.go`) and their tests
+  (`driver_test.go`, `docker_test.go`), the environment passed to scripts in
+  `internal/cli/labops.go` and `dryrun_plan.go` (`withGuestKind`),
+  `internal/cli/aliases.go` (bootstrap environment), `internal/cli/up_test.go`,
+  and `infra/commands/bootstrap.sh`.
 
 **Tests**
 
@@ -94,10 +108,10 @@ these)
 
 **Documentation**
 
-- `docs/orchestrators/<name>.md`: quick start, lab layout, gateway routing and
-  [key exposure](#gateway-wiring), runtime per environment type, settings,
-  shell behavior, reset, limitations, inspect the adapter, autonomous
-  permissions (sections of `docs/orchestrators/gascity.md`).
+- `docs/orchestrators/<name>.md`, with the sections of
+  `docs/orchestrators/gascity.md` that apply, including where the gateway key
+  appears ([gateway wiring](#gateway-wiring)) and the runtime per environment
+  type.
 - Orchestrator lists and tables: `README.md`, `docs/README.md`,
   `docs/reference/concepts.md`; `docs/reference/architecture.md` only when the
   adapter contract or guest runtime changes.
@@ -121,8 +135,8 @@ not to.
 
 ## Installation principles
 
-Each adapter follows these per environment type; the mechanics (the
-`TAXIWAY_GUEST_KIND` value, PID 1, systemd availability) are the
+This section is the only statement of these principles. The mechanics adapters
+rely on (the `TAXIWAY_GUEST_KIND` value, PID 1, systemd availability) are the
 [guest runtime contract](../../../docs/reference/architecture.md#adapter-boundary).
 Decided in [#179](https://github.com/taxiway-sh/taxiway/issues/179), which
 stays open for the remaining product work (process reaping checks, removing
@@ -134,9 +148,8 @@ lab capability).
   Docker labs, its normal VM or host path in Lima labs. Identical installs
   across drivers are not a goal; comparable, documented behavior is, and the
   adapter page lists the differences.
-- **Docker labs are first-class.** They are not a test-only path: every
-  feature works on Docker and Lima unless a limit documented in
-  [`docs/drivers/`](../../../docs/drivers/) says otherwise.
+- **Docker labs are first-class**, not a test-only path; see the
+  [invariants](../../../AGENTS.md#invariants) for behavior across drivers.
 - **Install what the lab needs without weakening isolation.** Never mount the
   host Docker socket or widen container privileges to make a tool work.
 - **No silent shims.** A tool probing its environment (for example
@@ -165,7 +178,8 @@ lab capability).
   process arguments, tmux environment) and compare with the other adapters:
   Claude Code and Codex pass it to their tmux session with `tmux -e`, Gas Town
   sources the lab environment file in `launch-agent.sh`, Gas City writes it
-  into a Lima supervisor unit
+  into a Lima supervisor unit and, on every driver, into process arguments
+  through `tmux -e`
   ([Gateway key exposure](../../../docs/orchestrators/gascity.md#gateway-key-exposure),
   tracked in [#180](https://github.com/taxiway-sh/taxiway/issues/180)).
   Gateway-key and secrets handling beyond this belongs to the
@@ -179,9 +193,8 @@ When the pinned version has a bug Taxiway must work around:
   local tracking issue (example: `orchestrators/gascity/start.sh` cites
   gastownhall/gascity#5985 and #178);
 - the adapter page lists it under Limitations when users can observe it;
-- one tracking issue holds the upstream link and removal criteria, as
-  [Upstream dependency fixes](../taxiway-intake/SKILL.md#upstream-dependency-fixes)
-  says.
+- the tracking issue follows
+  [Upstream dependency fixes](../taxiway-intake/SKILL.md#upstream-dependency-fixes).
 
 Investigation and upstream reports follow the `taxiway-upstream` skill and the
 [upstream procedure](../../../docs/contributing/development.md#upstream-dependency-bugs).
