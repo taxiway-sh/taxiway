@@ -100,8 +100,8 @@ issue is summarized for the maintainer; a new problem goes through
 5. **Fork CI.** For each fork run waiting for approval, ask the maintainer to
    approve it as the
    [contributor-code rule](../taxiway-security/SKILL.md#contributor-code)
-   says. When that approval request has expired, list it in the heartbeat's
-   `waiting` with its link and the action "read the diff, then re-run the
+   says. When that approval request has expired, the contributions agent lists
+   it in its heartbeat's `waiting` with its link and the action "read the diff, then re-run the
    CI"; rerun nothing and write nothing to the contributor. Lifecycle E2Es do
    not run on PRs ([CI structure](../../../docs/contributing/testing.md#ci-structure)).
 6. **Merge path.** When the change affects lifecycle scenarios that could not
