@@ -57,6 +57,14 @@ describe('docs loader', () => {
     });
   });
 
+  it('keeps one fragment for a link to a section of the contributing index', () => {
+    // The index's own headings are not on the site: the link lands on the
+    // overview's Contributing section instead of /docs#contributing#at-a-glance.
+    expect(resolveDocLink('contributing/testing', 'README.md#at-a-glance')).toEqual({
+      kind: 'internal', to: '/docs#contributing',
+    });
+  });
+
 });
 
 describe('resolveDocLink', () => {

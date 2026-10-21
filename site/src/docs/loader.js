@@ -57,7 +57,11 @@ export function resolveDocLink(currentRel, href) {
     if (part === '..') segments.pop();
     else if (part !== '.' && part !== '') segments.push(part);
   }
-  const to = routeFor(segments.join('/')) + (anchor ? `#${anchor}` : '');
+  const route = routeFor(segments.join('/'));
+  // A route that already names a section (the contributing index, shown as the
+  // overview's Contributing section) keeps it: the index's own headings do not
+  // exist on the site, and a second # would make an unreachable fragment.
+  const to = anchor && !route.includes('#') ? `${route}#${anchor}` : route;
   return { kind: 'internal', to };
 }
 
