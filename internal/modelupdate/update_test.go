@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 const existing = `defaults:
@@ -147,22 +149,66 @@ func TestPrepareAddsRetirementFieldsWithoutReformatting(t *testing.T) {
 	}
 }
 
+// lastLine returns the last source line of n or any of its descendants.
+func lastLine(n *yaml.Node) int {
+	end := n.Line
+	for _, c := range n.Content {
+		if l := lastLine(c); l > end {
+			end = l
+		}
+	}
+	return end
+}
+
+// withSyntheticRetiringModel inserts, after the catalog's last model and at its
+// indentation, an active chatgpt route to gpt-5.5, which fixtureSources
+// retires on 2026-10-14. Prepare must then patch the catalog whatever models
+// it lists.
+func withSyntheticRetiringModel(t *testing.T, catalog []byte) []byte {
+	t.Helper()
+	var doc yaml.Node
+	if err := yaml.Unmarshal(catalog, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Content) != 1 {
+		t.Fatal("catalog is not a single document")
+	}
+	models := get(doc.Content[0], "models")
+	if models == nil || models.Kind != yaml.SequenceNode || len(models.Content) == 0 {
+		t.Fatal("catalog has no models")
+	}
+	last := models.Content[len(models.Content)-1]
+	indent := strings.Repeat(" ", last.Column-1)
+	dash := strings.Repeat(" ", last.Column-3)
+	entry := "\n" + dash + "- name: zz-fixture-gpt-5.5\n" +
+		indent + "provider: chatgpt\n" +
+		indent + "upstream: gpt-5.5\n" +
+		indent + "api: responses\n" +
+		indent + "status: active\n" +
+		indent + "source: https://learn.chatgpt.com/docs/models\n"
+	lines := strings.SplitAfter(string(catalog), "\n")
+	end := lastLine(last) - 1
+	if !strings.HasSuffix(lines[end], "\n") {
+		lines[end] += "\n"
+	}
+	lines[end] += entry
+	return []byte(strings.Join(lines, ""))
+}
+
 // The live catalog changes with every reviewed update, so this test asserts
-// only what holds for any valid catalog: Prepare accepts it and its proposal
-// is a fixed point, and an unchanged run returns the input byte for byte.
+// only what holds for any valid catalog: with a synthetic entry that always
+// needs a lifecycle change, Prepare accepts and patches the catalog's own
+// formatting, and its proposal is a fixed point.
 func TestPrepareIsIdempotentOnLiveCatalog(t *testing.T) {
-	original := readCatalog(t, "../../infra/gateway/litellm/models.yaml")
+	original := withSyntheticRetiringModel(t, readCatalog(t, "../../infra/gateway/litellm/models.yaml"))
 	for _, now := range []time.Time{
 		time.Date(2026, 10, 3, 0, 0, 0, 0, time.UTC),
 		time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC),
 	} {
 		t.Run(now.Format("2006-01-02"), func(t *testing.T) {
 			out, _, changed, err := Prepare(original, fixtureSources(), now)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !changed && !bytes.Equal(original, out) {
-				t.Fatal("unchanged run rewrote the catalog")
+			if err != nil || !changed {
+				t.Fatalf("synthetic retirement not applied: changed=%v err=%v", changed, err)
 			}
 			again, _, changed, err := Prepare(out, fixtureSources(), now)
 			if err != nil || changed || !bytes.Equal(out, again) {
