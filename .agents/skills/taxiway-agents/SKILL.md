@@ -109,9 +109,14 @@ Each run then:
    `frictions` ([State repository](#state-repository)): a rule that was
    missing, ambiguous or contradictory, a workaround it used, a check it could
    not run or a tool that was refused;
-5. writes `status/<id>.json` in the `agents` clone, valid against
-   [`status.schema.json`](../../agents/status.schema.json), then runs
-   `scripts/agents/push-heartbeat.sh <id>` from the `taxiway` clone. It never
+5. writes `status/<id>.json` in the `agents` clone with the file-writing
+   tool, never with a shell heredoc or redirection, valid against
+   [`status.schema.json`](../../agents/status.schema.json). Then it runs
+   `scripts/agents/push-heartbeat.sh <id>` from the `taxiway` clone as a
+   command of its own, with nothing chained before or after it: a `cd` to the
+   clone, when needed, is an earlier, separate command. The permission check
+   judges a command as a whole, and has refused a heartbeat write, a `cd` and
+   the script chained in one command while allowing the script alone. It never
    commits the heartbeat by hand, and never edits that script or the
    `agents` clone's git configuration or hooks. The script owns `date`, which
    it sets to the current time; it validates the state, commits only that

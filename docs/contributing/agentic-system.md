@@ -194,13 +194,14 @@ is the same for every scheduled agent:
    missing, ambiguous or contradictory rule, a workaround, a check it could
    not run or a refused tool.
 3. **Heartbeat.** It writes `status/<id>.json` in its clone of the state
-   repository, valid against
+   repository with its file-writing tool, not a shell command, valid against
    [`status.schema.json`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/agents/status.schema.json):
    result, a one-sentence summary, `waiting` (what needs the maintainer, with
    links), `approvals` (answers recorded) and `frictions`. It then runs
-   [`scripts/agents/push-heartbeat.sh <id>`](https://github.com/taxiway-sh/taxiway/blob/main/scripts/agents/push-heartbeat.sh),
-   never a commit by hand: the script sets the date, validates the state,
-   commits only that file and pushes it without force. When the script fails
+   [`scripts/agents/push-heartbeat.sh <id>`](https://github.com/taxiway-sh/taxiway/blob/main/scripts/agents/push-heartbeat.sh)
+   as a command of its own, with nothing chained to it, never a commit by
+   hand: the script sets the date, validates the state, commits only that
+   file and pushes it without force. When the script fails
    or is refused, the run reports the heartbeat as not pushed, with the
    reason, and pushes it no other way.
 4. **Report.** It ends with a short report in its session, where the
