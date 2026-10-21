@@ -1,4 +1,4 @@
-# Model catalog agent
+# Taxiway – model catalog agent (catalog PR)
 
 Scheduled run. Follow [`taxiway-agents`](../skills/taxiway-agents/SKILL.md#every-run)
 for the run contract; this file only adds the job: bring the model catalog PR
@@ -13,20 +13,28 @@ to green, or report why not.
    retired defaults, failing checks and their root cause, compatibility with
    the pinned gateway.
 3. **Repair.** When a fix belongs in the PR (a catalog entry, a default that
-   names a retired model, a test that asserts it), prepare it in a separate
-   worktree of the `taxiway` clone on `automation/model-catalog`; the clone
-   itself stays on `main`. Run the checks the fix needs (`taxiway-testing`, or
+   names a retired model, a test that asserts it), prepare it in a worktree
+   created for this run, so the `taxiway` clone stays on `main`:
+   `git fetch origin automation/model-catalog`, then
+   `git worktree add --detach <path> origin/automation/model-catalog`. Run the
+   checks the fix needs (`taxiway-testing`, or
    [Testing](../../docs/contributing/testing.md) while that skill is not on
    `main`), then propose the push (`push-pr-branch`) with the diff and the
-   results. After the OK, push without force; if the branch moved, fetch it
-   and redo the fix, never force. The workflow regenerates the branch on its
-   next run and may drop these commits: say so in the proposal. When the cause
-   is in the updater or elsewhere outside this PR, draft a tracking issue
-   through [`taxiway-intake`](../skills/taxiway-intake/SKILL.md)
-   (`create-issue`) instead.
+   results. After the OK, push with
+   `git push origin HEAD:automation/model-catalog`, never with force; when
+   the push is refused because the branch moved, fetch and redo the fix.
+   Remove the worktree after the push or the refusal.
 4. **Ready and merge.** Ask for the OK to mark the PR ready (`mark-pr-ready`)
    only when every recorded check passes on its head, and to merge it
    (`merge-pr`) only once it is ready.
+5. **Deadline.** Every scheduled run of `model-catalog-update.yml` (23:37 UTC)
+   rewrites `automation/model-catalog` and drafts the PR again. A pushed
+   repair, the ready state and the merge must all happen before the next
+   such run, or the repair is lost: say so with the deadline in each
+   proposal. A fix that must outlive that run belongs in the updater or on
+   `main`: draft a tracking issue through
+   [`taxiway-intake`](../skills/taxiway-intake/SKILL.md) (`create-issue`)
+   instead.
 
 Report per the review's
 [Output](../skills/taxiway-upstream/references/model-catalog.md#output),
