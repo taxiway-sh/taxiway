@@ -16,22 +16,25 @@ reason. Then read the `pending` items of `queue/machine/` in the `agents`
 clone, oldest first, and for each one:
 
 1. **Validate.** An item that is not valid against
-   [`queue.schema.json`](queue.schema.json) is left untouched and listed in
-   the heartbeat's `waiting`. Otherwise check, in this order:
+   [`queue.schema.json`](queue.schema.json), or whose dates cannot be parsed,
+   is left untouched and listed in the heartbeat's `waiting`. Otherwise
+   check, in this order:
    - **Expiry.** Mark it `expired` when `expires` has passed, or when its link
      is a PR whose head is no longer `commit`.
    - **Cross-checks.** The file name is `<id>.json`, and `id` ends with
      `-<requester>`.
    - **Commit on a branch.** In the `taxiway` clone, fetch only
-     `git fetch origin '+refs/heads/*:refs/remotes/origin/*'`, never by SHA and
+     `git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*'`, never by SHA and
      never `refs/pull/*`; `git branch -r --contains <commit>` must list at
      least one branch. For a PR link, the PR's `head.repo.full_name` must also
      be `taxiway-sh/taxiway`: a fork PR is
      [contributor code](../skills/taxiway-security/SKILL.md#contributor-code).
-   - **Approval**, for a `real-account` check. The `approval` comment is on
-     the item's `link` thread, names the item `id` or `commit`, has
-     `author_association` `OWNER` or `MEMBER`, and was not edited after the
-     item's `created`.
+   - **Approval**, as [Approval](../skills/taxiway-agents/SKILL.md#approval)
+     says: needed when `git merge-base --is-ancestor <commit> origin/main`
+     fails, and for every `real-account` item. The `approval` comment is on
+     the item's `link` thread, approves running this item and names its `id`
+     or `commit`, has `author_association` `OWNER` or `MEMBER`, and was not
+     edited after the item's `created`.
 
    A failed cross-check, commit or approval check marks the item `rejected`
    with the reason, and nothing runs.
@@ -43,7 +46,8 @@ clone, oldest first, and for each one:
    kind, with their documented commands, within
    `maxMinutes` in total, one heavy run at a time. A run that exceeds
    `maxMinutes` stops and ends `failed`, with the reason. Real-account checks
-   use the reference logins already on the machine; a confirmed
+   use the reference logins already on the machine; no other kind uses them
+   or passes them to the labs it creates. A confirmed
    authentication failure follows
    [When authentication fails](../../docs/contributing/live-tests.md#when-authentication-fails)
    and goes into the heartbeat's `waiting`.
