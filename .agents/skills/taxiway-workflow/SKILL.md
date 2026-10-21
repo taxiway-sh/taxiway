@@ -41,12 +41,12 @@ without an actual artifact, process or result.
 | Force-pushing | Cleaning resources owned by a scenario with existing helpers |
 | Applying, removing or creating labels; comments, closures, reopenings and reviews on issues and PRs, unless already authorized | Recording in the issue a decision the maintainer has just given |
 | Releases: follow [`taxiway-release`](../taxiway-release/SKILL.md) | |
-| Upstream issues, PRs, comments, pushes or forks ([`taxiway-upstream`](../taxiway-upstream/SKILL.md)) | |
+| Upstream issues, PRs, comments, pushes or forks ([`taxiway-upstream`](../taxiway-upstream/SKILL.md#approvals)) | |
 | Real-provider (paid) live checks | |
 | Installing, changing or removing a [scheduled agent](../taxiway-agents/SKILL.md) | |
 | Discarding commits, user edits or persistent labs | |
 
-Authorization for Taxiway work never authorizes upstream publication. A pending
+Upstream publication follows [`taxiway-upstream`](../taxiway-upstream/SKILL.md#approvals). A pending
 approval blocks only that action on that subject: keep other authorized,
 independent implementation, tests and reviews moving within capacity. An
 approval wait alone is not a reason to end the session. If every remaining

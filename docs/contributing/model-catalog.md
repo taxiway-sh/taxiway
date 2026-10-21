@@ -13,7 +13,7 @@ Without `-write`, the command reports its proposal. With `-write`, it updates `i
 
 ## Sources and review
 
-The updater requires all six public sources: the [Codex structured catalog](https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json), [ChatGPT models](https://learn.chatgpt.com/docs/models), [Anthropic overview](https://platform.claude.com/docs/en/models/overview), [Anthropic deprecations](https://platform.claude.com/docs/en/about-claude/model-deprecations), [LiteLLM model metadata](https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json), and [LiteLLM releases](https://github.com/BerriAI/litellm/releases). Source hashes and links appear in the review report.
+The updater requires all six public sources: the [Codex structured catalog](https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json), [ChatGPT models](https://learn.chatgpt.com/docs/models), [Anthropic overview](https://platform.claude.com/docs/en/models/overview), [Anthropic deprecations](https://platform.claude.com/docs/en/about-claude/model-deprecations), [LiteLLM model metadata](https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json), and [LiteLLM releases](https://github.com/BerriAI/litellm/releases). Fetch, parse, schema, and incomplete-source errors produce no catalog update or PR. Source hashes and links appear in the review report.
 
 Candidate selection, lifecycle rules and the review of the draft PR are owned by the [model catalog review](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-upstream/references/model-catalog.md) of the [`taxiway-upstream`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-upstream/SKILL.md) skill.
 
