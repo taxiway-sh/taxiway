@@ -192,7 +192,8 @@ An idle `gastown` city keeps calling the model (see
 cd /lab/work/gc && gc suspend
 ```
 
-Before you use it again or run `taxiway start`:
+Before you use it again, or before `taxiway start` or `taxiway up` restarts
+the city:
 
 ```bash
 cd /lab/work/gc && gc resume
@@ -201,10 +202,11 @@ cd /lab/work/gc && gc resume
 `gc suspend` records the city as suspended in
 `/lab/work/gc/.gc/runtime/suspension-state.json`: the supervisor drains the
 running agent sessions and starts no new ones until `gc resume`. The state
-stays in the city, and `taxiway start` waits for active agent sessions, so run
-`gc resume` before restarting the lab: on a suspended city, `taxiway start`
-times out. `taxiway start --force` and `taxiway reset` delete the city and its
-suspension state.
+stays in the city. The start phase waits for active agent sessions, so on a
+suspended city it times out: `taxiway start`, and `taxiway up` when it runs
+that phase (on a stopped lab, after a settings or profile change, or with
+`--force`). Run `gc resume` first. Only `taxiway start --force` and
+`taxiway reset` delete the city and its suspension state.
 
 ## Reset
 
@@ -239,8 +241,9 @@ fails without deleting anything.
   ([Settings](#settings)). [Pause the City](#pause-the-city) when it is not
   in use; tracked in #259.
 - Every `gc` command prints a `named_session ... mode "always" with wake_mode
-  "fresh"` warning for the mayor, deacon, boot and witness. The pack chooses
-  this lifecycle on purpose and Gas City cannot acknowledge it yet
+  "fresh"` warning for the mayor, deacon and boot, and for each rig's
+  witness. The pack chooses this lifecycle on purpose and Gas City cannot
+  acknowledge it yet
   ([gastownhall/gascity#7674](https://github.com/gastownhall/gascity/issues/7674));
   tracked in #259.
 - A full `gastown` city uses about 2.2 GiB of memory and more than 200
