@@ -61,18 +61,18 @@ export function resolveDocLink(currentRel, href) {
   return { kind: 'internal', to };
 }
 
-// Explicit page order so the sidebar matches the overview page. Anything not
-// listed falls back to the end, alphabetically.
-const PAGE_ORDER = [
+// Explicit page order, shared by the sidebar, the overview page (docs/README.md)
+// and the contributing index (docs/contributing/README.md); a site test keeps
+// them in sync. Anything not listed falls back to the end, alphabetically.
+export const PAGE_ORDER = [
   'README',
   'reference/concepts', 'reference/installation', 'reference/commands', 'reference/configuration', 'reference/architecture',
   'drivers/lima', 'drivers/docker',
   'orchestrators/claude-code', 'orchestrators/codex', 'orchestrators/gastown', 'orchestrators/gascity',
   'how-to/gateway', 'how-to/observability', 'how-to/recordings',
-  'contributing/development', 'contributing/testing', 'contributing/issues', 'contributing/agentic-system',
-  'contributing/release',
-  'contributing/release-qualification',
-  'contributing/installation-qualification',
+  'contributing/development', 'contributing/testing', 'contributing/live-tests', 'contributing/model-gateway-tests',
+  'contributing/model-catalog', 'contributing/issues', 'contributing/agentic-system',
+  'contributing/release', 'contributing/release-qualification', 'contributing/installation-qualification',
 ];
 const orderIndex = (rel) => {
   const i = PAGE_ORDER.indexOf(rel);
