@@ -154,7 +154,8 @@ actionable request per blocker, and never invent percentages or finish dates.
   uncertain work until ownership and state are established, and do not launch
   duplicate agents or tests.
 - **Finish:** state that nothing continues after the session ends. Close
-  subagents whose mission has ended and list any still running. List each
+  subagents and child sessions whose mission has ended and list any still
+  running. List each
   subject's remaining work and pending decisions, any still-running tests with
   their owners, and the resume action. The final report links issues and PRs,
   states delivered behavior, actual checks and remaining limits, and

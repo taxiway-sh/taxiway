@@ -14,31 +14,33 @@ is done. Read [`AGENTS.md`](../../../AGENTS.md) first.
   wrote part of the change; [Running the reviewer](#running-the-reviewer) says
   how to start it.
 - It reviews the exact commit range or diff (`git diff <base>...<head>`, with
-  both SHAs), plus the issue and its acceptance criteria. It does not edit
-  the branch.
-- If delegation is unavailable, report the missing review; never present your
-  own review as independent.
+  both SHAs), plus the issue and its acceptance criteria. It writes nothing:
+  no edits, pushes or GitHub writes.
 
 ### Running the reviewer
 
-- **Default to a subagent.** The reviewer is a read-only subagent: it returns
-  its report directly and leaves nothing behind. Use a child session only when
-  the review needs its own environment, such as a long E2E run or a separate
-  container, or when the agent cannot start a subagent: a subagent cannot
-  start its own, so it uses a child session or leaves the review to the agent
-  that delegated to it, and says which.
-- **Child session.** Nobody watches it, so it is created with
-  `permission_mode: "auto"`, never `"default"` or `"plan"`, which wait on a
-  prompt nobody sees. Its prompt says to write nothing. It is archived as soon
-  as its report is read, as [Finish](../taxiway-workflow/SKILL.md#pause-resume-and-finish)
-  closes ended subagents.
-- **Stall check.** A child session that shows no progress for about 10 minutes
-  is checked for a pending permission prompt in its events. If it is stuck,
-  interrupt it, archive it and rerun the review as a subagent.
+- **Subagent by default.** Run the reviewer as a read-only subagent: it
+  returns its report directly and leaves nothing behind. A subagent cannot
+  start its own, so an implementer that is a subagent hands back the exact
+  range and leaves the review to the agent that delegated to it, unless it can
+  run a child session and wait for its report itself.
+- **Child session.** Only when the review needs its own environment, such as
+  a long E2E run or a separate container, or when no subagent can be started.
+  It clones from the remote, so the range must be pushed under the
+  [approvals](../taxiway-workflow/SKILL.md#approvals), and nobody watches it,
+  so it is created with `permission_mode: "auto"`, never `"default"` or
+  `"plan"`, which wait on a prompt nobody sees; a caller that cannot grant
+  `auto` does not use one. It is archived as soon as its report is read.
+- **Stall check.** About 10 minutes after a child session's last event,
+  scheduled with a tool the client provides rather than by waiting idle,
+  check its events for a pending prompt or a stopped turn. If it is stuck,
+  interrupt and archive it, then rerun the review as a subagent when one can
+  be started.
 - **Finish before handing back.** The agent that delegated the review waits
-  for the report and handles its findings before it ends its turn. If it
-  cannot, it says plainly that the review is unfinished and the PR states it
-  as pending; never a placeholder body.
+  for the report and handles its findings before it ends its turn. When no
+  reviewer can be started or the review cannot finish, say so plainly: the
+  PR's Limitations list the review as pending and its Validation has no
+  `Independent review` line. Never present your own review as independent.
 
 ## Checklist
 
