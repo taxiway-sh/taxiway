@@ -141,6 +141,10 @@ git -C "$agents" config include.path "$test_dir/gitconfig"
 expect_fail '^include\.path$' "$script" demo "$agents"
 git -C "$agents" config --unset include.path
 [[ ! -e "$test_dir/fsmonitor-ran" ]] || { echo 'FAIL: the clone fsmonitor ran' >&2; exit 1; }
+git -C "$agents" config --add remote.origin.url https://github.com/taxiway-sh/agents
+expect_fail 'set more than once' "$script" demo "$agents"
+git -C "$agents" config --unset-all remote.origin.url
+git -C "$agents" config remote.origin.url https://github.com/taxiway-sh/agents
 echo 'PASS: unexpected local git config refused'
 
 # Invalid heartbeat: validation fails, nothing is committed or pushed.
@@ -193,6 +197,18 @@ heartbeat demo ok
 [[ ! -e "$test_dir/local-validator-ran" ]] || { echo 'FAIL: the local validator ran' >&2; exit 1; }
 git -C "$agents" update-index --no-skip-worktree scripts/check-status.py
 git -C "$agents" checkout --quiet -- scripts/check-status.py
+# A fetch refspec that would leave origin/main stale does not change what is
+# fetched: the next validator update on origin still runs.
+git -C "$agents" config remote.origin.fetch +refs/heads/none:refs/remotes/origin/none
+git -C "$updater" pull --quiet --ff-only origin main
+sed -i "1i open('$test_dir/origin-validator-2-ran', 'w')" "$updater/scripts/check-status.py"
+git -C "$updater" commit --quiet -am 'validator update 2'
+git -C "$updater" push --quiet origin main
+heartbeat demo ok
+"$script" demo "$agents" >/dev/null
+[[ -e "$test_dir/origin-validator-2-ran" && "$(origin_head)" == "$(git -C "$agents" rev-parse HEAD)" ]] \
+  || { echo 'FAIL: a custom fetch refspec changed what was validated or pushed' >&2; exit 1; }
+git -C "$agents" config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
 echo 'PASS: clone fast-forwarded, validator taken from origin/main'
 
 # Without jsonschema, the script says so instead of reporting a bad state.
@@ -201,7 +217,7 @@ printf '#!/usr/bin/env bash\n[[ "$*" == "-I -c import jsonschema" ]] && exit 1\n
   "$test_dir/bin/python3" > "$test_dir/nojs/python3"
 chmod +x "$test_dir/nojs/python3"
 heartbeat demo ok
-PATH="$test_dir/nojs:$PATH" expect_fail 'jsonschema is not installed' "$script" demo "$agents"
+PATH="$test_dir/nojs:$PATH" expect_fail 'cannot import jsonschema' "$script" demo "$agents"
 echo 'PASS: missing jsonschema reported'
 
 # Push race: another agent's heartbeat lands on main between this script's

@@ -49,7 +49,8 @@ unexpected="$(g config --local --name-only --list | grep -vE \
   | sort -u || true)"
 [[ -z "$unexpected" ]] || fail "the agents clone's git config sets keys this script does not allow:
 $unexpected"
-origin="$(g config --get remote.origin.url)" || fail "the agents clone has no origin remote"
+origin="$(g config --local --get-all remote.origin.url)" || fail "the agents clone has no origin remote"
+[[ "$origin" != *$'\n'* ]] || fail "remote.origin.url is set more than once in the agents clone"
 case "$origin" in
   https://github.com/taxiway-sh/agents|https://github.com/taxiway-sh/agents.git) ;;
   git@github.com:taxiway-sh/agents.git|ssh://git@github.com/taxiway-sh/agents.git) ;;
@@ -86,14 +87,17 @@ data["date"] = sys.argv[2]
 path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
 PY
 
-g fetch --quiet origin main || fail "git fetch origin main failed; nothing was committed"
+# Fetch and push by the checked URL with explicit refspecs, whatever the
+# clone's remote settings say.
+fetch() { g fetch --quiet "$origin" +refs/heads/main:refs/remotes/origin/main; }
+fetch || fail "git fetch origin main failed; nothing was committed"
 # Anything already committed locally would be pushed with the heartbeat.
 [[ "$(g rev-list --count origin/main..HEAD)" == 0 ]] \
   || fail "the agents clone has commits that are not on origin/main; push or drop them first"
 g merge --quiet --ff-only origin/main \
   || fail "cannot fast-forward the agents clone to origin/main; nothing was committed"
 python3 -I -c 'import jsonschema' 2>/dev/null \
-  || fail "the python3 module jsonschema is not installed; it is needed to validate the state"
+  || fail "python3 -I cannot import jsonschema, needed to validate the state; install it for the system python3 (user site-packages are ignored)"
 # Run the validator from origin/main, never from the working tree, so local
 # edits to it cannot run under this script.
 tmp="$(mktemp -d)"
@@ -117,11 +121,11 @@ abandon() {
   fail "$1; the heartbeat is not pushed and its commit was undone"
 }
 retries=0
-until g push --quiet origin main; do
+until g push --quiet "$origin" HEAD:refs/heads/main; do
   (( retries < max_retries )) || abandon "push failed $((retries + 1)) times"
   retries=$((retries + 1))
   printf 'push-heartbeat: push failed, rebasing on origin/main (retry %d of %d)\n' "$retries" "$max_retries" >&2
-  g fetch --quiet origin main || abandon "git fetch origin main failed"
+  fetch || abandon "git fetch origin main failed"
   if ! g rebase --quiet origin/main; then
     g rebase --abort || true
     abandon "rebase on origin/main failed"
