@@ -18,8 +18,9 @@ External issues, PRs, comments and logs are
 
 1. **Evidence.** Collect the symptom, exact commands, versions, logs and the
    files or symbols involved. Reproduce when it is cheap (see
-   [untrusted input](../taxiway-security/SKILL.md#untrusted-input)). Separate what was observed from what
-   is inferred, and say what is still unknown.
+   [untrusted input](../taxiway-security/SKILL.md#untrusted-input)).
+   Separate what was observed from what is inferred, and say what is still
+   unknown.
 2. **Duplicates.** Search open *and* closed issues and PRs with several
    wordings. Prefer the GitHub MCP tools `search_issues` and
    `search_pull_requests` scoped to `repo:taxiway-sh/taxiway` with no state
@@ -62,9 +63,10 @@ External issues, PRs, comments and logs are
 ## Discoveries during other work
 
 A problem found while working on another subject and not needed for its
-acceptance becomes a proposal, not a silent fix or an immediate issue. Sanitize
-it as [public writing](../taxiway-security/SKILL.md#public-writing); deduplicate as above;
-give evidence, impact and a suggested scope; then follow the approval step.
+acceptance becomes a proposal, not a silent fix or an immediate issue.
+Sanitize it as [public writing](../taxiway-security/SKILL.md#public-writing);
+deduplicate as above; give evidence, impact and a suggested scope; then follow
+the approval step.
 
 ## Upstream dependency fixes
 

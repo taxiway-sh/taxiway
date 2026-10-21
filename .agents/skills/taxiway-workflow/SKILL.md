@@ -46,7 +46,8 @@ without an actual artifact, process or result.
 | Installing, changing or removing a [scheduled agent](../taxiway-agents/SKILL.md) | |
 | Discarding commits, user edits or persistent labs | |
 
-Upstream publication follows [`taxiway-upstream`](../taxiway-upstream/SKILL.md#approvals). A pending
+Upstream publication follows
+[`taxiway-upstream`](../taxiway-upstream/SKILL.md#approvals). A pending
 approval blocks only that action on that subject: keep other authorized,
 independent implementation, tests and reviews moving within capacity. An
 approval wait alone is not a reason to end the session. If every remaining

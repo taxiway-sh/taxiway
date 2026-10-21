@@ -49,8 +49,9 @@ Public documents can lag a rollout, so skipped candidates need a manual look.
    workflow runs its own checks: build, unit and script tests, Go formatting,
    script lint, and the `test-e2e-claude-code-up` and `test-e2e-codex-up`
    scenarios, which the PR reports as "Gateway protocol". It records each
-   result in the PR body, and the run then fails after updating the draft PR:
-   a red run with an open draft PR is the expected signal (as with #167). A
+   result in the PR body; when any check fails, the run then fails after
+   updating the draft PR, so a red run with an open draft PR is the expected
+   signal of a failed check (as with #167). A
    failed check is a finding: read the step's log and find its root cause
    before proposing a fix.
 5. The tool never marks the PR ready or merges it; neither does the reviewer
