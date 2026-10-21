@@ -2,7 +2,10 @@
 
 Scheduled run. Follow [`taxiway-agents`](../skills/taxiway-agents/SKILL.md#every-run)
 for the run contract; this file only adds the job. The watchdog reads and
-reports: no GitHub writes and no reruns; its only write is its own heartbeat.
+reports: no issue, PR or workflow writes and no reruns; its only write is its
+own heartbeat, whose `waiting` lists the items it reported. A watchdog that
+stops running sends nothing: the maintainer notices it through its stale
+heartbeat or with a manual [Check](../skills/taxiway-agents/SKILL.md#check).
 
 ## Checks
 
@@ -24,8 +27,8 @@ When something needs the maintainer, send one `PushNotification` titled
    issue otherwise);
 2. failed, late or missing agents and workflows, with the evidence link.
 
-When nothing needs the maintainer, send no notification: reply with one line,
-and the heartbeat records the run.
+When nothing needs the maintainer, send no notification and reply only
+`Nothing needs you today.`; the heartbeat records the run.
 
 Repairs and reruns are proposed, never done: [Install](../skills/taxiway-agents/SKILL.md#install)
 needs the maintainer's approval. Propose at most one rerun per failed agent per

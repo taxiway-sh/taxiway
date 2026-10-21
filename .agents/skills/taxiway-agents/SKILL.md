@@ -96,8 +96,7 @@ For each declaration, or the one `id` requested:
    session.
 3. Create a scheduled task named `Taxiway agent: <id>`, bound to that session,
    with the declared schedule and the bootstrap prompt. Never use a new
-   session per run: such a session has no repository access, and the task
-   prompt can only be changed from the session it posts into.
+   session per run: such a session has no repository access.
 4. When the schedule or the prompt changed, update the existing scheduled task.
    When the model changed, archive the session, create a new one as in
    step 2 and rebind the task.
