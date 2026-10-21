@@ -47,16 +47,20 @@ or in the current conversation is asked of the maintainer, then recorded as
 
 [`/taxiway-coordinator`](../taxiway-coordinator/SKILL.md) runs this section in
 a new cloud session on `taxiway`; it needs nothing from earlier sessions. Text
-given with the command sets the conversation language; without it, the
-maintainer's first reply does. The coordinator renames its session
-`Taxiway – coordinator` when it is not named so, or asks the maintainer to.
+given with the command is the maintainer's first message: it sets the
+conversation language, and a subject or request in it answers the opening
+question. Without it, the coordinator writes in English until the maintainer's
+first reply. It renames its session `Taxiway – coordinator` when it is not
+named so, or asks the maintainer to.
 
 1. Read [`taxiway-agents`](../taxiway-agents/SKILL.md) after this skill.
 2. Attach `taxiway-sh/agents` with push (`add_repo`, `access: push`) and clone
    it next to `taxiway` on `main`. Tell the maintainer first that the
-   attachment waits for their approval in this session. When
-   `taxiway-sh/agents` does not exist, [Bootstrapping](../taxiway-agents/SKILL.md#bootstrapping) applies and
-   the coordinator stops there.
+   attachment waits for their approval in this session; a refused attachment
+   becomes a pending decision of step 5, retried once approved. When
+   `taxiway-sh/agents` does not exist,
+   [Bootstrapping](../taxiway-agents/SKILL.md#bootstrapping) applies and the
+   coordinator stops there.
 3. Reconcile as [Intake and reconciliation](#intake-and-reconciliation) says,
    without its opening question, then run the
    [Check](../taxiway-agents/SKILL.md#check) of scheduled agents. A heartbeat is
@@ -64,16 +68,19 @@ maintainer's first reply does. The coordinator renames its session
    mentions before reporting them.
 4. When the Check finds something [Install](../taxiway-agents/SKILL.md#install)
    repairs, prepare Install's [Plan](../taxiway-agents/SKILL.md#plan) in its
-   default mode; the maintainer's OK on it is the approval. A machine agent with no heartbeat
-   yet waits for a maintainer's [Machine setup](../taxiway-agents/SKILL.md#machine-setup);
-   an [offline](../taxiway-agents/SKILL.md#heartbeat-offline-machine-and-metrics)
+   default mode; the maintainer's OK on it is the approval. A machine agent
+   with no heartbeat yet waits for a maintainer's
+   [Machine setup](../taxiway-agents/SKILL.md#machine-setup); an
+   [offline](../taxiway-agents/SKILL.md#heartbeat-offline-machine-and-metrics)
    one waits for a maintainer to bring it back.
 5. Report in one short message what is in service, what is abnormal and what
    waits for the maintainer. Ask the pending decisions together, each with a
-   recommendation: among them the Install Plan, which of the listed ready PRs
-   the maintainer asks to merge, as [Approvals](#approvals) requires, and the
-   archiving of an earlier coordinator session that is still open. Then ask
-   the opening question.
+   recommendation: among them the Install Plan; the open PRs whose current
+   head has an approving [independent review](../taxiway-review/SKILL.md) and
+   green CI, listed, of which the maintainer names those to merge, as
+   [Approvals](#approvals) requires; and archiving any other session titled
+   `Taxiway – coordinator` that is not archived. Then ask the opening question
+   unless the first message answered it.
 
 Untriaged issues wait for the [triage agent](../../agents/triage.prompt.md)
 unless the maintainer asks for their triage.

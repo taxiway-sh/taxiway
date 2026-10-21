@@ -123,8 +123,8 @@ client's native session-resume mechanism and invoke the same skill.
 
 To start the maintainer's coordinator instead, open a new Claude Code cloud
 session on `taxiway` and run `/taxiway-coordinator`, optionally followed by a
-message in your language. It
-follows the [Coordinator](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-workflow/SKILL.md#coordinator)
+message in your language. It follows the
+[Coordinator](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-workflow/SKILL.md#coordinator)
 section of `taxiway-workflow`.
 
 ## Issues and Pull Requests
