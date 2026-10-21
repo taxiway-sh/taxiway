@@ -188,6 +188,23 @@ tree="$(fixture agent-title-old-form)"
 sed -i.bak 's/"title": "[^"]*"/"title": "Taxiway agent: watch"/' "$tree/.agents/agents/watch.json"
 expect_fail 'agent title in the old form' "$tree" "title must be 'Taxiway – <role> agent (<scope>)'"
 
+for case in 'missing scope:Taxiway – watch agent ()' 'blank scope:Taxiway – watch agent ( )' \
+    'double space:Taxiway – watch  agent (fixture)' 'padded scope:Taxiway – watch agent ( fixture)' \
+    'watchdog title on another agent:Taxiway – agents watchdog'; do
+  tree="$(fixture "agent-title-${case%%:*}")"
+  TITLE="${case#*:}" python3 - "$tree/.agents/agents/watch.json" <<'PY2'
+import json, os, sys
+data = json.load(open(sys.argv[1])); data["title"] = os.environ["TITLE"]
+json.dump(data, open(sys.argv[1], "w"))
+PY2
+  expect_fail "agent title with ${case%%:*}" "$tree" "title must be 'Taxiway – <role> agent (<scope>)'"
+done
+
+tree="$(fixture agent-duplicate-title-case)"
+sed 's/"watch"/"other"/; s/"0 4 \* \* \*"/"0 5 * * *"/; s/watch agent (fixture)/Watch agent (Fixture)/' "$tree/.agents/agents/watch.json" > "$tree/.agents/agents/other.json"
+printf '# Other\n' > "$tree/.agents/agents/other.prompt.md"
+expect_fail 'two agents with one title in different case' "$tree" "title 'Taxiway – watch agent (fixture)' already used by other"
+
 tree="$(fixture agent-watchdog-title)"
 sed 's/"watch"/"watchdog"/' "$tree/.agents/agents/watch.json" > "$tree/.agents/agents/watchdog.json"
 rm "$tree/.agents/agents/watch.json" "$tree/.agents/agents/watch.prompt.md"
