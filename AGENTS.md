@@ -16,7 +16,7 @@ Each rule has one owner; link to it instead of restating it. This file and the s
 - Beta: no historical compatibility code, migrations or fallbacks to former behavior, nor tests for them, unless requested; tests assert the target behavior. Keep current lifecycle, idempotency and recovery coverage.
 - Find the root cause before adding a retry, wait, timeout or workaround; a change merged without a known root cause is labeled as a mitigation in the PR.
 - One behavior across contexts: the same command behaves the same on Docker and Lima, in CI and locally, unless a limit documented in [`docs/drivers/`](docs/drivers/) says otherwise.
-- Orchestrator-specific behavior belongs in its adapter under `orchestrators/<name>/`. Shared code under `internal/` gains no new orchestrator-name branches: extend the adapter contract instead, and treat existing special cases as debt, not precedent. Its [E2E scenarios](#e2e-scenarios), Makefile targets and CI entries are the exception.
+- Orchestrator-specific behavior belongs in its adapter under `orchestrators/<name>/`. Shared code under `internal/` gains no new orchestrator-name branches: extend the adapter contract instead, and treat existing special cases as debt, not precedent. Its [E2E scenarios](.agents/skills/taxiway-testing/SKILL.md#e2e-scenarios), Makefile targets and CI entries are the exception.
 - One responsibility per script, channel and state file: settings record the requested value, install scripts install, verify scripts only check and write nothing, and the installed binary is the source of truth for the installed version. A new purpose gets its own channel or state file; treat existing shared uses as debt to resolve, not precedent.
 - A fix or hardening change keeps every existing user-facing capability; it removes one only when that removal is the issue's approved goal.
 - Do not change product behavior only to make a test or fixture pass; fix the test or fixture, or propose a product issue through [`taxiway-intake`](.agents/skills/taxiway-intake/SKILL.md).
@@ -36,15 +36,6 @@ Each rule has one owner; link to it instead of restating it. This file and the s
 - Contributor code runs only in fork-PR CI after maintainer approval, never on a base-repo branch, a workstation or a Taxiway lab.
 - Never publish vulnerability details or exploitation steps.
 
-## E2E scenarios
-
-Each orchestrator has three lifecycle E2E scenarios on Docker (Up, PrepareRun, PhaseByPhase) in
-`internal/cli/orchestrator_e2e_test.go`. When a change affects provisioned or runtime behavior,
-enrich the affected scenarios with assertions and helpers in that file. Run them and verify they
-pass before merging; core CI or skipped runs do not count. Adding an orchestrator adds its three
-scenarios, Makefile targets and CI matrix entries. Do not add other parallel suites, scenario files,
-`TestE2E_` entry points, jobs or runners; `e2e_support_test.go` is setup/cleanup only.
-
 ## Need → read
 
 | Need | Owner |
@@ -52,11 +43,14 @@ scenarios, Makefile targets and CI matrix entries. Do not add other parallel sui
 | Start or resume a session, approvals, coordination | [`taxiway-workflow` skill](.agents/skills/taxiway-workflow/SKILL.md) |
 | New need, bug report, creating an issue; issue format, scope and labels | [`taxiway-intake` skill](.agents/skills/taxiway-intake/SKILL.md), [Issues](docs/contributing/issues.md) |
 | Backlog ranking, label hygiene, external and bot PRs | [`taxiway-triage` skill](.agents/skills/taxiway-triage/SKILL.md) |
+| External contributors: replies, claims, external PR reviews, follow-up, credit | [`taxiway-contributions` skill](.agents/skills/taxiway-contributions/SKILL.md), [CONTRIBUTING](CONTRIBUTING.md) |
 | Learnings from a session, PR, issue, git history or past transcripts | [`taxiway-learn` skill](.agents/skills/taxiway-learn/SKILL.md) |
 | Improving a practice, skill or agent; trials and rejected proposals | [`taxiway-improve` skill](.agents/skills/taxiway-improve/SKILL.md) |
 | Scheduled agents: declarations, install, check, run contract | [`taxiway-agents` skill](.agents/skills/taxiway-agents/SKILL.md) |
-| Choosing and writing tests, E2E style, CI | [Testing](docs/contributing/testing.md) |
+| Choosing checks, E2E scope, Docker or Lima, installation qualification scope, cloud sessions | [`taxiway-testing` skill](.agents/skills/taxiway-testing/SKILL.md) |
+| Running tests, E2E style, CI | [Testing](docs/contributing/testing.md) |
 | Live validation on Docker or Lima, live authentication | [Live validation](docs/contributing/live-tests.md), [`tests/live/AGENTS.md`](tests/live/AGENTS.md), [model gateway](docs/contributing/model-gateway-tests.md) |
+| Adding an orchestrator adapter: recipe, file checklist, installation principles, gateway wiring | [`taxiway-orchestrator` skill](.agents/skills/taxiway-orchestrator/SKILL.md) |
 | Working a selected issue: worktree, branch, commits, checks, PR, merge, post-merge cleanup | [`taxiway-issue` skill](.agents/skills/taxiway-issue/SKILL.md) |
 | Independent review of a change, review findings | [`taxiway-review` skill](.agents/skills/taxiway-review/SKILL.md) |
 | PR follow-up: CI, E2E results, conflicts, stacked PRs; PR template | [`steward` skill](.agents/skills/steward/SKILL.md), [PR template](.github/pull_request_template.md) |

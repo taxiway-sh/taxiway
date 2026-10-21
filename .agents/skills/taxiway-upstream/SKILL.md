@@ -94,7 +94,7 @@ link and status in the related Taxiway issue or PR.
 4. Run the checks the change needs from
    [Testing](../../../docs/contributing/testing.md); a pin that changes
    provisioned or runtime behavior needs the affected orchestrators'
-   [E2E scenarios](../../../AGENTS.md#e2e-scenarios).
+   [E2E scenarios](../taxiway-testing/SKILL.md#e2e-scenarios).
 5. Work it as a selected issue with [`taxiway-issue`](../taxiway-issue/SKILL.md).
 
 ## Model catalog

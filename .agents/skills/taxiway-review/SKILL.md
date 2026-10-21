@@ -36,7 +36,7 @@ Review adversarially: look for what is wrong, not for confirmation.
 - **Tests.** Claimed checks were actually run on this head, and skipped or
   blocked ones are reported as such. New behavior has tests where
   [Testing](../../../docs/contributing/testing.md) puts them, and lifecycle
-  changes follow the [E2E scenario rule](../../../AGENTS.md#e2e-scenarios).
+  changes follow the [E2E scenario rule](../taxiway-testing/SKILL.md#e2e-scenarios).
   Each new assertion can fail and is mapped to the test that ran it (no early
   returns, no absence-only checks without a positive counterpart); E2E
   assertions follow [Writing E2E scenarios](../../../docs/contributing/testing.md#writing-e2e-scenarios).

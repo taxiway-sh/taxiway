@@ -39,7 +39,7 @@ without an actual artifact, process or result.
 | Pushing a branch or publishing a PR | Proposing issues, PR text or upstream reports without publishing them |
 | Merging a PR | [Post-merge cleanup](../taxiway-issue/SKILL.md#post-merge-cleanup) after an authorized merge |
 | Force-pushing | Cleaning resources owned by a scenario with existing helpers |
-| Applying, removing or creating labels; comments, closures, reopenings and reviews on issues and PRs, unless already authorized | Recording in the issue a decision the maintainer has just given |
+| Applying, removing or creating labels; comments, assignments, closures, reopenings and reviews on issues and PRs, unless already authorized | Recording in the issue a decision the maintainer has just given |
 | Releases: follow [`taxiway-release`](../taxiway-release/SKILL.md) | |
 | Upstream issues, PRs, comments, pushes or forks ([`taxiway-upstream`](../taxiway-upstream/SKILL.md#approvals)) | |
 | Real-provider (paid) live checks | |
