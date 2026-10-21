@@ -47,7 +47,8 @@ says.
 never rules:
 
 - `status/<id>.json`, the heartbeat written at the end of every run:
-  `id`, `date` (UTC, ISO 8601), `result` (`ok`, `partial` or `failed`),
+  `id`, `date` (UTC, ISO 8601, set by the
+  [push script](#every-run) when it commits), `result` (`ok`, `partial` or `failed`),
   `summary` (one sentence), `waiting` (items that need the maintainer, each with
   a link and the action, which names the proposal id when there is one),
   `promptVersion` (the `taxiway` `main` SHA the run read) and, optionally,
@@ -109,11 +110,18 @@ Each run then:
    `frictions` ([State repository](#state-repository)): a rule that was
    missing, ambiguous or contradictory, a workaround it used, a check it could
    not run or a tool that was refused;
-5. writes `status/<id>.json`, valid against
-   [`status.schema.json`](../../agents/status.schema.json), commits and pushes
-   it to `taxiway-sh/agents`; a machine agent also writes the status changes
-   and reports of its [queue](#queue) items, which belong to its run contract
-   like its heartbeat and need no action class;
+5. writes `status/<id>.json` in the `agents` clone, valid against
+   [`status.schema.json`](../../agents/status.schema.json), then runs
+   `scripts/agents/push-heartbeat.sh <id>` from the `taxiway` clone and never
+   commits the heartbeat by hand. The script owns `date`, which it sets to the
+   current time; it validates the state, commits only that file and pushes it
+   to `main` of `taxiway-sh/agents`, without force, and prints the commit SHA.
+   When it fails, the run reports the heartbeat as not pushed, with the
+   script's message, and does not commit or push it another way. A machine
+   agent also writes the status changes and reports of its [queue](#queue)
+   items, which belong to its run contract like its heartbeat and need no
+   action class, and commits and pushes them before running the script,
+   which refuses any other uncommitted change in the clone;
 6. ends with its report in the agent's session, where the maintainer reads and
    answers it; the heartbeat's `waiting` lists what needs them. Unattended
    reports are in English; when someone replies in the session, continue in
@@ -585,9 +593,10 @@ can change: check them against the installed version.
    with the claude.ai account and trust the directory.
 7. In the agent account's `~/.claude/settings.json`, allow under
    `permissions.allow`: `Bash(git:*)`, `Bash(gh:*)`, `Bash(make:*)`,
-   `Bash(go:*)`, `Bash(docker:*)`, `Bash(limactl:*)`, `Bash(direnv:*)` and
-   `Bash(python3:*)`, plus `Edit` and `Write` limited to the `agents` clone,
-   the run worktree directory and the evidence directory, as path rules such
+   `Bash(go:*)`, `Bash(docker:*)`, `Bash(limactl:*)`, `Bash(direnv:*)`,
+   `Bash(python3:*)` and `Bash(scripts/agents/push-heartbeat.sh:*)`, plus
+   `Edit` and `Write` limited to the `agents` clone, the run worktree
+   directory and the evidence directory, as path rules such
    as `Edit(//<absolute path of the agents clone>/**)` and
    `Write(//<absolute path of the agents clone>/**)` (*verify at setup*).
    Under `permissions.deny`, add `Bash(git push --force:*)`,
