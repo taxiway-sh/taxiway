@@ -59,9 +59,28 @@ var ReferenceURLs = map[string]string{
 	"deprecations": "https://platform.claude.com/docs/en/about-claude/model-deprecations",
 }
 
-var chatRetirement = regexp.MustCompile(`(?s)On ([A-Z][a-z]+ [0-9]{1,2}, [0-9]{4}), ((?i:GPT)-[A-Za-z0-9. -]+?) will retire from ChatGPT, ChatGPT Work, and Codex`)
+// chatRetirementForm is one known wording of a ChatGPT subscription retirement
+// notice. A section must state exactly one notice in exactly one known form,
+// with that form's own OpenAI API exclusion; anything else needs manual review.
+type chatRetirementForm struct {
+	notice, apiExclusion *regexp.Regexp
+}
 
-var chatRetirementAnnouncement = regexp.MustCompile(`(?i)\b(?:will retire|will be retired|retires? from)\b`)
+// Both forms retire the model from Codex signed in with ChatGPT, which is the
+// `chatgpt` route, and explicitly leave the OpenAI API out of scope.
+var chatRetirementForms = []chatRetirementForm{
+	{
+		regexp.MustCompile(`On ([A-Z][a-z]+ [0-9]{1,2}, [0-9]{4}), ((?i:GPT)-[A-Za-z0-9. -]+?) will retire from ChatGPT, ChatGPT Work, and Codex`),
+		regexp.MustCompile(`retirement does not apply to the OpenAI API`),
+	},
+	{
+		regexp.MustCompile(`Effective ([A-Z][a-z]+ [0-9]{1,2}, [0-9]{4})(?:, at [^,.]+)?, ((?i:GPT)-[A-Za-z0-9. -]+?) retires from Codex for users signed in with ChatGPT\.`),
+		regexp.MustCompile(`The OpenAI API and Codex sessions authenticated with an API key (?:aren't|aren’t|are not) affected\.`),
+	},
+}
+
+var chatRetirementAnnouncement = regexp.MustCompile(`(?i)\b(?:will retire|will be retired|retire[sd]? (?:from|on))\b`)
+var whitespace = regexp.MustCompile(`\s+`)
 var chatVersionID = regexp.MustCompile(`^gpt-[0-9.]+$`)
 
 func clean(s string) string { return strings.Trim(strings.TrimSpace(s), "`") }
@@ -264,17 +283,27 @@ func Discover(s Sources) (Discovery, error) {
 		// Historical summaries and links are not primary announcements.
 		// A retirement heading or future announcement always requires parsing.
 		heading, _, _ := strings.Cut(section, "\n")
-		if !strings.Contains(strings.ToLower(heading), "retirement") && !strings.Contains(strings.ToLower(section), "will retire") && !strings.Contains(strings.ToLower(section), "will be retired") {
+		// Markdown wraps sentences at arbitrary points.
+		text := whitespace.ReplaceAllString(section, " ")
+		lower := strings.ToLower(text)
+		if !strings.Contains(strings.ToLower(heading), "retirement") && !strings.Contains(lower, "will retire") && !strings.Contains(lower, "will be retired") {
 			continue
 		}
-		matches := chatRetirement.FindAllStringSubmatch(section, -1)
-		if len(matches) != 1 || len(chatRetirementAnnouncement.FindAllString(section, -1)) != 1 {
+		var match []string
+		var form chatRetirementForm
+		notices := 0
+		for _, f := range chatRetirementForms {
+			for _, m := range f.notice.FindAllStringSubmatch(text, -1) {
+				notices++
+				match, form = m, f
+			}
+		}
+		if notices != 1 || len(chatRetirementAnnouncement.FindAllString(text, -1)) != 1 {
 			return d, fmt.Errorf("chatgpt: unrecognized retirement notice; manual source review required")
 		}
-		if !strings.Contains(section, "retirement does not apply to the OpenAI API") {
+		if !form.apiExclusion.MatchString(text) {
 			return d, fmt.Errorf("ChatGPT retirement API scope unclear")
 		}
-		match := matches[0]
 		dt, e := date(match[1])
 		if e != nil {
 			return d, e

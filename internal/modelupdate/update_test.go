@@ -130,3 +130,22 @@ func TestPrepareAddsRetirementFieldsWithoutReformatting(t *testing.T) {
 		t.Fatalf("new retirement changed unrelated text: %v", err)
 	}
 }
+
+func TestPrepareRetiresOnlyTheChatGPTRouteFromEffectiveNotice(t *testing.T) {
+	s := fixtureSources()
+	s.ChatGPT = []byte(effectiveNotice)
+	out, report, _, err := Prepare([]byte(existing), s, time.Date(2026, 10, 21, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "  - name: gpt-5.5\n    provider: chatgpt\n    upstream: gpt-5.5\n    api: responses\n    status: retired\n    retirement_date: \"2026-10-14\"\n    source: https://learn.chatgpt.com/docs/models\n"
+	if !strings.Contains(string(out), want) {
+		t.Fatalf("chatgpt route not retired:\n%s", out)
+	}
+	if !strings.Contains(string(out), "  - name: gpt-5.5-api\n    provider: openai\n    upstream: gpt-5.5\n") || strings.Count(string(out), "status: retired") != 1 {
+		t.Fatalf("API route changed:\n%s", out)
+	}
+	if !strings.Contains(report, "Marked `gpt-5.5` retired (subscription, retirement 2026-10-14).") {
+		t.Fatal(report)
+	}
+}
