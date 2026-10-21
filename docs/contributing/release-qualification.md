@@ -109,7 +109,7 @@ promise. Do not turn untested supported paths into PASS or hide them.
 | `review` | Different agent reviews candidate diff, findings, fixes and actual proof | Independent review and correction evidence; no self-review presented as independent. |
 
 Durable assertions follow the
-[E2E scenario rule](https://github.com/taxiway-sh/taxiway/blob/main/AGENTS.md#e2e-scenarios).
+[E2E scenario rule](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-testing/SKILL.md#e2e-scenarios).
 Run temporary live scripts through `direnv exec . python3` with
 `PYTHONPATH="$PWD/tests/live"` from the worktree. Follow
 [model gateway validation](model-gateway-tests.md) and the live guide for setup

@@ -11,6 +11,85 @@ import subprocess
 import sys
 import uuid
 
+# Set once this process handles a reference login; diagnostic output is then
+# refused for the rest of the process.
+_credentials_handled = False
+DIAGNOSTIC_LIMIT = 4000
+_REDACTIONS = (
+    (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(-----END [A-Z ]*PRIVATE KEY-----|\Z)", re.S), "<redacted private key>"),
+    # Credentials embedded in URLs: scheme://user:password@host.
+    (re.compile(r"(?i)\b([a-z][a-z0-9+.-]*://[^/\s:@]+:)[^@\s]+@"), r"\1<redacted>@"),
+    (re.compile(r"(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]+"), r"\1 <redacted>"),
+    # Command-line options taking a credential as the next argument.
+    (re.compile(r"(?i)(--?[a-z0-9-]*(?:key|token|secret|password|passwd|credential)[a-z0-9-]*\s+)(?!-)(\S+)"), r"\1<redacted>"),
+    (re.compile(r"(?i)([\"']?[A-Za-z0-9_.-]*(?:key|token|secret|password|passwd|credential|auth|cookie)[A-Za-z0-9_.-]*[\"']?\s*[=:]\s*)(\"[^\"]*\"|'[^']*'|\S+)"), r"\1<redacted>"),
+    (re.compile(r"\bsk-[A-Za-z0-9_-]{8,}"), "<redacted>"),
+    # Vendor token shapes: GitHub, GitLab, Slack, AWS access keys.
+    (re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{16,}|github_pat_[A-Za-z0-9_]{16,}|glpat-[A-Za-z0-9_-]{16,}|xox[abposr]-[A-Za-z0-9-]{8,}|(?:AKIA|ASIA)[0-9A-Z]{16})\b"), "<redacted>"),
+    (re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*"), "<redacted>"),
+)
+
+
+class CommandFailed(RuntimeError):
+    """A failed command; its captured output stays off the message and repr."""
+
+    def __init__(self, message, stdout=b"", stderr=b""):
+        super().__init__(message)
+        self.captured = (stdout or b"", stderr or b"")
+
+
+def _mark_credentials_handled():
+    global _credentials_handled
+    _credentials_handled = True
+
+
+def _host_paths():
+    """Host paths to name by variable, longest first, with their resolved forms."""
+    named = [(os.environ.get("TAXIWAY_RUNTIME_DIR"), "$TAXIWAY_RUNTIME_DIR"),
+             (str(Path(__file__).resolve().parents[2]), "<repository>"),
+             (os.environ.get("HOME"), "$HOME")]
+    paths = {}
+    for value, name in named:
+        if not value:
+            continue
+        for form in (value, os.path.abspath(value), os.path.realpath(value)):
+            form = form.rstrip("/")
+            if len(form) > 1:
+                paths.setdefault(form, name)
+    return sorted(paths.items(), key=lambda item: len(item[0]), reverse=True)
+
+
+def _sanitize(data):
+    text = data.decode(errors="replace") if isinstance(data, bytes) else (data or "")
+    for pattern, replacement in _REDACTIONS:
+        text = pattern.sub(replacement, text)
+    for path, name in _host_paths():
+        text = re.sub(r"(?<![A-Za-z0-9._-])" + re.escape(path) + r"(?![A-Za-z0-9_-]|\.[A-Za-z0-9_-])", name, text)
+    if len(text) > DIAGNOSTIC_LIMIT:
+        text = "[... truncated ...]\n" + text[-DIAGNOSTIC_LIMIT:]
+    return text
+
+
+def diagnostic_output(error):
+    """Sanitized captured output of a failed provider-free command.
+
+    Refused once this process has handled a reference login, so authenticated
+    runs keep withholding output.
+    """
+    if _credentials_handled:
+        raise RuntimeError("Diagnostic output is refused after credential propagation")
+    if isinstance(error, CommandFailed):
+        stdout, stderr = error.captured
+    elif isinstance(error, subprocess.TimeoutExpired):
+        stdout, stderr = error.stdout, error.stderr
+    else:
+        return ""
+    parts = []
+    for name, data in (("stdout", stdout), ("stderr", stderr)):
+        if data:
+            parts.append(f"--- {name} (sanitized) ---\n{_sanitize(data).rstrip()}")
+    return "\n".join(parts)
+
 
 def validate_context():
     if os.environ.get("TAXIWAY_CONTEXT") not in ("dev", "e2e"):
@@ -33,8 +112,10 @@ def command(argv, *, data=None, timeout=300):
     result = subprocess.run(argv, input=data, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, timeout=timeout)
     if result.returncode:
-        # Never echo output or argv: either can contain credentials.
-        raise RuntimeError(f"{Path(argv[0]).name} exited {result.returncode}")
+        # Never echo output or argv: either can contain credentials. Output is
+        # kept for the opt-in, sanitized diagnostic_output() only.
+        raise CommandFailed(f"{Path(argv[0]).name} exited {result.returncode}",
+                            result.stdout, result.stderr)
     return result.stdout
 
 
@@ -65,6 +146,7 @@ def guest(lab, script, *, data=None, timeout=300, workdir="/lab/work"):
 
 def require_claude_auth(lab):
     """A native bounded request permits native refresh; only categories leave the guest."""
+    _mark_credentials_handled()
     status = guest(lab, '''python3 - <<'PY'
 import json, os, pathlib, shutil, subprocess
 if not shutil.which('claude'):
@@ -174,6 +256,7 @@ finally:
 
 def propagate_claude_onboarding(source, target):
     """Reuse completed setup flags, preserving target account/workspace settings."""
+    _mark_credentials_handled()
     if source == target:
         raise RuntimeError("Onboarding source and target must be different labs")
     _write_claude_onboarding(target, _claude_onboarding(source))
@@ -181,6 +264,7 @@ def propagate_claude_onboarding(source, target):
 
 def propagate_claude_auth(source, target, *, overwrite=False):
     """Copy a reference login and completed onboarding; preserve lab-specific config."""
+    _mark_credentials_handled()
     if source == target:
         raise RuntimeError("Authentication source and target must be different labs")
     require_claude_auth(source)
@@ -275,7 +359,7 @@ def temporary_lab(orch, *, auth_lab=None, driver="docker", settings=None,
                 raise RuntimeError(message) from None
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     actions = parser.add_subparsers(dest="action", required=True)
     preflight = actions.add_parser("preflight", help="Verify a reference with a bounded native Claude request")
@@ -293,9 +377,13 @@ def main():
     run.add_argument("--repo")
     run.add_argument("--taxiway", default="./taxiway")
     run.add_argument("--timeout", type=int, default=180)
-    run.add_argument("--expect", help="Required stdout marker; captured output is not printed")
+    run.add_argument("--expect", help="Required stdout marker; captured output is not printed unless --show-output")
+    run.add_argument("--show-output", action="store_true",
+                     help="On failure, print sanitized captured output; refused with --auth-lab")
     run.add_argument("command", nargs=argparse.REMAINDER)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    if getattr(args, "show_output", False) and args.auth_lab:
+        parser.error("--show-output is refused with --auth-lab: authenticated runs withhold captured output")
     validate_context()
     if args.action == "preflight":
         require_claude_auth(args.source)
@@ -314,23 +402,43 @@ def main():
         if not sep or not key:
             parser.error("Settings must be key=value")
         settings[key] = value
-    with temporary_lab(args.type, auth_lab=args.auth_lab, driver=args.driver,
-                       settings=settings, repo=args.repo, taxiway=args.taxiway) as lab:
-        output = run_in_lab(lab, argv, agent=args.agent, timeout=args.timeout)
-        if args.expect and args.expect.encode() not in output:
-            raise RuntimeError("Expected stdout marker missing")
+    try:
+        with temporary_lab(args.type, auth_lab=args.auth_lab, driver=args.driver,
+                           settings=settings, repo=args.repo, taxiway=args.taxiway) as lab:
+            output = run_in_lab(lab, argv, agent=args.agent, timeout=args.timeout)
+            if args.expect and args.expect.encode() not in output:
+                raise CommandFailed("Expected stdout marker missing", output)
+    except (CommandFailed, subprocess.TimeoutExpired) as error:
+        error.diagnostic = ""
+        if args.show_output:
+            try:
+                error.diagnostic = diagnostic_output(error) or "(no captured output)"
+            except RuntimeError:
+                error.diagnostic = "(diagnostic output refused after credential handling)"
+        raise
     print("PASS: command completed; temporary lab removed; reference login preserved.")
 
 
-if __name__ == "__main__":
+def cli(argv=None):
+    """Run main() and report failures; captured output is withheld by default."""
+    diagnostic = ""
     try:
-        main()
-    except subprocess.TimeoutExpired:
-        print("FAIL: timeout (captured output withheld)", file=sys.stderr)
-        sys.exit(1)
+        main(argv)
+        return 0
+    except subprocess.TimeoutExpired as error:
+        message, diagnostic = "FAIL: timeout", getattr(error, "diagnostic", "")
     except RuntimeError as error:
-        print(f"FAIL: {error} (captured output withheld)", file=sys.stderr)
-        sys.exit(1)
+        message, diagnostic = f"FAIL: {error}", getattr(error, "diagnostic", "")
     except OSError:
-        print("FAIL: setup, execution, or cleanup failed (captured output withheld)", file=sys.stderr)
-        sys.exit(1)
+        message = "FAIL: setup, execution, or cleanup failed"
+    if diagnostic.startswith("("):
+        print(f"{message} {diagnostic}", file=sys.stderr)
+    elif diagnostic:
+        print(f"{message}\n{diagnostic}", file=sys.stderr)
+    else:
+        print(f"{message} (captured output withheld)", file=sys.stderr)
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(cli())
