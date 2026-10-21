@@ -82,22 +82,18 @@ tests under `site/`, and what they call.
 - Checks fork CI does not cover (lifecycle E2E, Lima, live validation) are
   reported as "could not run" for the contributor's code.
 
-## Agent permission files
+## Agent push script
 
-[`.claude/settings.json`](../../../.claude/settings.json) and
 [`scripts/agents/push-heartbeat.sh`](../../../scripts/agents/push-heartbeat.sh)
-are sensitive: the first lets Claude Code run the second without a permission
-prompt and without the auto mode classifier. A change to either changes what
-agents may run unreviewed, so it needs the maintainer's careful review of every
-line, and any new allow rule needs their explicit decision.
-
-The rule approves whatever that path holds in the agent's clone when it runs.
-An agent that edits the script in its clone, which the classifier does not
-review, could run any code under the rule. The
-[run contract](../taxiway-agents/SKILL.md#every-run) forbids it. The script
-guards the `agents` clone: it refuses git configuration a plain clone does
-not write, disables hooks and the file system monitor, and runs the state
-validator from `origin/main`; it cannot protect itself.
+is sensitive: every scheduled agent runs it to commit and push its state, so a
+change to it needs the maintainer's careful review of every line. No
+`.claude/settings.json` rule pre-approves it: in auto mode an agent edits its
+clone without review, so such a rule would let an edited script run without
+any check. The script runs under the session's usual permission checks, and
+the [run contract](../taxiway-agents/SKILL.md#every-run) forbids editing it.
+The script guards the `agents` clone: it refuses git configuration a plain
+clone does not write, disables hooks and the file system monitor, and runs
+the state validator from `origin/main`; it cannot protect itself.
 
 ## Public writing
 
