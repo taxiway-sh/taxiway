@@ -57,15 +57,23 @@ reads therefore go through git alone:
    from a shallow clone or bounded fetch into a scratch directory, never inside
    the Taxiway checkout: for example
    `GIT_LFS_SKIP_SMUDGE=1 git clone --depth 1 --branch <tag> <url> <scratch-dir>`,
-   or `git fetch --depth 1 origin tag <tag>` then `git show <tag>:<path>`.
+   or `git init <scratch-dir>`, `git -C <scratch-dir> remote add origin <url>`,
+   `git -C <scratch-dir> fetch --depth 1 origin tag <tag>`, then
+   `git -C <scratch-dir> show <tag>:<path>`.
 3. **An upstream PR's state** from `git ls-remote <url> refs/pull/<n>/head`:
    the PR is merged when that commit is reachable from the default branch, and
-   its fix shipped when it is reachable from a release tag
-   (`git merge-base --is-ancestor <commit> <ref>` after a bounded fetch of
-   that ref deep enough to contain it). A squash or rebase merge leaves that
-   commit unreachable: then look for the PR number in the default branch's
-   commit subjects. An open PR and a PR closed without merging cannot be told
-   apart this way: report it as not merged.
+   its fix shipped when it is reachable from a release tag. In the scratch
+   repository, fetch the PR head and that branch or tag without file contents,
+   so the history is complete
+   (`git fetch --filter=blob:none origin refs/pull/<n>/head +<ref>:refs/upstream`),
+   then run `git merge-base --is-ancestor <commit> refs/upstream`; a `--depth`
+   fetch can cut the history short and report a merged PR as not merged. A
+   squash merge leaves that commit unreachable, and its subject usually ends in
+   `(#<n>)`; a rebase merge keeps the PR's commit subjects under new SHAs. Look
+   for either with `git log --grep` on `refs/upstream`. A `refs/pull/<n>/merge`
+   ref shows an open PR that GitHub can merge; without it, an open PR with
+   conflicts and a PR closed without merging cannot be told apart this way:
+   report it as not merged.
 4. **Release notes** from the CHANGELOG or from annotated tags.
 
 When a run needs something only the API gives, such as an upstream issue's
