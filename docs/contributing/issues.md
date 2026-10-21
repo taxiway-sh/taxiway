@@ -63,13 +63,23 @@ Reference real commands, files, and symbols. Security-sensitive reports follow
 
 ## Labels
 
-| Axis | Values | Set by |
-|------|--------|--------|
-| **type** | `bug` \| `enhancement` \| `documentation` | reporter (via template), confirmed at triage |
-| **priority** | `priority:p0` \| `priority:p1` \| `priority:p2` | maintainer at triage |
-| **area** | `capability:*`, `driver:*`, `orchestrator:*`, `agent:*` | maintainer at triage |
-| **intake** | `needs-triage` | applied by the templates; removal per [conventions](#label-conventions) |
-| **onboarding** | `good first issue` | maintainer |
+| Axis | Values | Colour | Set by |
+|------|--------|--------|--------|
+| **type** | `bug` \| `enhancement` \| `documentation` | `d73a4a` \| `a2eeef` \| `0075ca` | reporter (via template), confirmed at triage |
+| **priority** | `priority:p0` \| `priority:p1` \| `priority:p2` | `b60205` \| `d93f0b` \| `fbca04` | maintainer at triage |
+| **area** | `capability:*` | `0e8a16` | maintainer at triage |
+| | `driver:*` | `d29922` | |
+| | `orchestrator:*` | `1d76db` | |
+| | `agent:*` | `5319e7` | |
+| **intake** | `needs-triage` | `ededed` | applied by the templates; removal per [conventions](#label-conventions) |
+| **onboarding** | `good first issue` | `7057ff` | maintainer |
+
+An area label's description names its axis and subject, for example
+`Orchestrator: Gas City` or `Capability: lab lifecycle`.
+`capability:contributing` ("Capability: contribution workflow, skills and
+project agents") locates changes to how Taxiway is contributed to: the
+contribution docs, the project skills under `.agents/skills/` and the
+scheduled project agents.
 
 Type means:
 
@@ -91,6 +101,12 @@ fragility, near-term · **p2** cleanliness or later.
   locate the change.
 - Adding an orchestrator creates its `orchestrator:<name>` label: it extends an
   existing axis rather than adding one.
+- A label exists before it is applied. Applying a label that does not exist
+  makes GitHub create it grey and without a description, so a new label (for
+  example `orchestrator:<name>`) is first created with its axis colour from
+  [Labels](#labels) and a description in its axis's form, then applied. Both
+  steps are label changes under the
+  [approvals matrix](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-workflow/SKILL.md#approvals).
 - `needs-triage` is removed at triage, or as soon as work on the issue starts.
 - GitHub's default `duplicate`, `invalid`, `question`, `wontfix` and
   `help wanted` labels are accepted as resolution and onboarding markers, like
