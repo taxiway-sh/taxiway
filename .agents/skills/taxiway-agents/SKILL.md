@@ -296,7 +296,11 @@ A commit reachable from `main` of `taxiway-sh/taxiway`
 approval. Any other commit, whatever the kind, runs only with an `approval`:
 a comment on the item's `link` thread that approves running that item and
 names its `id` or `commit`, written by an `OWNER` or `MEMBER`
-(`author_association`) and not edited after the item's `created`. A
+(`author_association`) and not edited after the item's `created`. The
+machine agent fetches the comment by its id
+(`gh api repos/taxiway-sh/taxiway/issues/comments/<id>`): the number in its
+`issue_url` must equal the number in `link`, and `author_association`,
+`created_at` and `updated_at` come from that response. A
 `real-account` item, which uses paid real-provider calls, also needs that
 approval when its commit is on `main`, as the
 [approvals](../taxiway-workflow/SKILL.md#approvals) require. The schema keeps
@@ -420,8 +424,10 @@ can change: check them against the installed version.
    the run worktree directory and the evidence directory, as path rules such
    as `Edit(//<absolute path of the agents clone>/**)` and
    `Write(//<absolute path of the agents clone>/**)` (*verify at setup*).
-   Under `permissions.deny`, add `Bash(git push --force:*)` and
-   `Bash(git push -f:*)`. Broad `make`, `docker` and `python3` entries amount
+   Under `permissions.deny`, add `Bash(git push --force:*)`,
+   `Bash(git push --force-with-lease:*)` and `Bash(git push -f:*)`. This deny
+   list is defence in depth: never force-pushing is the rule, and the token's
+   scope is the real bound. Broad `make`, `docker` and `python3` entries amount
    to arbitrary execution: they are acceptable only under this dedicated
    account. Do not bypass permissions.
 8. Start a new session with Remote Control from the working directory

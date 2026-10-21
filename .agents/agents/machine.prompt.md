@@ -23,18 +23,21 @@ clone, oldest first, and for each one:
      is a PR whose head is no longer `commit`.
    - **Cross-checks.** The file name is `<id>.json`, and `id` ends with
      `-<requester>`.
-   - **Commit on a branch.** In the `taxiway` clone, fetch only
-     `git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*'`, never by SHA and
-     never `refs/pull/*`; `git branch -r --contains <commit>` must list at
+   - **Commit on a branch.** In the `taxiway` clone, fetch only with
+     `git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*'`,
+     never by SHA and never `refs/pull/*`; `git branch -r --contains <commit>` must list at
      least one branch. For a PR link, the PR's `head.repo.full_name` must also
      be `taxiway-sh/taxiway`: a fork PR is
      [contributor code](../skills/taxiway-security/SKILL.md#contributor-code).
    - **Approval**, as [Approval](../skills/taxiway-agents/SKILL.md#approval)
      says: needed when `git merge-base --is-ancestor <commit> origin/main`
-     fails, and for every `real-account` item. The `approval` comment is on
-     the item's `link` thread, approves running this item and names its `id`
-     or `commit`, has `author_association` `OWNER` or `MEMBER`, and was not
-     edited after the item's `created`.
+     fails, and for every `real-account` item. Fetch the `approval` comment
+     by its id (`gh api repos/taxiway-sh/taxiway/issues/comments/<id>`): the
+     number in its `issue_url` equals the number in the item's `link`, its
+     body approves running this item and names its `id` or `commit`, its
+     `author_association` is `OWNER` or `MEMBER`, and its `created_at` and
+     `updated_at` show no edit after the item's `created`. Take these fields
+     from that response only.
 
    A failed cross-check, commit or approval check marks the item `rejected`
    with the reason, and nothing runs.
