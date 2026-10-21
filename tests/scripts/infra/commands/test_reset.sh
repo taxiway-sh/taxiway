@@ -77,26 +77,6 @@ for reply in default no eof; do
 done
 
 echo ""
-echo "=== reset.sh gastown shutdown ==="
-
-rm -rf "$target"
-fake_bin="$tmp/bin"
-gt_log="$tmp/gt.log"
-mkdir -p "$fake_bin" "$target/gt"
-cat >"$fake_bin/gt" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-printf 'cwd=%s gt %s\n' "$PWD" "$*" >> "$GT_LOG"
-exit 0
-EOF
-chmod +x "$fake_bin/gt"
-
-PATH="$fake_bin:$PATH" GT_LOG="$gt_log" LAB_RESET_TARGET="$target" LAB_RESET_YES=1 bash "$RESET_SH" >/dev/null
-
-_assert_contains "gastown reset stops runtime before cleanup" "$(cat "$gt_log")" "cwd=$target/gt gt down --all"
-_assert_missing "gastown directory removed after shutdown" "$target/gt"
-
-echo ""
 echo "=== reset.sh wipe contract ==="
 
 rm -rf "$target"

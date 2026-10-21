@@ -166,6 +166,39 @@ jobs:
               ;;
           esac
 
+          # Guest runtime contract (Docker: init as PID 1, orphans reaped, no
+          # fake systemd user manager; Lima: real user manager; both: phase
+          # scripts see the driver's guest kind). Releases before 0.5.0
+          # predate it: skip explicitly, and require it from 0.5.0.
+          installed_version="$(taxiway version | awk '$1 == "version:" { print $2 }')"
+          if printf '%s\n' "$installed_version" | awk -F'[.-]' '{ exit !($1 > 0 || $2 >= 5) }'; then
+            case "$DRIVER" in
+              docker) expected_guest=container ;;
+              lima) expected_guest=vm ;;
+            esac
+            taxiway bootstrap "$LAB" --dry-run | tee /tmp/taxiway-bootstrap-plan.txt
+            grep -Fq "Guest environment: $expected_guest" /tmp/taxiway-bootstrap-plan.txt
+            case "$DRIVER" in
+              docker)
+                test "$(docker exec "taxiway-$LAB" cat /proc/1/comm)" = docker-init
+                docker exec -u taxiway "taxiway-$LAB" sh -c '(sleep 1 &)'
+                sleep 3
+                zombies="$(docker exec "taxiway-$LAB" sh -c "sed -n 's/^.*) \([A-Z]\) .*/\1/p' /proc/[0-9]*/stat 2>/dev/null | grep -c '^Z$' || true")"
+                test "$zombies" = 0
+                if shim_output="$(docker exec -u taxiway "taxiway-$LAB" systemctl --user show-environment 2>&1)"; then
+                  printf 'systemctl --user must fail in a container guest\n' >&2
+                  exit 1
+                fi
+                printf '%s\n' "$shim_output" | grep -F '[docker-shim] no systemd user manager in container'
+                ;;
+              lima)
+                timeout 60 limactl shell "taxiway-$LAB" -- systemctl --user show-environment >/dev/null
+                ;;
+            esac
+          else
+            printf 'skipped: release %s predates the guest runtime contract\n' "$installed_version"
+          fi
+
       - name: Collect failure diagnostics
         if: failure()
         shell: bash
@@ -361,6 +394,39 @@ jobs:
                 grep -Fx "taxiway-$LAB Running"
               ;;
           esac
+
+          # Guest runtime contract (Docker: init as PID 1, orphans reaped, no
+          # fake systemd user manager; Lima: real user manager; both: phase
+          # scripts see the driver's guest kind). Releases before 0.5.0
+          # predate it: skip explicitly, and require it from 0.5.0.
+          installed_version="$(taxiway version | awk '$1 == "version:" { print $2 }')"
+          if printf '%s\n' "$installed_version" | awk -F'[.-]' '{ exit !($1 > 0 || $2 >= 5) }'; then
+            case "$DRIVER" in
+              docker) expected_guest=container ;;
+              lima) expected_guest=vm ;;
+            esac
+            taxiway bootstrap "$LAB" --dry-run | tee /tmp/taxiway-bootstrap-plan.txt
+            grep -Fq "Guest environment: $expected_guest" /tmp/taxiway-bootstrap-plan.txt
+            case "$DRIVER" in
+              docker)
+                test "$(docker exec "taxiway-$LAB" cat /proc/1/comm)" = docker-init
+                docker exec -u taxiway "taxiway-$LAB" sh -c '(sleep 1 &)'
+                sleep 3
+                zombies="$(docker exec "taxiway-$LAB" sh -c "sed -n 's/^.*) \([A-Z]\) .*/\1/p' /proc/[0-9]*/stat 2>/dev/null | grep -c '^Z$' || true")"
+                test "$zombies" = 0
+                if shim_output="$(docker exec -u taxiway "taxiway-$LAB" systemctl --user show-environment 2>&1)"; then
+                  printf 'systemctl --user must fail in a container guest\n' >&2
+                  exit 1
+                fi
+                printf '%s\n' "$shim_output" | grep -F '[docker-shim] no systemd user manager in container'
+                ;;
+              lima)
+                timeout 60 limactl shell "taxiway-$LAB" -- systemctl --user show-environment >/dev/null
+                ;;
+            esac
+          else
+            printf 'skipped: release %s predates the guest runtime contract\n' "$installed_version"
+          fi
 
       - name: Collect failure diagnostics
         if: failure()
@@ -729,6 +795,39 @@ jobs:
                 grep -Fx "taxiway-$lab Running"
               ;;
           esac
+
+          # Guest runtime contract (Docker: init as PID 1, orphans reaped, no
+          # fake systemd user manager; Lima: real user manager; both: phase
+          # scripts see the driver's guest kind). Releases before 0.5.0
+          # predate it: skip explicitly, and require it from 0.5.0.
+          installed_version="$(taxiway version | awk '$1 == "version:" { print $2 }')"
+          if printf '%s\n' "$installed_version" | awk -F'[.-]' '{ exit !($1 > 0 || $2 >= 5) }'; then
+            case "$driver" in
+              docker) expected_guest=container ;;
+              lima) expected_guest=vm ;;
+            esac
+            taxiway bootstrap "$lab" --dry-run | tee /tmp/taxiway-bootstrap-plan.txt
+            grep -Fq "Guest environment: $expected_guest" /tmp/taxiway-bootstrap-plan.txt
+            case "$driver" in
+              docker)
+                test "$(docker exec "taxiway-$lab" cat /proc/1/comm)" = docker-init
+                docker exec -u taxiway "taxiway-$lab" sh -c '(sleep 1 &)'
+                sleep 3
+                zombies="$(docker exec "taxiway-$lab" sh -c "sed -n 's/^.*) \([A-Z]\) .*/\1/p' /proc/[0-9]*/stat 2>/dev/null | grep -c '^Z$' || true")"
+                test "$zombies" = 0
+                if shim_output="$(docker exec -u taxiway "taxiway-$lab" systemctl --user show-environment 2>&1)"; then
+                  printf 'systemctl --user must fail in a container guest\n' >&2
+                  exit 1
+                fi
+                printf '%s\n' "$shim_output" | grep -F '[docker-shim] no systemd user manager in container'
+                ;;
+              lima)
+                timeout 60 limactl shell "taxiway-$lab" -- systemctl --user show-environment >/dev/null
+                ;;
+            esac
+          else
+            printf 'skipped: release %s predates the guest runtime contract\n' "$installed_version"
+          fi
           '@
 
           $scriptPath = Join-Path $env:RUNNER_TEMP "taxiway-exercise-driver.sh"

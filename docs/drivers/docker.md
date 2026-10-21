@@ -38,9 +38,14 @@ The driver:
 
 - creates a named Docker volume for `/lab`;
 - starts a container with a Taxiway-owned non-root `taxiway` user for lab
-  commands;
+  commands, and Docker's init (`--init`) as PID 1 so orphaned guest processes
+  are reaped as in a VM;
 - installs `sudo`;
-- installs a no-op `systemctl` shim for scripts that expect systemd;
+- installs a `systemctl` shim: system-manager calls (such as the Docker
+  installer's `systemctl enable --now docker`) are logged no-ops, while
+  `systemctl --user` fails with `[docker-shim] no systemd user manager in
+  container`, so tools never mistake the container for a host with a per-user
+  service manager;
 - bind-mounts runtime assets read-only at `/lab/infra`, `/lab/agents`, and
   `/lab/orchestrators/<type>`;
 - keeps `/lab/work` as internal writable lab state inside the Docker volume;
@@ -51,6 +56,14 @@ This matches the Lima driver contract: runtime assets are read-only, while
 `/lab/git` and `/lab/recordings` are host-visible writable per-lab state
 directories under `.lab-state/<lab>/`. `/lab/work` is writable but remains
 internal to the lab for stronger isolation.
+
+Docker labs created before the `--init` change keep `sleep infinity` as PID 1
+and the old `systemctl` shim, which reported success for `systemctl --user`;
+remove and recreate them (`taxiway rm`, then `taxiway up`) to get the init and
+the current shim.
+
+Phase scripts receive `TAXIWAY_GUEST_KIND=container` in Docker labs; see
+[Adapter Boundary](../reference/architecture.md#adapter-boundary).
 
 The default image is `ubuntu:24.04`. It follows the tag so lab containers pick
 up upstream image patch updates when Docker pulls the image.

@@ -54,6 +54,9 @@ func NewDockerDriver(stateDir string) *DockerDriver {
 
 func (d *DockerDriver) Name() string { return "docker" }
 
+// GuestKind reports a container guest: an init as PID 1 and no systemd.
+func (d *DockerDriver) GuestKind() string { return GuestKindContainer }
+
 // idDir returns the sidecar directory for a given lab/lab name.
 func (d *DockerDriver) idDir(id string) string {
 	return filepath.Join(d.stateDir, config.LabDirOf(id))
@@ -213,24 +216,26 @@ func (d *DockerDriver) Create(_ context.Context, id string, opts CreateOptions) 
 	// 5. Install container-environment shims so that bootstrap.sh and other
 	// lab scripts run identically inside Docker containers and Lima labs.
 	//
-	// Shim A — systemctl no-op stub
-	// ─────────────────────────────
+	// Shim A — systemctl stub
+	// ─────────────────────────
 	// `curl -fsSL https://get.docker.com | sh` (called by bootstrap.sh when
 	// Docker is absent) invokes `systemctl enable --now docker.service` to
 	// enable the daemon.  In a container there is no systemd init, so systemctl
-	// exits non-zero and the install script fails.  We place a no-op stub at
-	// /usr/local/bin/systemctl (higher priority than /bin/systemctl) that exits
-	// 0 for every invocation.  The stub is intentionally installed by the
-	// driver, not by bootstrap.sh, so the script itself is unchanged.
+	// exits non-zero and the install script fails.  We place a stub at
+	// /usr/local/bin/systemctl (higher priority than /bin/systemctl) that
+	// accepts those system-manager calls as no-ops.  The stub is intentionally
+	// installed by the driver, not by bootstrap.sh, so the script itself is
+	// unchanged.
 	//
-	// The stub prints a notice to stderr so runs are observable:
-	//   [docker-shim] systemctl <args> — no-op (no systemd in container)
-	// The stub is written by piping its content to `tee` inside the container
-	// so that no shell quoting or escaping of newlines is needed on the host.
-	// Double-quoted echo expands $@ so the actual arguments appear in the log.
-	systemctlStub := "#!/bin/sh\n" +
-		"echo \"[docker-shim] systemctl $@ — no-op (no systemd in container)\" >&2\n" +
-		"exit 0\n"
+	// The stub never pretends that a per-user manager exists: `systemctl
+	// --user` fails, so tools probing for one (for example a supervisor that
+	// would install a user unit) take their documented container path.
+	//
+	// The stub prints a notice to stderr so runs are observable and keeps
+	// stdout empty. It is written by piping its content to `tee` inside the
+	// container so that no shell quoting or escaping of newlines is needed on
+	// the host.
+	systemctlStub := dockerSystemctlStub
 	teeCmd := exec.Command("docker", "exec", "-i", id, "tee", "/usr/local/bin/systemctl") //nolint:gosec
 	teeCmd.Stdin = strings.NewReader(systemctlStub)
 	if out, err := teeCmd.CombinedOutput(); err != nil {
@@ -243,9 +248,26 @@ func (d *DockerDriver) Create(_ context.Context, id string, opts CreateOptions) 
 	return nil
 }
 
+// dockerSystemctlStub is installed at /usr/local/bin/systemctl in Docker labs.
+// System-manager calls are no-ops; per-user manager calls fail truthfully.
+const dockerSystemctlStub = `#!/bin/sh
+for arg in "$@"; do
+  if [ "$arg" = "--user" ]; then
+    echo "[docker-shim] no systemd user manager in container: systemctl $*" >&2
+    exit 1
+  fi
+done
+echo "[docker-shim] systemctl $* — no-op (no systemd in container)" >&2
+exit 0
+`
+
 func dockerRunArgs(id, volName string, opts CreateOptions, image string) []string {
 	args := []string{
 		"run", "-d",
+		// The guest runs long-lived services (orchestrator supervisors and
+		// their children). Docker's init reaps orphaned processes, as PID 1
+		// does in a VM; `sleep infinity` alone would leave them as zombies.
+		"--init",
 		"--name", id,
 		"--add-host", config.LabLiteLLMInternalHost(opts.Lab) + ":host-gateway",
 		"-e", "USER=" + dockerLabUser,

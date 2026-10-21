@@ -90,5 +90,5 @@ func TestOrchestratorsRealRepo(t *testing.T) {
 
 	names, err := Orchestrators(repoRoot)
 	require.NoError(t, err)
-	require.Equal(t, []string{"claude-code", "codex", "gastown"}, names)
+	require.Equal(t, []string{"claude-code", "codex", "gascity", "gastown"}, names)
 }

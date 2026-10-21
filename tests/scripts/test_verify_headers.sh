@@ -29,6 +29,7 @@ write_fake_bin() {
 }
 
 write_fake_bin gt 'case "${1:-}" in version|--version) echo "gt version test";; *) echo "gt: unsupported $*" >&2; exit 1;; esac'
+write_fake_bin gc 'case "${1:-}" in version) echo "1.5.0";; *) echo "gc: unsupported $*" >&2; exit 1;; esac'
 write_fake_bin bd 'case "${1:-}" in version|--version) echo "bd version test";; *) echo "bd: unsupported $*" >&2; exit 1;; esac'
 write_fake_bin dolt 'case "${1:-}" in version|--version) echo "dolt version test";; *) echo "dolt: unsupported $*" >&2; exit 1;; esac'
 write_fake_bin sqlite3 'case "${1:-}" in --version) echo "sqlite3 version test";; *) echo "sqlite3: unsupported $*" >&2; exit 1;; esac'
@@ -70,6 +71,11 @@ assert_first_header \
   "gastown verify starts with binaries section" \
   "$REPO_DIR/orchestrators/gastown/verify.sh" \
   "[gastown-verify] binaries"
+
+assert_first_header \
+  "gascity verify starts with binaries section" \
+  "$REPO_DIR/orchestrators/gascity/verify.sh" \
+  "[gascity-verify] binaries"
 
 assert_first_header \
   "codex agent verify starts with binaries section" \

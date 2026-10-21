@@ -165,8 +165,23 @@ flowchart LR
 ```
 
 Taxiway owns the lab lifecycle and calls the adapter at known phase boundaries.
-The adapter owns the details of installing, verifying, configuring, and starting
-the specific orchestrator.
+The adapter owns the details of installing, verifying, configuring, starting and
+stopping the specific orchestrator. Before `taxiway reset` clears `/lab/work`,
+Taxiway runs the adapter's optional `stop.sh`, which stops the services it
+started; `infra/commands/reset.sh` only clears the workspace and knows no
+orchestrator. A failing `stop.sh` aborts the reset before anything is deleted.
+
+Every script Taxiway runs in a lab (phase scripts, agent hooks and
+`reset.sh`) receives `TAXIWAY_GUEST_KIND`, declared by the lab's driver:
+`container` for Docker labs and `vm` for Lima labs. Adapters use it to pick each
+tool's official install and runtime method for that environment type, for
+example a detached foreground-style supervisor in a container and the tool's
+service unit in a VM. A container guest runs an init as PID 1 that reaps
+orphaned processes, and it has no systemd user manager: `systemctl --user`
+fails there instead of pretending to succeed. Adapters never mount the host
+Docker socket, and Taxiway does not fake a systemd user manager for them
+(system-manager calls remain logged no-ops only for the Docker engine install
+during bootstrap).
 
 Agents can optionally provide `trust-workspace.sh`. Taxiway calls this hook
 after agent installation for `/lab/work`, then again after repository
@@ -193,7 +208,7 @@ phase events.
 
 | Extension | Files to add or change |
 |---|---|
-| New orchestrator adapter | `orchestrators/<type>/manifest.yaml` and phase scripts |
+| New orchestrator adapter | `orchestrators/<type>/manifest.yaml`, phase scripts and optional `stop.sh` |
 | New supported agent CLI | `agents/<agent>/install.sh`, `verify.sh`, `auth.sh`, `doctor.sh`, and optional `trust-workspace.sh` |
 | New driver | Implementation of `internal/driver.Driver` and driver selection wiring |
 | New phase behavior | `internal/phases`, corresponding CLI command, and driver/adapter calls |

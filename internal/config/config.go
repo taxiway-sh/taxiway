@@ -260,6 +260,16 @@ func StartScript(repoDir, orch string) (string, error) {
 	return p, nil
 }
 
+// StopScript returns the path to the optional orchestrators/<orch>/stop.sh,
+// which stops the orchestrator's services before a reset, and whether it exists.
+func StopScript(repoDir, orch string) (string, bool) {
+	p := filepath.Join(repoDir, "orchestrators", orch, "stop.sh")
+	if _, err := os.Stat(p); err != nil {
+		return "", false
+	}
+	return p, true
+}
+
 // BootstrapScript returns the path to infra/commands/bootstrap.sh.
 func BootstrapScript(repoDir string) string {
 	return filepath.Join(repoDir, "infra", "commands", "bootstrap.sh")

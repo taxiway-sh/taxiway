@@ -23,8 +23,8 @@ body:
   - type: textarea
     id: direction
     attributes:
-      label: Proposed direction
-      description: Optional — a sketch of how it could work, kept open.
+      label: Possible directions
+      description: Optional — ways it could work, kept open and unranked.
     validations:
       required: false
   - type: textarea

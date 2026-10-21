@@ -1,4 +1,4 @@
-.PHONY: build snapshot completion completion-bash completion-fish completion-zsh test test-unit test-e2e test-e2e-only test-e2e-up test-e2e-prepare-run test-e2e-phase-by-phase test-e2e-codex test-e2e-codex-up test-e2e-codex-prepare-run test-e2e-codex-phase-by-phase test-e2e-claude-code test-e2e-claude-code-up test-e2e-claude-code-prepare-run test-e2e-claude-code-phase-by-phase test-e2e-gastown test-e2e-gastown-up test-e2e-gastown-prepare-run test-e2e-gastown-phase-by-phase lint lint-scripts lint-agent-docs test-scripts
+.PHONY: build snapshot completion completion-bash completion-fish completion-zsh test test-unit test-e2e test-e2e-only test-e2e-up test-e2e-prepare-run test-e2e-phase-by-phase test-e2e-codex test-e2e-codex-up test-e2e-codex-prepare-run test-e2e-codex-phase-by-phase test-e2e-claude-code test-e2e-claude-code-up test-e2e-claude-code-prepare-run test-e2e-claude-code-phase-by-phase test-e2e-gastown test-e2e-gastown-up test-e2e-gastown-prepare-run test-e2e-gastown-phase-by-phase test-e2e-gascity test-e2e-gascity-up test-e2e-gascity-prepare-run test-e2e-gascity-phase-by-phase lint lint-scripts lint-agent-docs test-scripts
 
 .PHONY: test-release-tools
 
@@ -6,6 +6,12 @@ build:
 	go build ./...
 
 E2E_TIMEOUT ?= 1200s
+# Go test timeouts: one scenario, one Gas City scenario (a full city restarts
+# several times; PhaseByPhase takes about 30 minutes), and the aggregate
+# targets that run several orchestrators in sequence (all twelve scenarios
+# take about 2.5 hours).
+E2E_GASCITY_TIMEOUT ?= 3600s
+E2E_SUITE_TIMEOUT ?= 4h
 
 snapshot:
 	go run github.com/goreleaser/goreleaser/v2@latest release --snapshot --clean
@@ -59,27 +65,27 @@ test-unit:
 ## test-e2e: run end-to-end tests (requires a running Docker daemon)
 ## Usage: make test-e2e
 test-e2e:
-	go test -v -tags=e2e -count=1 -timeout=$(E2E_TIMEOUT) ./...
+	go test -v -tags=e2e -count=1 -timeout=$(E2E_SUITE_TIMEOUT) ./...
 
 ## test-e2e-only: run only end-to-end tests (requires relevant local services)
 ## Usage: make test-e2e-only
 test-e2e-only:
-	go test -v -tags=e2e -count=1 -timeout=$(E2E_TIMEOUT) -run '^TestE2E_' ./...
+	go test -v -tags=e2e -count=1 -timeout=$(E2E_SUITE_TIMEOUT) -run '^TestE2E_' ./...
 
 ## test-e2e-up: run only up end-to-end tests
 ## Usage: make test-e2e-up
 test-e2e-up:
-	go test -v -tags=e2e -count=1 -timeout=$(E2E_TIMEOUT) -run '^TestE2E_Orchestrator.*_Up$$' ./internal/cli
+	go test -v -tags=e2e -count=1 -timeout=$(E2E_SUITE_TIMEOUT) -run '^TestE2E_Orchestrator.*_Up$$' ./internal/cli
 
 ## test-e2e-prepare-run: run only prepare+run end-to-end tests
 ## Usage: make test-e2e-prepare-run
 test-e2e-prepare-run:
-	go test -v -tags=e2e -count=1 -timeout=$(E2E_TIMEOUT) -run '^TestE2E_Orchestrator.*_PrepareRun$$' ./internal/cli
+	go test -v -tags=e2e -count=1 -timeout=$(E2E_SUITE_TIMEOUT) -run '^TestE2E_Orchestrator.*_PrepareRun$$' ./internal/cli
 
 ## test-e2e-phase-by-phase: run only phase-by-phase end-to-end tests
 ## Usage: make test-e2e-phase-by-phase
 test-e2e-phase-by-phase:
-	go test -v -tags=e2e -count=1 -timeout=$(E2E_TIMEOUT) -run '^TestE2E_Orchestrator.*_PhaseByPhase$$' ./internal/cli
+	go test -v -tags=e2e -count=1 -timeout=$(E2E_SUITE_TIMEOUT) -run '^TestE2E_Orchestrator.*_PhaseByPhase$$' ./internal/cli
 
 ## test-e2e-codex: run Codex orchestrator end-to-end tests
 ## Usage: make test-e2e-codex
@@ -137,6 +143,25 @@ test-e2e-gastown-prepare-run:
 ## Usage: make test-e2e-gastown-phase-by-phase
 test-e2e-gastown-phase-by-phase:
 	go test -v -tags=e2e -count=1 -timeout=$(E2E_TIMEOUT) -run '^TestE2E_OrchestratorGastown_PhaseByPhase$$' ./internal/cli
+
+## test-e2e-gascity: run Gas City orchestrator end-to-end tests
+## Usage: make test-e2e-gascity
+test-e2e-gascity: test-e2e-gascity-up test-e2e-gascity-prepare-run test-e2e-gascity-phase-by-phase
+
+## test-e2e-gascity-up: run Gas City up end-to-end test
+## Usage: make test-e2e-gascity-up
+test-e2e-gascity-up:
+	go test -v -tags=e2e -count=1 -timeout=$(E2E_GASCITY_TIMEOUT) -run '^TestE2E_OrchestratorGascity_Up$$' ./internal/cli
+
+## test-e2e-gascity-prepare-run: run Gas City prepare+run end-to-end test
+## Usage: make test-e2e-gascity-prepare-run
+test-e2e-gascity-prepare-run:
+	go test -v -tags=e2e -count=1 -timeout=$(E2E_GASCITY_TIMEOUT) -run '^TestE2E_OrchestratorGascity_PrepareRun$$' ./internal/cli
+
+## test-e2e-gascity-phase-by-phase: run Gas City phase-by-phase end-to-end test
+## Usage: make test-e2e-gascity-phase-by-phase
+test-e2e-gascity-phase-by-phase:
+	go test -v -tags=e2e -count=1 -timeout=$(E2E_GASCITY_TIMEOUT) -run '^TestE2E_OrchestratorGascity_PhaseByPhase$$' ./internal/cli
 
 lint: lint-scripts lint-agent-docs
 	@out=$$(find . -name '*.go' -not -path './vendor/*' \

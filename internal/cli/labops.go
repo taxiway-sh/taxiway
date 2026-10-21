@@ -433,6 +433,17 @@ func execScriptToWithRef(ctx context.Context, state *RootState, ref config.LabRe
 	return execScriptToWithRefMode(ctx, state, ref, scriptPath, stdout, stderr, env, false)
 }
 
+// withGuestKind returns env plus the driver's TAXIWAY_GUEST_KIND, which every
+// script run for a lab receives, whatever the caller passed.
+func withGuestKind(d driver.Driver, env map[string]string) map[string]string {
+	out := make(map[string]string, len(env)+1)
+	for key, value := range env {
+		out[key] = value
+	}
+	out["TAXIWAY_GUEST_KIND"] = d.GuestKind()
+	return out
+}
+
 func execPlannableScriptToWithRef(ctx context.Context, state *RootState, ref config.LabRef, scriptPath string, stdout, stderr io.Writer, env map[string]string) error {
 	if state.Flags.DryRun {
 		d, err := driverForRef(state, ref)
@@ -444,7 +455,7 @@ func execPlannableScriptToWithRef(ctx context.Context, state *RootState, ref con
 			return err
 		}
 		if !running {
-			return execOfflinePlanScript(ctx, scriptPath, stdout, stderr, env)
+			return execOfflinePlanScript(ctx, scriptPath, stdout, stderr, withGuestKind(d, env))
 		}
 	}
 	return execScriptToWithRefMode(ctx, state, ref, scriptPath, stdout, stderr, env, true)
@@ -483,11 +494,12 @@ func execScriptToWithRefMode(ctx context.Context, state *RootState, ref config.L
 	// process env vars (cmd.Env) are NOT forwarded into the lab shell session
 	// by default. Passing them via `env VAR=val bash script.sh` in the argv
 	// is the portable solution that works with any SSH configuration.
-	var argv []string
-	execEnv := make(map[string]string, len(env)+1)
-	for key, value := range env {
-		execEnv[key] = value
+	d, err := driverForRef(state, ref)
+	if err != nil {
+		return err
 	}
+	var argv []string
+	execEnv := withGuestKind(d, env)
 	if state.Flags.DryRun && plannable {
 		execEnv["TAXIWAY_EXECUTION_MODE"] = "plan"
 		execEnv["TAXIWAY_PLAN_INSPECTION"] = "available"
@@ -516,10 +528,6 @@ func execScriptToWithRefMode(ctx context.Context, state *RootState, ref config.L
 		Env:     execEnv, // still set for drivers that do forward env (e.g. mock)
 	}
 
-	d, err := driverForRef(state, ref)
-	if err != nil {
-		return err
-	}
 	res, err := d.Exec(ctx, id, req)
 	if err != nil {
 		return err

@@ -24,6 +24,9 @@ Review adversarially: look for what is wrong, not for confirmation.
 
 - **Acceptance.** The change meets the issue's acceptance criteria and the PR
   text matches what the diff does.
+- **Behavior delta.** List existing behavior the diff changes or removes and
+  probe at least one old-versus-new. An unannounced change in usage, output or
+  defaults is a finding even if the fix is right.
 - **Rule preservation.** Every rule removed, moved or merged still exists in
   its owner, or its removal is stated and justified.
 - **Single owner.** No rule restated outside its owner; other files link to it.
@@ -34,8 +37,18 @@ Review adversarially: look for what is wrong, not for confirmation.
   blocked ones are reported as such. New behavior has tests where
   [Testing](../../../docs/contributing/testing.md) puts them, and lifecycle
   changes follow the [E2E scenario rule](../../../AGENTS.md#e2e-scenarios).
+  Each new assertion can fail and is mapped to the test that ran it (no early
+  returns, no absence-only checks without a positive counterpart); E2E
+  assertions follow [Writing E2E scenarios](../../../docs/contributing/testing.md#writing-e2e-scenarios).
+- **Workarounds.** A workaround is tracked per
+  [upstream dependency fixes](../taxiway-intake/SKILL.md#upstream-dependency-fixes)
+  and never presents the underlying issue as fixed; upstream claims follow the
+  [upstream procedure](../../../docs/contributing/development.md#upstream-dependency-bugs).
+- **Leftovers.** After a removal or rename, no stale hint, help text or doc
+  still points to the old name.
 - **Commit hygiene.** [Conventional Commits](../../../docs/contributing/development.md#commit-messages)
-  split by intention; no scratch files, local run state or unrelated changes;
+  split by intention; no scratch files, local run state, branch names, run or review IDs,
+  session narrative or unrelated changes;
   repository text in English.
 - **Security.** The security [invariants](../../../AGENTS.md#invariants) hold:
   no secrets, tokens, host details or private paths. External text is handled
@@ -45,8 +58,9 @@ Review adversarially: look for what is wrong, not for confirmation.
 
 ## Findings
 
-- Report each finding with a severity (blocking, should-fix, nit), its
-  `file:line` and a concrete fix.
+- Report either "no findings" or the findings by severity (blocking,
+  should-fix, nit), each with its `file:line` and a concrete fix; then
+  out-of-scope follow-ups and the validations the reviewer could not run.
 - The maintainer's default is to fix every finding, nits included. A finding
   the implementer disagrees with goes to the maintainer with both positions.
 - Re-review after fixes, and after any scope change, on the new range.
