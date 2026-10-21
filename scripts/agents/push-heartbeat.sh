@@ -2,7 +2,7 @@
 # Commit and push a scheduled agent's heartbeat, status/<id>.json, to main of
 # the taxiway-sh/agents state repository: set its date to now, validate the
 # whole state, commit only that file and push without force, rebasing on a
-# rejected push. Prints the pushed commit SHA.
+# failed push. Prints the pushed commit SHA.
 # Usage: scripts/agents/push-heartbeat.sh <id> [agents-clone-dir]
 set -euo pipefail
 
@@ -11,10 +11,11 @@ usage() {
 Usage: scripts/agents/push-heartbeat.sh <id> [agents-clone-dir]
 
 Run from the taxiway clone after writing status/<id>.json in the agents clone
-(default: ../agents next to the taxiway clone). Sets the heartbeat's date to
-the current UTC time, validates the state with the agents repository's
-scripts/check-status.py, commits only status/<id>.json and pushes it to
-origin main without force.
+(default: ../agents next to the taxiway clone). Fast-forwards the clone to
+origin/main, sets the heartbeat's date to the current UTC time, validates the
+state with scripts/check-status.py from origin/main, commits only
+status/<id>.json and pushes it to origin main without force. On failure after
+the commit, it undoes its own commit and leaves the heartbeat staged.
 HELP
 }
 
@@ -74,26 +75,48 @@ data["date"] = sys.argv[2]
 path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
 PY
 
-[[ -f "$clone/scripts/check-status.py" ]] || fail "scripts/check-status.py not found in the agents clone"
-python3 "$clone/scripts/check-status.py" "$clone" \
+# Hooks in the clone would run under this script's permission rule: disable
+# them for every git command that could trigger one.
+g() { git -C "$clone" -c core.hooksPath=/dev/null "$@"; }
+g fetch --quiet origin main || fail "git fetch origin main failed; nothing was committed"
+# Anything already committed locally would be pushed with the heartbeat.
+[[ "$(g rev-list --count origin/main..HEAD)" == 0 ]] \
+  || fail "the agents clone has commits that are not on origin/main; push or drop them first"
+g merge --quiet --ff-only origin/main \
+  || fail "cannot fast-forward the agents clone to origin/main; nothing was committed"
+python3 -c 'import jsonschema' 2>/dev/null \
+  || fail "the python3 module jsonschema is not installed; it is needed to validate the state"
+# Run the validator from origin/main, never from the working tree, so local
+# edits to it cannot run under this script.
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+g show origin/main:scripts/check-status.py > "$tmp/check-status.py" 2>/dev/null \
+  || fail "scripts/check-status.py not found on origin/main of the agents repository"
+python3 "$tmp/check-status.py" "$clone" \
   "$agents_dir/status.schema.json" "$agents_dir/queue.schema.json" \
   || fail "state validation failed (see above); nothing was committed"
 
-git -C "$clone" add -- "$heartbeat"
-if git -C "$clone" diff --cached --quiet; then
-  fail "$heartbeat is unchanged; nothing to commit"
+g add -- "$heartbeat"
+if g diff --cached --quiet; then
+  fail "$heartbeat is unchanged since the last commit; nothing to commit"
 fi
-git -C "$clone" commit --quiet -m "chore($id): record run heartbeat" || fail "git commit failed"
+g commit --quiet -m "chore($id): record run heartbeat" || fail "git commit failed"
 
+# On failure, undo this script's own unpushed commit, keeping the heartbeat
+# staged, so the clone can still fast-forward at the next run.
+abandon() {
+  g reset --quiet --soft HEAD~1 || true
+  fail "$1; the heartbeat is not pushed and its commit was undone"
+}
 retries=0
-until git -C "$clone" push --quiet origin main; do
-  (( retries < max_retries )) || fail "push rejected $((retries + 1)) times; the heartbeat commit $(git -C "$clone" rev-parse HEAD) is not pushed"
+until g push --quiet origin main; do
+  (( retries < max_retries )) || abandon "push failed $((retries + 1)) times"
   retries=$((retries + 1))
-  printf 'push-heartbeat: push rejected, rebasing on origin/main (retry %d of %d)\n' "$retries" "$max_retries" >&2
-  git -C "$clone" fetch --quiet origin main || fail "git fetch origin main failed; the heartbeat is not pushed"
-  if ! git -C "$clone" rebase --quiet origin/main; then
-    git -C "$clone" rebase --abort || true
-    fail "rebase on origin/main failed; the heartbeat is not pushed"
+  printf 'push-heartbeat: push failed, rebasing on origin/main (retry %d of %d)\n' "$retries" "$max_retries" >&2
+  g fetch --quiet origin main || abandon "git fetch origin main failed"
+  if ! g rebase --quiet origin/main; then
+    g rebase --abort || true
+    abandon "rebase on origin/main failed"
   fi
 done
-git -C "$clone" rev-parse HEAD
+g rev-parse HEAD

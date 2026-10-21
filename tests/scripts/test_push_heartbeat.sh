@@ -24,6 +24,11 @@ git config --global user.email 'agent@example.invalid'
 git config --global init.defaultBranch main
 git config --global "url.$origin.insteadOf" https://github.com/taxiway-sh/agents
 git init --quiet --bare "$origin"
+# The script requires jsonschema, which the real validator imports; the
+# stand-in below does not need it, so an empty module satisfies the check.
+mkdir -p "$test_dir/py"
+touch "$test_dir/py/jsonschema.py"
+export PYTHONPATH="$test_dir/py"
 
 # The state repository's validator is not available here: this stand-in checks
 # the arguments it receives and the heartbeat fields this test relies on.
@@ -52,9 +57,11 @@ git -C "$seed" commit --quiet -m 'chore: seed state'
 git -C "$seed" push --quiet https://github.com/taxiway-sh/agents main
 git clone --quiet https://github.com/taxiway-sh/agents "$agents"
 
-heartbeat() { # id result
+runs=0
+heartbeat() { # id result; each heartbeat differs, even within one second
+  runs=$((runs + 1))
   cat > "$agents/status/$1.json" <<JSON
-{"id": "$1", "date": "2000-01-01T00:00:00Z", "result": "$2", "summary": "Test run.",
+{"id": "$1", "date": "2000-01-01T00:00:00Z", "result": "$2", "summary": "Test run $runs.",
  "waiting": [], "promptVersion": "$(printf '0%.0s' {1..40})", "frictions": []}
 JSON
 }
@@ -72,8 +79,13 @@ expect_fail() { # message-pattern command...
 }
 origin_head() { git --git-dir="$origin" rev-parse main; }
 
-# Success, with the default clone directory, run from the taxiway clone.
+# Success, with the default clone directory, run from the taxiway clone. An
+# untracked file is left alone, and the clone's hooks do not run.
 heartbeat demo ok
+echo scratch > "$agents/notes.txt"
+printf '#!/usr/bin/env bash\ntouch "%s/hook-ran"\n' "$test_dir" > "$agents/.git/hooks/pre-commit"
+cp "$agents/.git/hooks/pre-commit" "$agents/.git/hooks/pre-push"
+chmod +x "$agents/.git/hooks/pre-commit" "$agents/.git/hooks/pre-push"
 before="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 sha="$(cd "$taxiway" && scripts/agents/push-heartbeat.sh demo)"
 after="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -87,9 +99,12 @@ python3 - "$agents/status/demo.json" "$before" "$after" <<'PY'
 import json, sys
 data = json.load(open(sys.argv[1]))
 assert sys.argv[2] <= data["date"] <= sys.argv[3], data["date"]
-assert data["summary"] == "Test run." and data["frictions"] == [], data
+assert data["summary"] == "Test run 1." and data["frictions"] == [], data
 PY
-echo 'PASS: date set to now, only the heartbeat committed and pushed, SHA printed'
+[[ -f "$agents/notes.txt" && ! -e "$test_dir/hook-ran" ]] \
+  || { echo 'FAIL: untracked file touched or a clone hook ran' >&2; exit 1; }
+rm "$agents/notes.txt" "$agents/.git/hooks/pre-commit" "$agents/.git/hooks/pre-push"
+echo 'PASS: date set to now, only the heartbeat committed and pushed, SHA printed, no hooks'
 
 # Bad ids.
 for id in 'Demo' '9demo' '../demo' 'demo/x' '-demo' ''; do
@@ -129,31 +144,106 @@ git -C "$agents" reset --quiet -- deployed.json
 git -C "$agents" checkout --quiet -- deployed.json
 echo 'PASS: other staged or modified files refused'
 
-# Push race: another agent pushed its heartbeat since this clone last fetched.
+# A local commit that is not on origin/main would be pushed with the heartbeat:
+# refused.
+git -C "$agents" stash --quiet
+echo '{"agents": {}}' > "$agents/deployed.json"
+git -C "$agents" commit --quiet --allow-empty -m 'local change'
+expect_fail 'not on origin/main' "$script" demo "$agents"
+git -C "$agents" reset --quiet --hard origin/main
+git -C "$agents" stash pop --quiet
+echo 'PASS: unpushed local commits refused'
+
+# The validator runs from origin/main, not from the clone's working tree.
+updater="$test_dir/updater"
+git clone --quiet https://github.com/taxiway-sh/agents "$updater"
+sed -i "1i open('$test_dir/origin-validator-ran', 'w')" "$updater/scripts/check-status.py"
+git -C "$updater" commit --quiet -am 'validator update'
+git -C "$updater" push --quiet origin main
+"$script" demo "$agents" >/dev/null 2>"$test_dir/ff.err" || { cat "$test_dir/ff.err" >&2; exit 1; }
+[[ -e "$test_dir/origin-validator-ran" ]] || { echo 'FAIL: the validator did not come from origin/main' >&2; exit 1; }
+! grep -q 'push failed' "$test_dir/ff.err" \
+  || { echo 'FAIL: the clone was not fast-forwarded before the commit' >&2; exit 1; }
+# A local edit of the validator hidden from git diff does not run either.
+git -C "$agents" update-index --skip-worktree scripts/check-status.py
+sed -i "1i open('$test_dir/local-validator-ran', 'w')" "$agents/scripts/check-status.py"
+heartbeat demo ok
+"$script" demo "$agents" >/dev/null
+[[ ! -e "$test_dir/local-validator-ran" ]] || { echo 'FAIL: the local validator ran' >&2; exit 1; }
+git -C "$agents" update-index --no-skip-worktree scripts/check-status.py
+git -C "$agents" checkout --quiet -- scripts/check-status.py
+echo 'PASS: clone fast-forwarded, validator taken from origin/main'
+
+# Without jsonschema, the script says so instead of reporting a bad state.
+mkdir -p "$test_dir/nojs"
+printf '#!/usr/bin/env bash\n[[ "$*" == "-c import jsonschema" ]] && exit 1\nexec %q "$@"\n' \
+  "$(command -v python3)" > "$test_dir/nojs/python3"
+chmod +x "$test_dir/nojs/python3"
+heartbeat demo ok
+PATH="$test_dir/nojs:$PATH" expect_fail 'jsonschema is not installed' "$script" demo "$agents"
+echo 'PASS: missing jsonschema reported'
+
+# Push race: another agent's heartbeat lands on main between this script's
+# fetch and its push. A one-shot pre-receive hook moves main to that commit,
+# prepared on a side branch, then rejects the push.
 other="$test_dir/other"
 git clone --quiet https://github.com/taxiway-sh/agents "$other"
 cp "$agents/status/demo.json" "$other/status/other.json"
 sed -i 's/"demo"/"other"/' "$other/status/other.json"
 git -C "$other" add status/other.json
 git -C "$other" commit --quiet -m 'chore(other): record run heartbeat'
-git -C "$other" push --quiet origin main
-theirs="$(origin_head)"
+git -C "$other" push --quiet origin HEAD:refs/heads/side
+theirs="$(git -C "$other" rev-parse HEAD)"
+race_hook() { # commit that lands on main during the next push
+  rm -f "$test_dir/raced"
+  cat > "$origin/hooks/pre-receive" <<SH
+#!/usr/bin/env bash
+[[ -e "$test_dir/raced" ]] && exit 0
+touch "$test_dir/raced"
+env -u GIT_QUARANTINE_PATH -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES \
+  git --git-dir="$origin" update-ref refs/heads/main "$1"
+exit 1
+SH
+  chmod +x "$origin/hooks/pre-receive"
+}
+race_hook "$theirs"
 heartbeat demo partial
 sha="$("$script" demo "$agents" 2>"$test_dir/race.err")"
-grep -q 'push rejected, rebasing' "$test_dir/race.err" || { echo 'FAIL: no rejected push in the race' >&2; exit 1; }
+grep -q 'push failed, rebasing' "$test_dir/race.err" || { echo 'FAIL: no failed push in the race' >&2; exit 1; }
 [[ "$(origin_head)" == "$sha" && "$(git --git-dir="$origin" rev-parse "$sha^")" == "$theirs" ]] \
   || { echo 'FAIL: heartbeat not rebased onto the other push' >&2; exit 1; }
 echo 'PASS: rejected push rebased and retried'
 
-# A push that keeps failing stops after three retries, without force.
+# A rebase conflict stops, and the script undoes its own commit.
+git -C "$other" fetch --quiet origin main
+git -C "$other" reset --quiet --hard origin/main
+python3 - "$other/status/demo.json" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+data["summary"] = "Edited elsewhere."
+open(sys.argv[1], "w").write(json.dumps(data) + "\n")
+PY
+git -C "$other" commit --quiet -am 'edit demo elsewhere'
+git -C "$other" push --quiet origin HEAD:refs/heads/side2
+race_hook "$(git -C "$other" rev-parse HEAD)"
+before="$(git -C "$agents" rev-parse HEAD)"
+heartbeat demo ok
+expect_fail 'rebase on origin/main failed.*commit was undone' "$script" demo "$agents"
+[[ "$(git -C "$agents" rev-parse HEAD)" == "$before" && "$(git -C "$agents" diff --cached --name-only)" == status/demo.json ]] \
+  || { echo 'FAIL: the failed heartbeat commit was not undone' >&2; exit 1; }
+echo 'PASS: rebase conflict undoes the commit'
+
+# A push that keeps failing stops after three retries, without force, and
+# undoes the commit.
+git -C "$agents" reset --quiet --hard origin/main
 cat > "$origin/hooks/pre-receive" <<'SH'
 #!/usr/bin/env bash
 echo rejected >&2
 exit 1
 SH
-chmod +x "$origin/hooks/pre-receive"
 pushed="$(origin_head)"
 heartbeat demo failed
-expect_fail 'push rejected 4 times.*not pushed' "$script" demo "$agents"
-[[ "$(origin_head)" == "$pushed" ]] || { echo 'FAIL: origin changed' >&2; exit 1; }
+expect_fail 'push failed 4 times.*commit was undone' "$script" demo "$agents"
+[[ "$(origin_head)" == "$pushed" && "$(git -C "$agents" rev-parse HEAD)" == "$pushed" ]] \
+  || { echo 'FAIL: origin changed or the commit was not undone' >&2; exit 1; }
 echo 'PASS: gives up after three retries'
