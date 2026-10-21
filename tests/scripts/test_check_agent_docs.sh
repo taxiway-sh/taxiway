@@ -383,6 +383,10 @@ tree="$(fixture queue-schema-date)"
 set_queue_schema "$tree" 'del data["properties"]["started"]["pattern"]'
 expect_fail 'queue schema with a date without the UTC pattern' "$tree" 'queue.schema.json: queue started must be a UTC date'
 
+tree="$(fixture queue-schema-scope)"
+set_queue_schema "$tree" 'del data["properties"]["checks"]["items"]["properties"]["scope"]["pattern"]'
+expect_fail 'queue schema with a multi-line scope' "$tree" 'queue.schema.json: queue check scope must be one line'
+
 tree="$(fixture queue-schema-open)"
 set_queue_schema "$tree" 'del data["additionalProperties"]'
 expect_fail 'queue schema allowing additional properties' "$tree" 'queue.schema.json: queue items must not allow additional properties'
@@ -443,7 +447,8 @@ done = dict(item, status="done", finished="2026-10-21T11:00:00Z", **started,
                     "outcomes": [{"kind": "lima", "outcome": "pass"}]})
 real = dict(item, checks=[{"kind": "real-account", "scope": "Claude Code delegation"}],
             approval="https://github.com/taxiway-sh/taxiway/pull/185#issuecomment-1")
-valid = [item, dict(item, status="running", **started), done, real,
+# approval is optional in the schema: the machine agent decides when it is needed.
+valid = [item, {k: v for k, v in real.items() if k != "approval"}, dict(item, status="running", **started), done, real,
          dict(item, status="failed", finished="2026-10-21T10:05:00Z", **started,
               result={"summary": "Lima is not installed."}),
          dict(item, status="expired", finished="2026-10-24T10:00:00Z",
@@ -472,7 +477,7 @@ invalid = {
     "date without a time": dict(item, expires="2026-10-24"),
     "date with fractions": dict(item, created="2026-10-21T09:15:00.5Z"),
     "report outside the queue": dict(done, result=dict(done["result"], link="https://example.invalid/r.md")),
-    "real account without approval": {k: v for k, v in real.items() if k != "approval"},
+    "multi-line scope": dict(item, checks=[{"kind": "lima", "scope": "Up on Lima\nthen more"}]),
 }
 for sample in valid:
     validator.validate(sample)

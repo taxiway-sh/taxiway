@@ -149,6 +149,7 @@ QUEUE_SCHEMA = "queue.schema.json"
 QUEUE_REQUIRED = {"id", "link", "commit", "checks", "maxMinutes", "expires", "requester", "created", "status"}
 QUEUE_STATUSES = ["pending", "running", "done", "failed", "expired", "rejected"]
 QUEUE_DATES = ["expires", "created", "started", "finished"]
+ONE_LINE = "^[^\\n]*$"
 UTC_DATE = "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
 # A machine agent reads Taxiway, writes only the state repository, and takes
 # no action class: its queue and heartbeat writes are its run contract.
@@ -264,6 +265,12 @@ def check_queue_schema(schema):
     commit = props.get("commit")
     if not isinstance(commit, dict) or commit.get("pattern") != "^[0-9a-f]{40}$":
         errors.append(f"{rel(schema)}: queue commit must be a full SHA")
+    checks = props.get("checks") if isinstance(props.get("checks"), dict) else {}
+    items = checks.get("items") if isinstance(checks.get("items"), dict) else {}
+    fields = items.get("properties") if isinstance(items.get("properties"), dict) else {}
+    scope = fields.get("scope")
+    if not isinstance(scope, dict) or scope.get("pattern") != ONE_LINE:
+        errors.append(f"{rel(schema)}: queue check scope must be one line ({ONE_LINE})")
     for field in QUEUE_DATES:
         date = props.get(field)
         if not isinstance(date, dict) or date.get("pattern") != UTC_DATE:

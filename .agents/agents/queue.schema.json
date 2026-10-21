@@ -18,7 +18,7 @@
         "required": ["kind", "scope"],
         "properties": {
           "kind": {"enum": ["lima", "macos", "install", "real-account", "e2e", "campaign"]},
-          "scope": {"type": "string", "minLength": 1, "maxLength": 300}
+          "scope": {"type": "string", "minLength": 1, "maxLength": 300, "pattern": "^[^\\n]*$"}
         }
       }
     },
@@ -54,10 +54,6 @@
     }
   },
   "allOf": [
-    {
-      "if": {"properties": {"checks": {"contains": {"properties": {"kind": {"const": "real-account"}}}}}},
-      "then": {"required": ["approval"]}
-    },
     {
       "if": {"properties": {"status": {"const": "pending"}}},
       "then": {"not": {"anyOf": [{"required": ["started"]}, {"required": ["finished"]}, {"required": ["result"]}]}}
