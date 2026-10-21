@@ -88,22 +88,19 @@ Review adversarially: look for what is wrong, not for confirmation.
   out-of-scope follow-ups and the validations the reviewer could not run.
 - The maintainer's default is to fix every finding, nits included. A finding
   the implementer disagrees with goes to the maintainer with both positions.
-- Re-review after fixes, and after any scope change, on the new range.
-- The round that approves, with the verdict "no findings", covers the whole
-  range of the PR, `<base>...<head>`, not only the fixes. It goes to a fresh
-  subagent, or a fresh child session when
-  [Running the reviewer](#running-the-reviewer) calls for one, that is not
-  given, and does not read, the reports of earlier rounds in any form, posted
-  or not, nor follows the review links in the PR's Validation section; a round
-  that covers less, or was run with them, cannot approve. A finding it reports
-  that the maintainer already declined does not count against its verdict; the
-  agent that ran the round notes it as declined.
-- Keep reviews proportionate: on a small documentation change, one blind round
-  over the whole PR is enough when it finds nothing; add rounds only after
-  findings were fixed or the scope changed.
-- Problems that are global or outside the change become issue proposals
-  through [`taxiway-intake`](../taxiway-intake/SKILL.md), not fixes in this
-  change.
+- **Approving round.** It covers the whole PR, `<base>...<head>`, and goes to a
+  fresh reviewer, started as [Running the reviewer](#running-the-reviewer)
+  says, that neither receives nor reads the reports of earlier rounds. It
+  approves when it finds nothing blocking or should-fix within the PR's scope;
+  its remaining nits are fixed without a new round. A finding the maintainer
+  already declined does not count.
+- **Scope.** A finding that extends the PR beyond its starting scope, or a
+  problem outside the change, becomes an issue proposal through
+  [`taxiway-intake`](../taxiway-intake/SKILL.md), not a fix in this change.
+- **Tighter fixes.** A fix tightens or removes text rather than adding to it.
+- **Convergence.** After blocking or should-fix findings are fixed, a new
+  approving round follows. When two rounds after the first still find some,
+  stop and present the remaining findings to the maintainer.
 
 ## Review reports
 
