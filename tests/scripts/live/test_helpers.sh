@@ -287,7 +287,7 @@ import taxiway_live as live
 
 def run_cli(argv):
     stderr = io.StringIO()
-    with contextlib.redirect_stderr(stderr):
+    with contextlib.redirect_stderr(stderr), contextlib.redirect_stdout(io.StringIO()):
         try:
             status = live.cli(argv)
         except SystemExit as exit:
@@ -335,15 +335,62 @@ with tempfile.TemporaryDirectory(prefix="taxiway-diagnostic-test-") as root:
         provision.assert_not_called()
         print("PASS: --show-output is refused for authenticated runs before provisioning")
 
-    for failure in (subprocess.TimeoutExpired(["guest"], 5, output=b"partial progress", stderr=b""),
-                    live.CommandFailed("Expected stdout marker missing", b"partial progress")):
-        with patch.dict(os.environ, environment), patch.object(live, "command", return_value=b""), \
-             patch.object(live, "run_in_lab", side_effect=failure):
-            status, err = run_cli(["run", "--type", "codex", "--show-output", "--", "true"])
-            assert status == 1 and "partial progress" in err, err
-            status, err = run_cli(["run", "--type", "codex", "--", "true"])
-            assert status == 1 and "partial progress" not in err and "withheld" in err, err
+    with patch.dict(os.environ, environment), patch.object(live, "command", return_value=b""), \
+         patch.object(live, "run_in_lab", side_effect=subprocess.TimeoutExpired(["guest"], 5, output=b"partial progress", stderr=b"")):
+        status, err = run_cli(["run", "--type", "codex", "--show-output", "--", "true"])
+        assert status == 1 and "FAIL: timeout" in err and "partial progress" in err, err
+        status, err = run_cli(["run", "--type", "codex", "--", "true"])
+        assert status == 1 and "partial progress" not in err and "withheld" in err, err
+    # The real --expect check turns a missing marker into CommandFailed.
+    with patch.dict(os.environ, environment), patch.object(live, "command", return_value=b""), \
+         patch.object(live, "run_in_lab", return_value=b"partial progress"):
+        status, err = run_cli(["run", "--type", "codex", "--expect", "MARKER", "--show-output", "--", "true"])
+        assert status == 1 and "Expected stdout marker missing" in err and "partial progress" in err, err
+        status, err = run_cli(["run", "--type", "codex", "--expect", "MARKER", "--", "true"])
+        assert status == 1 and "partial progress" not in err and "withheld" in err, err
+        status, err = run_cli(["run", "--type", "codex", "--expect", "partial", "--show-output", "--", "true"])
+        assert status == 0, err
+    with patch.dict(os.environ, environment), patch.object(live, "command", return_value=b""), \
+         patch.object(live, "run_in_lab", side_effect=live.CommandFailed("bash exited 1")):
+        status, err = run_cli(["run", "--type", "codex", "--show-output", "--", "true"])
+        assert status == 1 and "FAIL: bash exited 1 (no captured output)" in err, err
     print("PASS: timeouts and missing markers show output only on request")
+
+    # One fixture per redaction pattern; none of the secret parts may survive.
+    fixtures = [
+        "postgres://taxiway:fixture-secret-url@db:5432/langfuse",
+        "DATABASE_URL=postgresql://user:fixture-secret-dburl@host/db",
+        "TAXIWAY_LITELLM_API_KEY=fixture-secret-env",
+        '{"accessToken": "fixture-secret-json"}',
+        "Authorization: Bearer fixture-secret-bearer",
+        "litellm --api-key fixture-secret-flag --port 4000",
+        "token sk-fixturesecretopenai",
+        "ghp_" + "A" * 36,
+        "github_pat_" + "B" * 40,
+        "glpat-" + "C" * 20,
+        "xoxb-" + "1234567890-fixture",
+        "AKIA" + "D" * 16,
+        "eyJ" + "E" * 20 + "." + "F" * 20 + "." + "G" * 20,
+        "-----BEGIN RSA PRIVATE KEY-----\nfixture-secret-pem\n-----END RSA PRIVATE KEY-----",
+    ]
+    for fixture in fixtures:
+        shown = live.diagnostic_output(live.CommandFailed("x", fixture.encode()))
+        for part in ("fixture-secret", "fixturesecret", "A" * 36, "B" * 40, "C" * 20, "D" * 16, "E" * 20, "1234567890-fixture"):
+            assert part not in shown, (fixture, shown)
+        assert "<redacted" in shown, (fixture, shown)
+    shown = live.diagnostic_output(live.CommandFailed("x", b"postgres://taxiway:pw@db:5432/langfuse --port 4000"))
+    assert "postgres://taxiway:<redacted>@db:5432/langfuse" in shown and "--port 4000" in shown, shown
+    print("PASS: URL, environment, header, option and vendor token credentials are redacted")
+
+    with tempfile.TemporaryDirectory(prefix="taxiway-home-") as home:
+        with patch.dict(os.environ, dict(environment, HOME=home)):
+            shown = live.diagnostic_output(live.CommandFailed("x", (
+                f"{home}/.config/taxiway {home}name/other {root}/labs "
+                f"{os.path.realpath(home)}/resolved {live.Path(live.__file__).resolve().parents[2]}/tests\n").encode()))
+            assert "$HOME/.config/taxiway" in shown and "$HOME/resolved" in shown, shown
+            assert "$TAXIWAY_RUNTIME_DIR/labs" in shown and "<repository>/tests" in shown, shown
+            assert f"{home}name/other" in shown and "$HOMEname" not in shown, shown
+    print("PASS: host paths are named on path boundaries, including resolved forms")
 
     error = None
     try:
@@ -352,20 +399,34 @@ with tempfile.TemporaryDirectory(prefix="taxiway-diagnostic-test-") as root:
         error = caught
     assert error is not None and "fixture-diagnostic" not in str(error) + repr(error)
     assert "fixture-diagnostic" in live.diagnostic_output(error)
-    large = live.CommandFailed("x", b"a" * (live.DIAGNOSTIC_LIMIT * 3))
-    assert len(live.diagnostic_output(large)) < live.DIAGNOSTIC_LIMIT + 200
-    print("PASS: command() keeps output off the error message; diagnostics are bounded")
+    large = live.diagnostic_output(live.CommandFailed("x", b"a" * (live.DIAGNOSTIC_LIMIT * 3) + b"TAIL-MARKER"))
+    assert len(large) < live.DIAGNOSTIC_LIMIT + 200 and "[... truncated ...]" in large, large[:80]
+    assert large.rstrip().endswith("TAIL-MARKER"), "truncation must keep the tail"
+    print("PASS: command() keeps output off the error message; diagnostics keep the bounded tail")
 
-    with patch.object(live, "guest", side_effect=live.CommandFailed("bash exited 1", b"fixture")):
+    # Each credential path marks the process; diagnostics are refused afterwards.
+    def reject(*args, **kwargs):
+        raise live.CommandFailed("bash exited 1", b"fixture")
+    marks = (lambda: live.require_claude_auth("reference"),
+             lambda: live.propagate_claude_auth("source", "target"),
+             lambda: live.propagate_claude_onboarding("source", "target"))
+    for mark in marks:
+        live._credentials_handled = False
+        assert live.diagnostic_output(error)
+        with patch.object(live, "guest", side_effect=reject):
+            try:
+                mark()
+            except live.CommandFailed:
+                pass
         try:
-            live.propagate_claude_onboarding("source", "target")
-        except live.CommandFailed:
-            pass
-    try:
-        live.diagnostic_output(error)
-    except RuntimeError as refusal:
-        assert "refused after credential propagation" in str(refusal)
-    else:
-        raise AssertionError("diagnostic output allowed after credential propagation")
-    print("PASS: diagnostic output is refused once credentials were handled")
+            live.diagnostic_output(error)
+        except RuntimeError as refusal:
+            assert "refused after credential propagation" in str(refusal)
+        else:
+            raise AssertionError("diagnostic output allowed after credential handling")
+        with patch.dict(os.environ, environment), patch.object(live, "command", return_value=b""), \
+             patch.object(live, "run_in_lab", side_effect=live.CommandFailed("bash exited 1", b"fixture-hidden")):
+            status, err = run_cli(["run", "--type", "codex", "--show-output", "--", "true"])
+            assert "(diagnostic output refused after credential handling)" in err and "fixture-hidden" not in err, err
+    print("PASS: diagnostic output is refused once any credential path ran")
 PYTHON

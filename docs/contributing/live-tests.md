@@ -208,7 +208,8 @@ direnv exec . python3 tests/live/taxiway_live.py run \
 `run` prepares a uniquely named lab, propagates the login before starting any
 agent roles, runs the ordinary runtime phases,
 runs the command with the lab's own gateway environment, then removes only that
-temporary lab. Captured command output is not printed. A missing marker,
+temporary lab. Captured command output is not printed unless `--show-output`
+is given. A missing marker,
 nonzero exit or timeout fails the smoke check and still triggers cleanup.
 The reference login and shared Langfuse/proxy runtime remain available.
 
@@ -224,9 +225,11 @@ direnv exec . python3 tests/live/taxiway_live.py run \
 ```
 
 The output is sanitized: values of key, token, secret, password and
-authorization fields, bearer tokens, API-key and JWT shapes and private keys are
-redacted, the runtime directory and home are replaced by their variable names,
-and only the last 4000 characters of each stream are kept. The helper still
+authorization fields and options, credentials in URLs, bearer tokens, API-key,
+GitHub, GitLab, Slack, AWS and JWT token shapes and private keys are redacted;
+the runtime directory, the repository and home (and their resolved forms) are
+named instead of printed; only the last 4000 characters of each stream are
+kept. An empty capture prints `(no captured output)`. The helper still
 removes the owned lab. `--show-output` is refused with `--auth-lab`, and
 `diagnostic_output()` is refused once the process has handled a reference
 login, so authenticated runs keep withholding output. Redaction is a safety

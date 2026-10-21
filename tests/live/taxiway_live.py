@@ -17,9 +17,15 @@ _credentials_handled = False
 DIAGNOSTIC_LIMIT = 4000
 _REDACTIONS = (
     (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(-----END [A-Z ]*PRIVATE KEY-----|\Z)", re.S), "<redacted private key>"),
+    # Credentials embedded in URLs: scheme://user:password@host.
+    (re.compile(r"(?i)\b([a-z][a-z0-9+.-]*://[^/\s:@]+:)[^@\s]+@"), r"\1<redacted>@"),
     (re.compile(r"(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]+"), r"\1 <redacted>"),
+    # Command-line options taking a credential as the next argument.
+    (re.compile(r"(?i)(--?[a-z0-9-]*(?:key|token|secret|password|passwd|credential)[a-z0-9-]*\s+)(?!-)(\S+)"), r"\1<redacted>"),
     (re.compile(r"(?i)([\"']?[A-Za-z0-9_.-]*(?:key|token|secret|password|passwd|credential|auth|cookie)[A-Za-z0-9_.-]*[\"']?\s*[=:]\s*)(\"[^\"]*\"|'[^']*'|\S+)"), r"\1<redacted>"),
     (re.compile(r"\bsk-[A-Za-z0-9_-]{8,}"), "<redacted>"),
+    # Vendor token shapes: GitHub, GitLab, Slack, AWS access keys.
+    (re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{16,}|github_pat_[A-Za-z0-9_]{16,}|glpat-[A-Za-z0-9_-]{16,}|xox[abposr]-[A-Za-z0-9-]{8,}|(?:AKIA|ASIA)[0-9A-Z]{16})\b"), "<redacted>"),
     (re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*"), "<redacted>"),
 )
 
@@ -37,15 +43,28 @@ def _mark_credentials_handled():
     _credentials_handled = True
 
 
+def _host_paths():
+    """Host paths to name by variable, longest first, with their resolved forms."""
+    named = [(os.environ.get("TAXIWAY_RUNTIME_DIR"), "$TAXIWAY_RUNTIME_DIR"),
+             (str(Path(__file__).resolve().parents[2]), "<repository>"),
+             (os.environ.get("HOME"), "$HOME")]
+    paths = {}
+    for value, name in named:
+        if not value:
+            continue
+        for form in (value, os.path.abspath(value), os.path.realpath(value)):
+            form = form.rstrip("/")
+            if len(form) > 1:
+                paths.setdefault(form, name)
+    return sorted(paths.items(), key=lambda item: len(item[0]), reverse=True)
+
+
 def _sanitize(data):
     text = data.decode(errors="replace") if isinstance(data, bytes) else (data or "")
     for pattern, replacement in _REDACTIONS:
         text = pattern.sub(replacement, text)
-    # Name the variable instead of a host path.
-    for key in ("TAXIWAY_RUNTIME_DIR", "HOME"):
-        value = os.environ.get(key)
-        if value and len(value) > 1:
-            text = text.replace(value.rstrip("/"), "$" + key)
+    for path, name in _host_paths():
+        text = re.sub(r"(?<![A-Za-z0-9._-])" + re.escape(path) + r"(?![A-Za-z0-9._-])", name, text)
     if len(text) > DIAGNOSTIC_LIMIT:
         text = "[... truncated ...]\n" + text[-DIAGNOSTIC_LIMIT:]
     return text
@@ -358,7 +377,7 @@ def main(argv=None):
     run.add_argument("--repo")
     run.add_argument("--taxiway", default="./taxiway")
     run.add_argument("--timeout", type=int, default=180)
-    run.add_argument("--expect", help="Required stdout marker; captured output is not printed")
+    run.add_argument("--expect", help="Required stdout marker; captured output is not printed unless --show-output")
     run.add_argument("--show-output", action="store_true",
                      help="On failure, print sanitized captured output; refused with --auth-lab")
     run.add_argument("command", nargs=argparse.REMAINDER)
@@ -393,9 +412,9 @@ def main(argv=None):
         error.diagnostic = ""
         if args.show_output:
             try:
-                error.diagnostic = diagnostic_output(error)
+                error.diagnostic = diagnostic_output(error) or "(no captured output)"
             except RuntimeError:
-                pass
+                error.diagnostic = "(diagnostic output refused after credential handling)"
         raise
     print("PASS: command completed; temporary lab removed; reference login preserved.")
 
@@ -412,7 +431,9 @@ def cli(argv=None):
         message, diagnostic = f"FAIL: {error}", getattr(error, "diagnostic", "")
     except OSError:
         message = "FAIL: setup, execution, or cleanup failed"
-    if diagnostic:
+    if diagnostic.startswith("("):
+        print(f"{message} {diagnostic}", file=sys.stderr)
+    elif diagnostic:
         print(f"{message}\n{diagnostic}", file=sys.stderr)
     else:
         print(f"{message} (captured output withheld)", file=sys.stderr)
