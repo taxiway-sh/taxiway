@@ -85,6 +85,7 @@ jobs:
           body-path: ${{ runner.temp }}/model-catalog-review.md
           add-paths: infra/gateway/litellm/models.yaml
           draft: always-true
+          labels: automation, enhancement, capability:gateway
           delete-branch: true
       - name: Fail validation visibly after preparing review
         if: steps.build.outcome != 'success' || steps.unit.outcome != 'success' || steps.scripts.outcome != 'success' || steps.gofmt.outcome != 'success' || steps.lint.outcome != 'success' || steps.protocol.outcome != 'success'
