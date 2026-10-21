@@ -25,9 +25,9 @@ full guide lives in [docs/contributing](docs/contributing/README.md).
 - **Review.** Each PR gets a review against its linked issue: comments to
   address, or an approval. Some replies and reviews are drafted by an AI
   agent; the maintainer approves them before they are posted.
-- **CI approval.** For first-time contributors, GitHub runs CI on a fork PR
-  only after a maintainer approves it, so the first run may wait for that.
-  Your code runs only there, in fork-PR CI on GitHub-hosted runners, never on
+- **CI approval.** GitHub runs CI on a fork PR only after a maintainer has
+  read the changes and approved the run, so each run may wait for that. Your
+  code runs only there, in fork-PR CI on GitHub-hosted runners, never on
   a workstation or in a Taxiway lab. Lifecycle
   [E2E scenarios](AGENTS.md#e2e-scenarios) do not run on PRs: if your change
   affects them, the maintainer may reimplement it on a Taxiway branch so they
