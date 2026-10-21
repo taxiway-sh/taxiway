@@ -301,6 +301,43 @@ tree="$(fixture heartbeat-approvals-required)"
 sed -i.bak 's/"waiting", "promptVersion"\]/"waiting", "promptVersion", "approvals"]/' "$tree/.agents/agents/status.schema.json"
 expect_fail 'required approval log' "$tree" 'status.schema.json: approvals must stay optional'
 
+edit_schema() {
+  python3 - "$1/.agents/agents/status.schema.json" "$2" <<'PY2'
+import json, sys
+data = json.load(open(sys.argv[1]))
+exec(sys.argv[2], {"data": data, "frictions": data["properties"]["frictions"]})
+json.dump(data, open(sys.argv[1], "w"))
+PY2
+}
+
+tree="$(fixture heartbeat-frictions-required)"
+edit_schema "$tree" 'data["required"].append("frictions")'
+expect_fail 'required frictions' "$tree" 'status.schema.json: frictions must stay optional'
+
+tree="$(fixture heartbeat-frictions-missing)"
+edit_schema "$tree" 'del data["properties"]["frictions"]'
+expect_fail 'heartbeat schema without frictions' "$tree" 'status.schema.json: frictions must be an array'
+
+tree="$(fixture heartbeat-frictions-open-items)"
+edit_schema "$tree" 'frictions["items"]["additionalProperties"] = True'
+expect_fail 'frictions items with additional properties' "$tree" 'status.schema.json: frictions items must be objects without additional properties'
+
+tree="$(fixture heartbeat-frictions-fields)"
+edit_schema "$tree" 'frictions["items"]["required"] = ["kind"]'
+expect_fail 'frictions items missing a required field' "$tree" "status.schema.json: frictions items must require exactly ['kind', 'summary']"
+
+tree="$(fixture heartbeat-frictions-kinds)"
+edit_schema "$tree" 'frictions["items"]["properties"]["kind"]["enum"].remove("tool-refused")'
+expect_fail 'frictions without a kind' "$tree" 'status.schema.json: frictions kind must be one of'
+
+tree="$(fixture heartbeat-frictions-extra-field)"
+edit_schema "$tree" 'frictions["items"]["properties"]["session"] = {"type": "string"}'
+expect_fail 'frictions with an extra field' "$tree" "status.schema.json: frictions items must have exactly ['kind', 'link', 'summary']"
+
+tree="$(fixture heartbeat-frictions-link)"
+edit_schema "$tree" 'frictions["items"]["properties"]["link"]["pattern"] = "^https://"'
+expect_fail 'frictions link outside the project' "$tree" 'status.schema.json: frictions link must match'
+
 tree="$(fixture agent-orphan-prompt)"
 printf '# Gone\n' > "$tree/.agents/agents/gone.prompt.md"
 expect_fail 'prompt without declaration' "$tree" '.agents/agents/gone.prompt.md: no matching declaration'
@@ -331,8 +368,22 @@ for change in ({"answer": "maybe"}, {"link": "https://example.invalid/1"}, {"ext
 missing = {k: v for k, v in entry.items() if k != "answer"}
 if validator.is_valid(dict(base, approvals=[missing])):
     sys.exit("FAIL: approval entry without an answer was accepted")
+friction = {"kind": "tool-refused", "summary": "gh GraphQL calls were refused; used REST.",
+            "link": "https://github.com/taxiway-sh/taxiway/issues/1"}
+validator.validate(dict(base, frictions=[friction]))
+validator.validate(dict(base, frictions=[{k: v for k, v in friction.items() if k != "link"}]))
+for change in ({"kind": "annoyance"}, {"link": "https://github.com/other/repo/issues/1"},
+               {"link": "https://example.invalid/1"}, {"summary": ""}, {"summary": "x" * 201},
+               {"extra": 1}):
+    if validator.is_valid(dict(base, frictions=[dict(friction, **change)])):
+        sys.exit(f"FAIL: friction {change} was accepted")
+for field in ("kind", "summary"):
+    if validator.is_valid(dict(base, frictions=[{k: v for k, v in friction.items() if k != field}])):
+        sys.exit(f"FAIL: friction without {field} was accepted")
+if validator.is_valid(dict(base, frictions=[friction] * 21)):
+    sys.exit("FAIL: more than 20 frictions were accepted")
 PY2
-  echo 'PASS: heartbeat schema validates the approval log'
+  echo 'PASS: heartbeat schema validates the approval log and frictions'
 else
   echo 'SKIP: heartbeat schema samples (python jsonschema not installed)'
 fi

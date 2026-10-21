@@ -44,7 +44,11 @@ never rules:
   `proposal` (its id or link), `answer` (`ok`, `refused` or `corrected`),
   `date` (of the answer) and `link` (the GitHub item or the action taken).
   A heartbeat holds at most 50 answers; the rest are carried to the next run.
-  The history of `status/<id>.json` is the approval log;
+  Optionally, `frictions`: what got in the run's way, at most 20, each with
+  `kind` (`missing-rule`, `ambiguous-rule`, `contradictory-rule`,
+  `workaround`, `check-not-run` or `tool-refused`), `summary` (one sentence)
+  and, when there is one, `link` (a `taxiway-sh` GitHub item).
+  The history of `status/<id>.json` is the approval log and the friction log;
 - `deployed.json`: for each installed agent, its schedule, `model` and the
   `promptVersion` it was installed from. Session and scheduled task IDs stay
   out of it: install and check look them up, the session by tag and the
@@ -83,7 +87,10 @@ Each run then:
 3. records in `approvals` the maintainer's answers to its previous proposals,
    and every revert or correction of one of its `auto` actions as
    `corrected`; each answer is recorded once, by the first run that sees it;
-4. does the job in its prompt file;
+4. does the job in its prompt file, and records each friction it met in
+   `frictions` ([State repository](#state-repository)): a rule that was
+   missing, ambiguous or contradictory, a workaround it used, a check it could
+   not run or a tool that was refused;
 5. writes `status/<id>.json`, valid against
    [`status.schema.json`](../../agents/status.schema.json), commits and pushes
    it to `taxiway-sh/agents`;

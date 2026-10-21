@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Check agent docs and docs/ pages: skill frontmatter and discovery symlinks,
-# scheduled agent declarations, autonomy and heartbeat schema,
+# scheduled agent declarations, autonomy and heartbeat schema (approval log
+# and frictions),
 # relative Markdown links (pages under docs/ reach other files through blob
 # URLs), and normative phrases that must stay in their owner.
 # Usage: scripts/check-agent-docs.sh [repository-root]
@@ -141,6 +142,11 @@ AGENTS_SKILL = ".agents/skills/taxiway-agents/SKILL.md"
 HEARTBEAT_SCHEMA = "status.schema.json"
 APPROVAL_FIELDS = {"class", "proposal", "answer", "date", "link"}
 APPROVAL_ANSWERS = ["ok", "refused", "corrected"]
+FRICTION_FIELDS = {"kind", "summary"}
+FRICTION_KINDS = ["missing-rule", "ambiguous-rule", "contradictory-rule",
+                  "workaround", "check-not-run", "tool-refused"]
+# Heartbeat links stay on the project's own GitHub items.
+PROJECT_LINK = "^https://github\\.com/taxiway-sh/"
 
 
 def skill_table(text, heading):
@@ -202,6 +208,26 @@ def check_autonomy(name, autonomy, classes):
             errors.append(f"{name}: autonomy {action!r} can never be {level}")
 
 
+def check_heartbeat_list(schema, props, name, fields, enum_field, values):
+    """An optional heartbeat list of objects with exactly the required fields."""
+    node = props.get(name) if isinstance(props, dict) else None
+    if not isinstance(node, dict) or node.get("type") != "array":
+        errors.append(f"{rel(schema)}: {name} must be an array")
+        return None
+    items = node.get("items")
+    if not isinstance(items, dict) or items.get("additionalProperties") is not False:
+        errors.append(f"{rel(schema)}: {name} items must be objects without additional properties")
+        return None
+    if not isinstance(items.get("required"), list) or set(items["required"]) != fields:
+        errors.append(f"{rel(schema)}: {name} items must require exactly {sorted(fields)}")
+    item_props = items.get("properties")
+    item_props = item_props if isinstance(item_props, dict) else {}
+    enum = item_props.get(enum_field)
+    if not isinstance(enum, dict) or enum.get("enum") != values:
+        errors.append(f"{rel(schema)}: {name} {enum_field} must be one of {values}")
+    return item_props
+
+
 def check_heartbeat_schema(schema):
     data = json.loads(schema.read_text())
     if not isinstance(data, dict):
@@ -213,23 +239,19 @@ def check_heartbeat_schema(schema):
         required = []
     if "promptVersion" not in required:
         errors.append(f"{rel(schema)}: must require promptVersion")
-    if "approvals" in required:
-        errors.append(f"{rel(schema)}: approvals must stay optional")
+    for name in ("approvals", "frictions"):
+        if name in required:
+            errors.append(f"{rel(schema)}: {name} must stay optional")
     props = data.get("properties")
-    approvals = props.get("approvals") if isinstance(props, dict) else None
-    if not isinstance(approvals, dict) or approvals.get("type") != "array":
-        errors.append(f"{rel(schema)}: approvals must be an array")
-        return
-    items = approvals.get("items")
-    if not isinstance(items, dict) or items.get("additionalProperties") is not False:
-        errors.append(f"{rel(schema)}: approvals items must be objects without additional properties")
-        return
-    if not isinstance(items.get("required"), list) or set(items["required"]) != APPROVAL_FIELDS:
-        errors.append(f"{rel(schema)}: approvals items must require exactly {sorted(APPROVAL_FIELDS)}")
-    fields = items.get("properties")
-    answer = fields.get("answer") if isinstance(fields, dict) else None
-    if not isinstance(answer, dict) or answer.get("enum") != APPROVAL_ANSWERS:
-        errors.append(f"{rel(schema)}: approvals answer must be one of {APPROVAL_ANSWERS}")
+    check_heartbeat_list(schema, props, "approvals", APPROVAL_FIELDS, "answer", APPROVAL_ANSWERS)
+    frictions = check_heartbeat_list(schema, props, "frictions", FRICTION_FIELDS, "kind", FRICTION_KINDS)
+    if frictions is not None:
+        if set(frictions) != FRICTION_FIELDS | {"link"}:
+            errors.append(f"{rel(schema)}: frictions items must have exactly"
+                          f" {sorted(FRICTION_FIELDS | {'link'})}")
+        link = frictions.get("link")
+        if not isinstance(link, dict) or link.get("pattern") != PROJECT_LINK:
+            errors.append(f"{rel(schema)}: frictions link must match {PROJECT_LINK}")
 
 
 def check_agents():
