@@ -64,7 +64,7 @@ a merge, a date or a priority the maintainer has not given.
    [`CONTRIBUTING.md`](../../../CONTRIBUTING.md#claim-an-issue), the issue's
    acceptance criteria and the docs it touches (for example
    [Testing](../../../docs/contributing/testing.md) and the
-   [E2E scenario rule](../../../AGENTS.md#e2e-scenarios)). When taken, say
+   [E2E scenario rule](../taxiway-testing/SKILL.md#e2e-scenarios)). When taken, say
    who has it and suggest another `good first issue`.
 
 ### Question or extra evidence
@@ -103,7 +103,7 @@ issue is summarized for the maintainer; a new problem goes through
    says. Lifecycle E2Es do not run on PRs
    ([CI structure](../../../docs/contributing/testing.md#ci-structure)).
 6. **Merge path.** When the change affects lifecycle scenarios that could not
-   run, the [E2E merge rule](../../../AGENTS.md#e2e-scenarios) is unmet: the
+   run, the [E2E merge rule](../taxiway-testing/SKILL.md#e2e-scenarios) is unmet: the
    maintainer either reimplements the change on a maintainer branch,
    [crediting](#credit) the contributor, and runs the scenarios before merging,
    or merges only changes that affect no lifecycle scenario. Say which path
