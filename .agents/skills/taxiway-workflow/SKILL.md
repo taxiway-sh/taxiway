@@ -57,7 +57,8 @@ named so, or asks the maintainer to.
 2. Attach `taxiway-sh/agents` with push (`add_repo`, `access: push`) and clone
    it next to `taxiway` on `main`. Tell the maintainer first that the
    attachment waits for their approval in this session; a refused attachment
-   becomes a pending decision of step 5, retried once approved. When
+   becomes a pending decision of step 5, retried once approved, and steps 3-4
+   meanwhile read a read-only clone of the public repository. When
    `taxiway-sh/agents` does not exist,
    [Bootstrapping](../taxiway-agents/SKILL.md#bootstrapping) applies and the
    coordinator stops there.
@@ -77,7 +78,8 @@ named so, or asks the maintainer to.
    waits for the maintainer. Ask the pending decisions together, each with a
    recommendation: among them the Install Plan; the open PRs whose current
    head has an approving [independent review](../taxiway-review/SKILL.md) and
-   green CI, listed, of which the maintainer names those to merge, as
+   green CI, listed with any missing [Merge](../taxiway-issue/SKILL.md#8-merge)
+   criterion as a blocker, of which the maintainer names those to merge, as
    [Approvals](#approvals) requires; and archiving any other session titled
    `Taxiway – coordinator` that is not archived. Then ask the opening question
    unless the first message answered it.
