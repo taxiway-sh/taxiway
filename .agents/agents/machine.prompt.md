@@ -38,10 +38,9 @@ clone, oldest first, and for each one:
 2. **Claim.** Set `running` and `started`, then commit and push before running.
 3. **Run.** In a new worktree of the `taxiway` clone, in the run worktree
    directory outside the session's working directory, detached at `commit`,
-   run each requested check with the documented commands for its kind
-   ([Live validation](../../docs/contributing/live-tests.md),
-   [Testing](../../docs/contributing/testing.md),
-   [`taxiway-release`](../skills/taxiway-release/SKILL.md)), within
+   run each requested check as [`taxiway-testing`](../skills/taxiway-testing/SKILL.md)
+   and [`taxiway-release`](../skills/taxiway-release/SKILL.md) say for its
+   kind, with their documented commands, within
    `maxMinutes` in total, one heavy run at a time. A run that exceeds
    `maxMinutes` stops and ends `failed`, with the reason. Real-account checks
    use the reference logins already on the machine; a confirmed

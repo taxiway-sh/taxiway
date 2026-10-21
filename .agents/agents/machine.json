@@ -8,7 +8,7 @@
     "taxiway-sh/agents": "write"
   },
   "workdir": "taxiway",
-  "skills": ["taxiway-agents", "taxiway-release", "taxiway-security"],
+  "skills": ["taxiway-agents", "taxiway-testing", "taxiway-release", "taxiway-security"],
   "outputs": ["report", "queue/machine/", "status/machine.json"],
   "autonomy": {}
 }
