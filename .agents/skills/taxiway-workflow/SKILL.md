@@ -36,12 +36,34 @@ included, and none sees another's worktrees or processes: the state of work is
 on GitHub (issues, branches, PRs, checks), and that of scheduled agents in the
 [state repository](../taxiway-agents/SKILL.md#state-repository).
 [Selection](../taxiway-issue/SKILL.md#1-selection) says how a session checks
-and shows that a subject is taken. The coordinator session is the maintainer's
-entry point for status, decisions and priorities: it delegates work to
-subagents or dedicated sessions and reads that state rather than relying on
-memory. A decision recorded nowhere there, in the repository or in the
-current conversation is asked of the maintainer, then recorded as
+and shows that a subject is taken. The [coordinator](#coordinator) session is
+the maintainer's entry point for status, decisions and priorities: it
+delegates work to subagents or dedicated sessions and reads that state rather
+than relying on memory. A decision recorded nowhere there, in the repository
+or in the current conversation is asked of the maintainer, then recorded as
 [Decisions](#decisions) says.
+
+## Coordinator
+
+[`/taxiway-coordinator`](../taxiway-coordinator/SKILL.md) runs this section in
+a new session on `taxiway`; it needs nothing from earlier sessions.
+
+1. Read [`taxiway-agents`](../taxiway-agents/SKILL.md) after this skill.
+2. Attach `taxiway-sh/agents` with push (`add_repo`, `access: push`) and clone
+   it next to `taxiway` on `main`; the maintainer approves the attachment in
+   this session.
+3. Reconcile as [Intake and reconciliation](#intake-and-reconciliation) says,
+   then run the [Check](../taxiway-agents/SKILL.md#check) of scheduled agents.
+4. When the Check finds an agent not installed, or a session or scheduled task
+   that is missing or differs from its declaration, propose
+   [Install](../taxiway-agents/SKILL.md#install) for those agents and run it
+   once the maintainer approves. A maintainer sets up the machine agent as
+   [Machine setup](../taxiway-agents/SKILL.md#machine-setup) says.
+5. Report briefly what is in service, what waits for the maintainer and what
+   is abnormal, then wait for instructions.
+
+Merging stays in the [Approvals](#approvals) matrix: the coordinator merges
+only what the maintainer has authorized in this session.
 
 ## Approvals
 

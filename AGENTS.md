@@ -43,7 +43,7 @@ Skills are named `taxiway-<topic>`; `steward` keeps the name Claude Code reads f
 
 | Need | Owner |
 |---|---|
-| Start or resume a session, approvals, coordination | [`taxiway-workflow` skill](.agents/skills/taxiway-workflow/SKILL.md) |
+| Start or resume a session, approvals, coordination | [`taxiway-workflow` skill](.agents/skills/taxiway-workflow/SKILL.md) (a coordinator starts with [`/taxiway-coordinator`](.agents/skills/taxiway-coordinator/SKILL.md)) |
 | New need, bug report, creating an issue; issue format, scope and labels | [`taxiway-intake` skill](.agents/skills/taxiway-intake/SKILL.md), [Issues](docs/contributing/issues.md) |
 | Backlog ranking, label hygiene, external and bot PRs | [`taxiway-triage` skill](.agents/skills/taxiway-triage/SKILL.md) |
 | External contributors: replies, claims, external PR reviews, follow-up, credit | [`taxiway-contributions` skill](.agents/skills/taxiway-contributions/SKILL.md), [CONTRIBUTING](CONTRIBUTING.md) |
