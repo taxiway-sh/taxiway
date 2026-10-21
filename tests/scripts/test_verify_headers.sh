@@ -50,10 +50,12 @@ assert_first_header() {
   local expected="$3"
   local output
   local first
+  local status=0
 
   # Only the first header is checked: a verify script may still fail on a
   # binary the host keeps outside this PATH (tmux under Homebrew on macOS).
-  output="$(HOME="$HOME_DIR" PATH="$BIN_DIR:/usr/local/bin:/usr/bin:/bin" bash "$script" 2>&1)" || true
+  # Its exit status is reported to help diagnose a FAIL, not asserted.
+  output="$(HOME="$HOME_DIR" PATH="$BIN_DIR:/usr/local/bin:/usr/bin:/bin" bash "$script" 2>&1)" || status=$?
   first="$(printf '%s\n' "$output" | first_content_line | strip_ansi)"
 
   if [[ "$first" == *"$expected"* ]]; then
@@ -63,6 +65,7 @@ assert_first_header() {
     echo "  FAIL: $test_name"
     echo "        expected first content line to contain: $expected"
     echo "        first content line was: $first"
+    echo "        verify script exit status: $status"
     fail=$((fail + 1))
   fi
 }
