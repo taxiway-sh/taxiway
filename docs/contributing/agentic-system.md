@@ -173,7 +173,7 @@ scheduled.
 
 | Role | Does | Skill |
 |---|---|---|
-| Coordinator | Starts or resumes a session, routes needs, tracks approvals and status | [`taxiway-workflow`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-workflow/SKILL.md) |
+| Coordinator | The maintainer's entry point: starts or resumes a session, routes needs, delegates work to subagents or dedicated sessions, tracks approvals and status from GitHub | [`taxiway-workflow`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-workflow/SKILL.md) |
 | Implementer | Works one selected issue in its own worktree and branch | [`taxiway-issue`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-issue/SKILL.md) |
 | Reviewer | Reviews a change it did not write, read-only: a subagent by default, or a child session in auto mode with a stall check when a subagent cannot do it | [`taxiway-review`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-review/SKILL.md) |
 | PR steward | Follows an open PR until it is merged or closed | [`steward`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/steward/SKILL.md) |

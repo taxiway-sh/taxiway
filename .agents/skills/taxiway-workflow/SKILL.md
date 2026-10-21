@@ -26,6 +26,20 @@ passed; old-head results do not validate a new commit; unknown past results
 remain unknown. Do not claim drafts, diagnoses, tests or state writes exist
 without an actual artifact, process or result.
 
+Several sessions, cloud or local, may work on Taxiway at once, and none sees
+another's worktrees or processes. Shared state is what is on GitHub:
+
+- **Before taking a subject,** check the remote branches and open PRs that
+  reference its issue, not only local ones; an issue with a branch or a PR
+  in progress belongs to that session unless the maintainer reassigns it.
+- **When taking a subject,** make it visible: push the branch early or open a
+  draft PR that references the issue, under the
+  [approvals](#approvals).
+- **The coordinator session** is the maintainer's entry point for status,
+  decisions and priorities. It delegates work to subagents or to dedicated
+  sessions and reads their state from GitHub and the state repository,
+  never from memory.
+
 - **New need:** follow [`taxiway-intake`](../taxiway-intake/SKILL.md).
 - **Backlog:** follow [`taxiway-triage`](../taxiway-triage/SKILL.md); the user
   selects the work.
