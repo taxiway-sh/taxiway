@@ -408,8 +408,11 @@ Some checks cannot run in a cloud session: Lima (no hardware
 virtualization), a macOS host (Docker Desktop, Lima `vz`, installed release
 archives), real accounts (no reference login) and runs longer than a cloud
 session allows. Cloud agents queue them in the state repository; the
-[machine agent](../../agents/machine.prompt.md) runs them on a machine the
-maintainer operates and returns sanitized results.
+[machine agent](../../agents/machine.prompt.md) runs them on a machine outside
+the cloud, run by a maintainer, set up as [Machine setup](#machine-setup) says,
+and returns sanitized results. A check that needs macOS runs only on a macOS
+machine; a machine that cannot run a requested kind reports it
+`not-executed`, with the reason.
 
 ### Declaration
 
@@ -448,7 +451,7 @@ report `link` and one `outcome` per requested kind). Dates are UTC,
 |---|---|---|
 | `lima` | Live validation on Lima | [`taxiway-testing`](../taxiway-testing/SKILL.md#live-validation-docker-or-lima) |
 | `macos` | Behavior on a macOS host: Docker Desktop, Lima `vz` | [`taxiway-testing`](../taxiway-testing/SKILL.md#live-validation-docker-or-lima) |
-| `install` | Installed release archives on the Mac | [`taxiway-release`](../taxiway-release/SKILL.md) |
+| `install` | Installed release archives on a macOS machine | [`taxiway-release`](../taxiway-release/SKILL.md) |
 | `real-account` | Live validation with a reference login, the only kind that may use one | [`taxiway-testing`](../taxiway-testing/SKILL.md#change--checks), [approvals](../taxiway-workflow/SKILL.md#approvals) |
 | `e2e` | Lifecycle E2E scenarios a cloud session cannot finish | [E2E scenarios](../taxiway-testing/SKILL.md#e2e-scenarios) |
 | `campaign` | A bounded campaign over data that stays on the machine, such as local transcripts in a [history campaign](../taxiway-learn/SKILL.md#history-campaigns) | Its skill |
@@ -550,8 +553,8 @@ Metrics come from the queue files on `main`, per ISO week of `created`:
 ### Credentials on the machine
 
 - The agent runs under a dedicated user account with no personal credentials:
-  no personal Apple ID, keychain items, SSH keys, browser sessions or cloud
-  accounts. Its only logins are the Claude Code login of its session, a
+  no personal OS or cloud accounts, keychain items, SSH keys or browser
+  sessions. Its only logins are the Claude Code login of its session, a
   GitHub token that can push only to `taxiway-sh/agents`, and the reference
   logins for real-account checks.
 - Reference logins and the token stay on the machine. They are never copied,
@@ -572,65 +575,82 @@ Metrics come from the queue files on `main`, per ISO week of `created`:
 
 ### Machine setup
 
-The maintainer sets the machine up once, on a Mac with the Taxiway
-[prerequisites](../../../docs/reference/installation.md#macos) and the tools of
-the [release recipe](../../../docs/contributing/release-qualification.md#candidate-prerequisites-and-evidence).
+A maintainer sets the machine up once; any machine that provides these steps
+can run the agent. It needs the Taxiway
+[prerequisites](../../../docs/reference/installation.md#prerequisites) for its
+OS and the tools of the
+[release recipe](../../../docs/contributing/release-qualification.md#candidate-prerequisites-and-evidence).
 Steps marked *verify at setup* name Claude Code features whose exact command
-can change: check them against the installed version.
+or syntax can change: check them against the installed version.
 
 1. Create a standard (non-administrator) user account for the agent, with no
    personal accounts signed in. Install what needs an administrator from
-   another account, then start Docker Desktop in this one, and keep the Mac
-   awake while the agent serves the queue.
+   another account. While the agent serves the queue, the machine stays awake
+   and the container runtime runs in this account.
 2. In that account, install the prerequisites and check that `docker`,
    `limactl`, `go`, `python3`, `direnv`, `git` and `gh` run.
 3. Create a fine-grained GitHub token limited to `taxiway-sh/agents` with
    read and write access to contents, with an expiry, and sign `gh` in with it
    (`gh auth login`, then `gh auth setup-git`). `taxiway-sh/taxiway` is read
    anonymously.
-4. Create a working directory and clone both repositories into it:
-   `git clone https://github.com/taxiway-sh/taxiway.git` and
+4. Create a working directory and clone both repositories into it, side by
+   side: `git clone https://github.com/taxiway-sh/taxiway.git` and
    `git clone https://github.com/taxiway-sh/agents.git`. Create, outside that
    working directory, a directory for run worktrees and a private evidence
    directory, both with mode `0700`. Instructions are read only from the
    `taxiway` clone on `main`, never from a run worktree.
-5. Create the reference logins needed for real-account checks, as
+5. Commits in `taxiway-sh/agents` are public and carry the git identity: set
+   a non-identifying one in the `agents` clone's own configuration, which the
+   heartbeat script accepts, with `git -C agents config user.name '<name>'` and
+   `git -C agents config user.email '<GitHub noreply address>'`. Never leave
+   git to derive it from the OS user name or the hostname; check with
+   `git -C agents var GIT_COMMITTER_IDENT` that neither appears.
+6. Create the reference logins needed for real-account checks, as
    [Authenticate once](../../../docs/contributing/live-tests.md#authenticate-once)
    says, from a development worktree in the run worktree directory.
-6. Install Claude Code, run `claude` once in the working directory, sign in
+7. Install Claude Code, run `claude` once in the working directory, sign in
    with the claude.ai account and trust the directory.
-7. In the agent account's `~/.claude/settings.json`, allow under
-   `permissions.allow`: `Bash(git:*)`, `Bash(gh:*)`, `Bash(make:*)`,
-   `Bash(go:*)`, `Bash(docker:*)`, `Bash(limactl:*)`, `Bash(direnv:*)`,
-   `Bash(python3:*)` and `Bash(scripts/agents/push-heartbeat.sh:*)`, plus
-   `Edit` and `Write` limited to the `agents` clone, the run worktree
-   directory and the evidence directory, as path rules such
-   as `Edit(//<absolute path of the agents clone>/**)` and
-   `Write(//<absolute path of the agents clone>/**)` (*verify at setup*).
-   Under `permissions.deny`, add `Bash(git push --force:*)`,
-   `Bash(git push --force-with-lease:*)` and `Bash(git push -f:*)`. This deny
-   list is defence in depth: never force-pushing is the rule, and the token's
-   scope is the real bound. Broad `make`, `docker` and `python3` entries amount
-   to arbitrary execution: they are acceptable only under this dedicated
-   account. Do not bypass permissions.
-8. Start a new session with Remote Control from the working directory
+8. In the agent account's `~/.claude/settings.json`, set the permissions an
+   unattended run needs, so that a scheduled run never waits on a prompt
+   (*verify at setup*):
+   - `permissions.additionalDirectories`: the run worktree and evidence
+     directories;
+   - `permissions.allow`: `Bash(cd:*)`, `Bash(git:*)`, `Bash(gh:*)`,
+     `Bash(make:*)`, `Bash(go:*)`, `Bash(docker:*)`, `Bash(limactl:*)`,
+     `Bash(direnv:*)`, `Bash(python3:*)`, `Bash(bash:*)`, `Bash(./taxiway:*)`
+     and `Bash(scripts/agents/push-heartbeat.sh:*)`, plus `Edit` and `Write`
+     limited to the `agents` clone, the run worktree directory and the
+     evidence directory, as path rules such as
+     `Edit(//<absolute path of the agents clone>/**)` and
+     `Write(//<absolute path of the agents clone>/**)`, never the `taxiway`
+     clone;
+   - `permissions.deny`: `Bash(git push --force:*)`,
+     `Bash(git push --force-with-lease:*)` and `Bash(git push -f:*)`.
+
+   The deny list is defence in depth: never force-pushing is the rule, and the
+   token's scope is the real bound. Broad `make`, `docker`, `python3` and
+   `bash` entries amount to arbitrary execution: they are acceptable only
+   under this dedicated account. Do not bypass permissions.
+9. Start a new session with Remote Control from the working directory
    (`claude remote-control`, *verify at setup*); never resume an existing
    session. Name it with the declaration's `title` (*verify at setup*). Keep
    the terminal open.
-9. Send this first prompt:
+10. Send this first prompt:
 
-   > Setup only. Check that the `taxiway` and `agents` clones are on `main`
-   > and fast-forward, that `gh` can push to `taxiway-sh/agents` and read
-   > `taxiway-sh/taxiway`, that `docker`, `limactl`, `go`, `python3` and
-   > `direnv` respond, that the run worktree and evidence directories exist
-   > outside the working directory, and that the reference labs exist. Report
-   > what is missing without showing any credential, then stop.
+    > Setup only. Check that the `taxiway` and `agents` clones are on `main`
+    > and fast-forward, that `gh` can push to `taxiway-sh/agents` and read
+    > `taxiway-sh/taxiway`, that the `agents` clone has a local git identity
+    > with no user or host name in it, that `docker`, `limactl`, `go`,
+    > `python3` and `direnv` respond, that the run worktree and evidence
+    > directories exist outside the working directory, and that the reference
+    > labs exist. Report what is missing without showing any credential, then
+    > stop.
 
-10. Once setup is clean, send the [bootstrap prompt](#every-run) with
+11. Once setup is clean, send the [bootstrap prompt](#every-run) with
     `<id>` = `machine`, then arm the local schedule: the same prompt at least
     every 12 hours, in the session (for example with `/loop`, *verify at
     setup*). Check that it is armed. After each restart of the session, send
     the bootstrap prompt and arm the schedule again.
-11. The first time a cloud session messages the machine session, the
+12. The first time a cloud session messages the machine session, the
     maintainer may be asked, on a trusted device, to let cloud sessions reach
     their other sessions. Without it, items wait for the local schedule.

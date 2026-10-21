@@ -93,9 +93,9 @@ script run without any check. Cloud agents run it under the session's usual
 permission checks, and the
 [run contract](../taxiway-agents/SKILL.md#every-run) forbids editing it. The
 machine agent's own `~/.claude/settings.json` allows it
-([Machine setup](../taxiway-agents/SKILL.md#machine-setup) step 7); that
-account already allows `python3` and `make`, and its `Edit` and `Write` rules
-exclude the `taxiway` clone, so the rule adds no reach.
+([Machine setup](../taxiway-agents/SKILL.md#machine-setup) step 8); that
+account already allows `python3`, `make` and `bash`, and its `Edit` and
+`Write` rules exclude the `taxiway` clone, so the rule adds no reach.
 The script guards the `agents` clone: it refuses git configuration a plain
 clone does not write, disables hooks and the file system monitor, and runs
 the state validator from `origin/main`; it cannot protect itself.

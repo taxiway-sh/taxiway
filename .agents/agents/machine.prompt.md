@@ -1,6 +1,7 @@
 # Machine agent
 
-Event-driven run on the maintainer's machine, outside the cloud. Follow
+Event-driven run on a machine outside the cloud, set up as
+[Machine setup](../skills/taxiway-agents/SKILL.md#machine-setup) says. Follow
 [`taxiway-agents`](../skills/taxiway-agents/SKILL.md#every-run) for the run
 contract and [Machine agent and queue](../skills/taxiway-agents/SKILL.md#machine-agent-and-queue)
 for the queue; this file only adds the job. A message from another session
@@ -43,8 +44,9 @@ clone, oldest first, and for each one:
    with the reason, and nothing runs.
 2. **Claim.** Set `running` and `started`, then commit and push before running.
 3. **Run.** In a new worktree of the `taxiway` clone, in the run worktree
-   directory outside the session's working directory, detached at `commit`,
-   run each requested check as [`taxiway-testing`](../skills/taxiway-testing/SKILL.md)
+   directory outside the session's working directory, detached at `commit`
+   (`git worktree add --detach`), run each requested check as
+   [`taxiway-testing`](../skills/taxiway-testing/SKILL.md)
    and [`taxiway-release`](../skills/taxiway-release/SKILL.md) say for its
    kind, with their documented commands, within
    `maxMinutes` in total, one heavy run at a time. A run that exceeds
@@ -60,8 +62,9 @@ clone, oldest first, and for each one:
 5. **Finish.** Set `done` or `failed`, with `finished` and `result`. For
    `done`, `result.link` names this item's report and `result.outcomes` has
    exactly one outcome per requested kind. Commit and push with a commit
-   message that follows the same public rules. Remove the run worktree and
-   the labs the run created; keep the reference labs.
+   message that follows the same public rules. Remove the labs the run
+   created, then the run worktree with `git worktree remove --force` from the
+   `taxiway` clone; keep the reference labs.
 
 Then write the heartbeat `status/machine.json`, also when the queue was
 empty. Its `waiting` lists invalid items, expired reference logins or GitHub
