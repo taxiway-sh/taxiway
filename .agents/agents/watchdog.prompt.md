@@ -16,6 +16,9 @@ heartbeat or with a manual [Check](../skills/taxiway-agents/SKILL.md#check).
    `install.yml`, `model-catalog-update.yml`) started within the past 24 hours,
    and report its conclusion; a run not finished yet is pending.
 3. Collect every heartbeat's `waiting` items.
+4. Collect every heartbeat's `approvals` entries answered `corrected` for a
+   class that agent's declaration sets to `auto`: each is a demotion incident
+   ([Promotion and demotion](../skills/taxiway-agents/SKILL.md#promotion-and-demotion)).
 
 ## Report
 
@@ -25,7 +28,8 @@ When something needs the maintainer, send one `PushNotification` titled
 1. one line per item that needs the maintainer, most urgent first, each with
    the action and its link (the agent's session for its proposals, the run or
    issue otherwise);
-2. failed, late or missing agents and workflows, with the evidence link.
+2. demotion incidents: agent, action class and the corrected action's link;
+3. failed, late or missing agents and workflows, with the evidence link.
 
 When nothing needs the maintainer, send no notification and reply only
 `Nothing needs you today.`; the heartbeat records the run.

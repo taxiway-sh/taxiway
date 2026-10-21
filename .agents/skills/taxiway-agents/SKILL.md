@@ -16,8 +16,7 @@ Each agent is declared in this repository and changes only through reviewed PRs:
 - `.agents/agents/<id>.json`: `id` (the file name), `title`, `schedule` (five
   cron fields, UTC), `model` (a model ID, or `default` for the account's
   default), `repositories` (`read` or `write` per repository),
-  `workdir`, `skills`, `outputs` and `autonomy` (`ask` only, until
-  per-action levels are defined in #196);
+  `workdir`, `skills`, `outputs` and `autonomy` (see [Autonomy](#autonomy));
 - `.agents/agents/<id>.prompt.md`: the job, read at the start of every run.
 
 `read` means the agent never pushes to that repository; issue and PR writes
@@ -34,8 +33,12 @@ declarations and the heartbeat schema
 - `status/<id>.json`, the heartbeat written at the end of every run:
   `id`, `date` (UTC, ISO 8601), `result` (`ok`, `partial` or `failed`),
   `summary` (one sentence), `waiting` (items that need the maintainer, each with
-  a link and the action) and `promptVersion` (the `taxiway` `main` SHA the run
-  read);
+  a link and the action), `promptVersion` (the `taxiway` `main` SHA the run
+  read) and, optionally, `approvals`: the maintainer's answers this run
+  recorded, each with `class` (an [action class](#action-classes)),
+  `proposal` (its id or link), `answer` (`ok`, `refused` or `corrected`),
+  `date` (of the answer) and `link` (the GitHub item or the action taken).
+  The history of `status/<id>.json` is the approval log;
 - `deployed.json`: for each installed agent, its schedule, `model` and the
   `promptVersion` it was installed from. Session and scheduled task IDs stay
   out of it: install and check look them up, the session by tag and the
@@ -66,16 +69,92 @@ then stops. A run never resets or force-updates a clone.
 Each run then:
 
 1. records the `taxiway` `main` SHA as `promptVersion`;
-2. does the job in its prompt file at the declared `autonomy`
-   ([approvals](../taxiway-workflow/SKILL.md#approvals));
-3. writes `status/<id>.json`, commits and pushes it to `taxiway-sh/agents`;
-4. ends with its report in the agent's session, where the maintainer reads and
+2. reads its `autonomy` from its declaration in that `main`, never from memory
+   or an earlier run, and acts at those levels ([Autonomy](#autonomy));
+3. records in `approvals` the maintainer's answers to its previous proposals,
+   and every revert or correction of one of its `auto` actions as
+   `corrected`; each answer is recorded once, by the first run that sees it;
+4. does the job in its prompt file;
+5. writes `status/<id>.json`, valid against
+   [`status.schema.json`](../../agents/status.schema.json), commits and pushes
+   it to `taxiway-sh/agents`;
+6. ends with its report in the agent's session, where the maintainer reads and
    answers it; the heartbeat's `waiting` lists what needs them. Unattended
    reports are in English; when someone replies in the session, continue in
    their language.
 
 A run that cannot finish still writes its heartbeat with `failed` or `partial`
 and says why.
+
+## Autonomy
+
+A declaration's `autonomy` maps each action class the agent takes to a level.
+A class missing from the map stays at `propose`. Levels apply to the
+repositories the declaration allows; `read` access still forbids pushing.
+
+| Level | The agent |
+|---|---|
+| `propose` | describes the action in its report; the maintainer acts |
+| `ask` | proposes it in its report and takes it only after the maintainer's OK in its session; the initial level |
+| `auto` | takes it, then reports it with a link that undoes it or shows how |
+
+Each proposal in a report carries an id, `<id>-<UTC date YYYYMMDD>-<n>`, which
+the maintainer answers and `approvals` records.
+
+### Action classes
+
+`make lint` rejects any other class and any level above a class's highest
+level. A class whose highest level is `ask` changes the agentic system itself
+and is never `auto`.
+
+| Class | Covers | Highest level |
+|---|---|---|
+| `comment-issue` | Commenting on an issue or PR | `auto` |
+| `create-issue` | Creating an issue through [`taxiway-intake`](../taxiway-intake/SKILL.md) | `auto` |
+| `label-issue` | Applying or removing labels on an issue or PR | `auto` |
+| `assign-issue` | Assigning or unassigning an issue or PR | `auto` |
+| `review-pr` | Submitting a PR review | `auto` |
+| `push-pr-branch` | Pushing, without force, to a PR branch the agent created | `auto` |
+| `mark-pr-ready` | Marking a draft PR ready for review | `auto` |
+| `merge-pr` | Merging a PR | `auto` |
+| `close-issue` | Closing or reopening an issue | `auto` |
+| `close-pr` | Closing or reopening a PR | `auto` |
+| `rerun-workflow` | Rerunning a GitHub Actions run | `auto` |
+| `write-state` | Writing its own files in `taxiway-sh/agents` other than its heartbeat, which every run writes | `auto` |
+| `change-agent-system` | A draft PR changing skills, agent declarations or prompts, `AGENTS.md` or the agent docs checker | `ask` |
+
+### Never
+
+No level allows these actions and none is an action class: `make lint` rejects
+them in a declaration, and rejects this list unless it matches the checker's.
+
+| Action | Never |
+|---|---|
+| `push-main` | Pushing to `main` of `taxiway-sh/taxiway` |
+| `force-push-foreign` | Force-pushing a branch someone else created or pushed to |
+| `publish-release` | Publishing a release ([`taxiway-release`](../taxiway-release/SKILL.md)) |
+| `publish-upstream` | Upstream issues, PRs, comments, pushes or forks |
+| `handle-secrets` | Reading, writing, printing or moving secret values |
+| `skip-tests` | Skipping, disabling or quarantining a test or check |
+| `change-own-instructions` | Changing its own declaration, prompt or the skills it uses |
+| `change-approvals` | Changing the [approvals](../taxiway-workflow/SKILL.md#approvals) matrix or this Autonomy section |
+| `change-never-list` | Changing this list or the checker that enforces it |
+
+### Promotion and demotion
+
+A level changes only through a `change-agent-system` PR that changes nothing
+but the agent's declaration, reviewed and merged by the maintainer:
+
+- **Promotion** to `auto`, for a class whose highest level is `auto`: after
+  10 consecutive `ok` answers for that class and agent in `approvals`, with no
+  `refused` or `corrected` answer among them.
+- **Demotion** back to `ask`: after a revert or correction of an `auto` action
+  of that class, recorded as `corrected`. The
+  [watchdog](../../agents/watchdog.prompt.md) reports the incident at its next
+  run.
+
+The weekly improvement agent proposes these PRs once it is declared; until
+then, an interactive session proposes them when the maintainer asks.
 
 ## Install
 

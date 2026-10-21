@@ -10,5 +10,12 @@
   "workdir": "taxiway",
   "skills": ["taxiway-triage"],
   "outputs": ["report", "status/triage.json"],
-  "autonomy": "ask"
+  "autonomy": {
+    "comment-issue": "ask",
+    "create-issue": "ask",
+    "label-issue": "ask",
+    "review-pr": "ask",
+    "close-issue": "ask",
+    "close-pr": "ask"
+  }
 }

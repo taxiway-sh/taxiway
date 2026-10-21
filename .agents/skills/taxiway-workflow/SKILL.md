@@ -46,6 +46,9 @@ without an actual artifact, process or result.
 | Installing, changing or removing a [scheduled agent](../taxiway-agents/SKILL.md) | |
 | Discarding commits, user edits or persistent labs | |
 
+A scheduled agent takes these actions at the levels its declaration sets,
+under the [autonomy rule](../taxiway-agents/SKILL.md#autonomy).
+
 Authorization for Taxiway work never authorizes upstream publication. A pending
 approval blocks only that action on that subject: keep other authorized,
 independent implementation, tests and reviews moving within capacity. An

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Check agent docs and docs/ pages: skill frontmatter and discovery symlinks,
-# scheduled agent declarations and heartbeat schema,
+# scheduled agent declarations, autonomy and heartbeat schema,
 # relative Markdown links (pages under docs/ reach other files through blob
 # URLs), and normative phrases that must stay in their owner.
 # Usage: scripts/check-agent-docs.sh [repository-root]
@@ -124,8 +124,85 @@ def check_skills():
 
 
 AGENT_FIELDS = {"id", "title", "schedule", "model", "repositories", "workdir", "skills", "outputs", "autonomy"}
-AUTONOMY = {"ask"}
+LEVELS = ["propose", "ask", "auto"]
+# The fixed never list: the agents skill must list exactly these actions, and
+# no declaration may use one as an action class.
+NEVER = {
+    "push-main", "force-push-foreign", "publish-release", "publish-upstream",
+    "handle-secrets", "skip-tests", "change-own-instructions",
+    "change-approvals", "change-never-list",
+}
+AGENTS_SKILL = ".agents/skills/taxiway-agents/SKILL.md"
 HEARTBEAT_SCHEMA = "status.schema.json"
+APPROVAL_FIELDS = {"class", "proposal", "answer", "date", "link"}
+APPROVAL_ANSWERS = ["ok", "refused", "corrected"]
+
+
+def skill_table(text, heading):
+    """Rows of the table under a heading: {first-cell code: last-cell code}."""
+    section = re.split(rf"^###? {re.escape(heading)}\s*$", text, maxsplit=1, flags=re.M)
+    if len(section) < 2:
+        return {}
+    rows = {}
+    for line in re.split(r"^#", section[1], maxsplit=1, flags=re.M)[0].splitlines():
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        first = re.fullmatch(r"`([a-z0-9-]+)`", cells[0]) if line.startswith("|") else None
+        if first:
+            last = re.fullmatch(r"`([a-z]+)`", cells[-1])
+            rows[first.group(1)] = last.group(1) if last else None
+    return rows
+
+
+def action_classes():
+    """Action classes and their highest level, and the never list, from the skill."""
+    skill = root / AGENTS_SKILL
+    if not skill.is_file():
+        errors.append(f"{AGENTS_SKILL}: missing; it defines the agent action classes")
+        return {}
+    text = skill.read_text()
+    classes = skill_table(text, "Action classes")
+    if not classes:
+        errors.append(f"{AGENTS_SKILL}: no Action classes table")
+    for name, highest in classes.items():
+        if highest not in ("ask", "auto"):
+            errors.append(f"{AGENTS_SKILL}: action class {name!r} highest level must be ask or auto")
+            classes[name] = "ask"
+    never = set(skill_table(text, "Never"))
+    if never != NEVER:
+        errors.append(f"{AGENTS_SKILL}: Never list must be exactly {sorted(NEVER)}")
+    for name in classes.keys() & NEVER:
+        errors.append(f"{AGENTS_SKILL}: {name!r} is on the never list, not an action class")
+    return classes
+
+
+def check_autonomy(name, autonomy, classes):
+    if not isinstance(autonomy, dict):
+        errors.append(f"{name}: autonomy must map action classes to {LEVELS}")
+        return
+    for action, level in autonomy.items():
+        if action in NEVER:
+            errors.append(f"{name}: autonomy {action!r} is on the never list")
+        elif action not in classes:
+            errors.append(f"{name}: autonomy {action!r} is not an action class")
+        elif level not in LEVELS:
+            errors.append(f"{name}: autonomy {action!r} must be one of {LEVELS}")
+        elif LEVELS.index(level) > LEVELS.index(classes[action]):
+            errors.append(f"{name}: autonomy {action!r} can never be {level}")
+
+
+def check_heartbeat_schema(schema):
+    data = json.loads(schema.read_text())
+    if "promptVersion" not in data.get("required", []):
+        errors.append(f"{rel(schema)}: must require promptVersion")
+    approvals = data.get("properties", {}).get("approvals", {})
+    items = approvals.get("items", {}) if isinstance(approvals, dict) else {}
+    if (approvals.get("type") != "array" or items.get("additionalProperties") is not False
+            or set(items.get("required", [])) != APPROVAL_FIELDS
+            or items.get("properties", {}).get("answer", {}).get("enum") != APPROVAL_ANSWERS):
+        errors.append(f"{rel(schema)}: approvals must be an array of {sorted(APPROVAL_FIELDS)}"
+                      f" with answer one of {APPROVAL_ANSWERS}")
+    if "approvals" in data.get("required", []):
+        errors.append(f"{rel(schema)}: approvals must stay optional")
 
 
 def check_agents():
@@ -133,12 +210,13 @@ def check_agents():
     agents = root / ".agents/agents"
     schedules = {}
     schema = agents / HEARTBEAT_SCHEMA
+    classes = {}
     if agents.is_dir():
         try:
-            if "promptVersion" not in json.loads(schema.read_text()).get("required", []):
-                errors.append(f"{rel(schema)}: must require promptVersion")
-        except (OSError, ValueError) as err:
+            check_heartbeat_schema(schema)
+        except (OSError, ValueError, AttributeError) as err:
             errors.append(f"{rel(schema)}: unreadable heartbeat schema: {err}")
+        classes = action_classes()
     decls = [p for p in agents.glob("*.json") if p.name != HEARTBEAT_SCHEMA] if agents.is_dir() else []
     for decl in sorted(decls):
         name = rel(decl)
@@ -181,8 +259,7 @@ def check_agents():
         for skill in data.get("skills") if isinstance(data.get("skills"), list) else []:
             if not (root / ".agents/skills" / str(skill) / "SKILL.md").is_file():
                 errors.append(f"{name}: unknown skill {skill!r}")
-        if not isinstance(data.get("autonomy"), str) or data["autonomy"] not in AUTONOMY:
-            errors.append(f"{name}: autonomy must be one of {sorted(AUTONOMY)}")
+        check_autonomy(name, data.get("autonomy"), classes)
     for prompt in sorted(agents.glob("*.prompt.md")) if agents.is_dir() else []:
         if not (agents / (prompt.name[: -len(".prompt.md")] + ".json")).is_file():
             errors.append(f"{rel(prompt)}: no matching declaration")

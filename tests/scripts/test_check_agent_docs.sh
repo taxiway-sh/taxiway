@@ -53,14 +53,46 @@ Read [AGENTS.md](../../../AGENTS.md#e2e-scenarios).
 MD
   printf '# Live\n' > "$tree/tests/live/AGENTS.md"
   ln -s ../../.agents/skills/demo "$tree/.claude/skills/demo"
+  mkdir -p "$tree/.agents/skills/taxiway-agents"
+  cat > "$tree/.agents/skills/taxiway-agents/SKILL.md" <<'MD'
+---
+name: taxiway-agents
+description: Use for the fixture.
+---
+
+### Action classes
+
+| Class | Covers | Highest level |
+|---|---|---|
+| `comment-issue` | Commenting | `auto` |
+| `change-agent-system` | Changing the agentic system | `ask` |
+
+### Never
+
+| Action | Never |
+|---|---|
+| `push-main` | Pushing to main |
+| `force-push-foreign` | Force-pushing |
+| `publish-release` | Releases |
+| `publish-upstream` | Upstream |
+| `handle-secrets` | Secrets |
+| `skip-tests` | Skipping tests |
+| `change-own-instructions` | Own instructions |
+| `change-approvals` | Approvals |
+| `change-never-list` | This list |
+
+## After
+MD
+  ln -s ../../.agents/skills/taxiway-agents "$tree/.claude/skills/taxiway-agents"
   mkdir -p "$tree/.agents/agents"
   cat > "$tree/.agents/agents/watch.json" <<'JSON'
 {"id": "watch", "title": "Watch", "schedule": "0 4 * * *", "model": "default",
  "repositories": {"taxiway-sh/taxiway": "read", "taxiway-sh/agents": "write"},
- "workdir": "taxiway", "skills": ["demo"], "outputs": ["report"], "autonomy": "ask"}
+ "workdir": "taxiway", "skills": ["demo"], "outputs": ["report"],
+ "autonomy": {"comment-issue": "auto", "change-agent-system": "ask"}}
 JSON
   printf '# Watch\n' > "$tree/.agents/agents/watch.prompt.md"
-  printf '{"required": ["id", "promptVersion"]}\n' > "$tree/.agents/agents/status.schema.json"
+  cp "$repo_dir/.agents/agents/status.schema.json" "$tree/.agents/agents/status.schema.json"
   printf '%s\n' "$tree"
 }
 
@@ -157,9 +189,50 @@ tree="$(fixture agent-invalid-json)"
 printf '{' > "$tree/.agents/agents/watch.json"
 expect_fail 'invalid agent JSON' "$tree" '.agents/agents/watch.json: invalid JSON'
 
-tree="$(fixture agent-bad-autonomy)"
-sed -i.bak 's/"autonomy": "ask"/"autonomy": {"label": "auto"}/' "$tree/.agents/agents/watch.json"
-expect_fail 'agent with unsupported autonomy' "$tree" "autonomy must be one of ['ask']"
+set_autonomy() {
+  python3 - "$1/.agents/agents/watch.json" "$2" <<'PY2'
+import json, sys
+data = json.load(open(sys.argv[1])); data["autonomy"] = json.loads(sys.argv[2])
+json.dump(data, open(sys.argv[1], "w"))
+PY2
+}
+
+tree="$(fixture agent-autonomy-string)"
+set_autonomy "$tree" '"ask"'
+expect_fail 'agent autonomy as a single level' "$tree" 'autonomy must map action classes to'
+
+tree="$(fixture agent-autonomy-unknown-class)"
+set_autonomy "$tree" '{"label": "ask"}'
+expect_fail 'agent autonomy with an unknown action class' "$tree" "autonomy 'label' is not an action class"
+
+tree="$(fixture agent-autonomy-bad-level)"
+set_autonomy "$tree" '{"comment-issue": "always"}'
+expect_fail 'agent autonomy with an unknown level' "$tree" "autonomy 'comment-issue' must be one of"
+
+tree="$(fixture agent-autonomy-never)"
+set_autonomy "$tree" '{"push-main": "ask"}'
+expect_fail 'agent autonomy with a never action' "$tree" "autonomy 'push-main' is on the never list"
+
+tree="$(fixture agent-autonomy-never-auto)"
+set_autonomy "$tree" '{"change-agent-system": "auto"}'
+expect_fail 'auto for a never-auto action class' "$tree" "autonomy 'change-agent-system' can never be auto"
+
+tree="$(fixture skill-never-list-shortened)"
+sed -i.bak '/`skip-tests`/d' "$tree/.agents/skills/taxiway-agents/SKILL.md"
+expect_fail 'never list missing an action' "$tree" 'Never list must be exactly'
+
+tree="$(fixture skill-never-as-class)"
+sed -i.bak 's/^| `comment-issue` | Commenting |/| `skip-tests` | Skipping |/' "$tree/.agents/skills/taxiway-agents/SKILL.md"
+set_autonomy "$tree" '{}'
+expect_fail 'never action declared as an action class' "$tree" "'skip-tests' is on the never list, not an action class"
+
+tree="$(fixture skill-no-action-classes)"
+sed -i.bak 's/^### Action classes$/### Classes/' "$tree/.agents/skills/taxiway-agents/SKILL.md"
+expect_fail 'agents skill without action classes' "$tree" 'no Action classes table'
+
+tree="$(fixture skill-bad-highest-level)"
+sed -i.bak 's/Commenting | `auto` |/Commenting | `sometimes` |/' "$tree/.agents/skills/taxiway-agents/SKILL.md"
+expect_fail 'action class with an unknown highest level' "$tree" "action class 'comment-issue' highest level must be ask or auto"
 
 tree="$(fixture agent-string-skills)"
 sed -i.bak 's/"skills": \["demo"\]/"skills": "demo"/' "$tree/.agents/agents/watch.json"
@@ -169,9 +242,43 @@ tree="$(fixture heartbeat-schema)"
 printf '{"required": ["id"]}\n' > "$tree/.agents/agents/status.schema.json"
 expect_fail 'heartbeat schema without promptVersion' "$tree" 'status.schema.json: must require promptVersion'
 
+tree="$(fixture heartbeat-approvals-answers)"
+sed -i.bak 's/"answer": {"enum": \["ok", "refused", "corrected"\]}/"answer": {"enum": ["ok", "refused"]}/' "$tree/.agents/agents/status.schema.json"
+expect_fail 'approval log without the corrected answer' "$tree" 'status.schema.json: approvals must be an array of'
+
+tree="$(fixture heartbeat-approvals-required)"
+sed -i.bak 's/"waiting", "promptVersion"\]/"waiting", "promptVersion", "approvals"]/' "$tree/.agents/agents/status.schema.json"
+expect_fail 'required approval log' "$tree" 'status.schema.json: approvals must stay optional'
+
 tree="$(fixture agent-orphan-prompt)"
 printf '# Gone\n' > "$tree/.agents/agents/gone.prompt.md"
 expect_fail 'prompt without declaration' "$tree" '.agents/agents/gone.prompt.md: no matching declaration'
 
 bash "$checker" "$repo_dir" > /dev/null
 echo 'PASS: repository agent docs'
+
+# The heartbeat schema itself, on sample heartbeats, when jsonschema is installed.
+if python3 -c 'import jsonschema' 2>/dev/null; then
+  python3 - "$repo_dir/.agents/agents/status.schema.json" <<'PY2'
+import copy, json, sys
+import jsonschema
+schema = json.load(open(sys.argv[1]))
+validator = jsonschema.Draft202012Validator(schema, format_checker=jsonschema.FormatChecker())
+base = {"id": "triage", "date": "2026-10-21T04:20:00Z", "result": "ok", "summary": "Done.",
+        "waiting": [], "promptVersion": "0" * 40}
+entry = {"class": "label-issue", "proposal": "triage-20261020-1", "answer": "corrected",
+         "date": "2026-10-20T09:00:00Z", "link": "https://github.com/taxiway-sh/taxiway/issues/1"}
+validator.validate(base)
+validator.validate(dict(base, approvals=[entry]))
+for change in ({"answer": "maybe"}, {"link": "https://example.invalid/1"}, {"extra": 1}):
+    bad = dict(base, approvals=[dict(copy.deepcopy(entry), **change)])
+    if validator.is_valid(bad):
+        sys.exit(f"FAIL: approval entry {change} was accepted")
+missing = {k: v for k, v in entry.items() if k != "answer"}
+if validator.is_valid(dict(base, approvals=[missing])):
+    sys.exit("FAIL: approval entry without an answer was accepted")
+PY2
+  echo 'PASS: heartbeat schema validates the approval log'
+else
+  echo 'SKIP: heartbeat schema samples (python jsonschema not installed)'
+fi
