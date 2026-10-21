@@ -40,13 +40,14 @@ When something needs the maintainer, send one `PushNotification` titled
    one's age, notified only once as
    [Heartbeat, offline machine and metrics](../skills/taxiway-agents/SKILL.md#heartbeat-offline-machine-and-metrics)
    says;
-5. agents not installed, each linked to its declaration on `main`.
+5. agents not installed, each linked to its declaration on `main`;
 6. old sessions ready to archive, as Check reports them:
    `old session ready to archive: run /install-agents`.
 
-An agent not installed is listed in the reply and in `waiting` at every run,
-but calls for a `PushNotification` only on the first day it appears; when it
-is the only item, later runs reply with the list and send no notification.
+An agent not installed, or an old session ready to archive, is listed in the
+reply and in `waiting` at every run, but calls for a `PushNotification` only
+on the first day it appears; when such items are the only ones, later runs
+reply with the list and send no notification.
 
 When nothing needs the maintainer, send no notification and reply only
 `Nothing needs you today.`; the heartbeat records the run.
