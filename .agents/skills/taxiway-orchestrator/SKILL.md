@@ -39,8 +39,7 @@ the reference addition is Gas City
    answers as [Decisions](../taxiway-workflow/SKILL.md#decisions) says.
 5. **Implementation.** Follow [`taxiway-issue`](../taxiway-issue/SKILL.md),
    covering every [checklist](#file-checklist) entry. Test selection and E2E
-   scope belong to the `taxiway-testing` skill and
-   [Testing](../../../docs/contributing/testing.md).
+   scope belong to [`taxiway-testing`](../taxiway-testing/SKILL.md#change--checks).
 6. **Review.** Follow [`taxiway-review`](../taxiway-review/SKILL.md).
 7. **PR.** Open it as [`taxiway-issue`](../taxiway-issue/SKILL.md#6-pull-request)
    says and follow it with [`steward`](../steward/SKILL.md); the PR lists the
@@ -96,7 +95,7 @@ every adapter)
   plus the adapter's entries in `tests/scripts/test_dry_run_plans.sh` and
   `tests/scripts/test_verify_headers.sh`.
 - The scenarios, Makefile targets and CI entries the
-  [E2E scenario rule](../../../AGENTS.md#e2e-scenarios) requires, in
+  [E2E scenario rule](../taxiway-testing/SKILL.md#e2e-scenarios) requires, in
   `internal/cli/orchestrator_e2e_test.go` and `Makefile` (`.PHONY`, the
   per-scenario targets and a timeout variable when the default is too short).
 - `.github/workflows/e2e.yml` and `.github/workflows/release.yml`: the
