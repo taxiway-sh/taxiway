@@ -29,9 +29,9 @@ full guide lives in [docs/contributing](docs/contributing/README.md).
   only after a maintainer approves it, so the first run may wait for that.
   Your code runs only there, in fork-PR CI on GitHub-hosted runners, never on
   a workstation or in a Taxiway lab. Lifecycle
-  [E2E scenarios](AGENTS.md#e2e-scenarios) do not run on PRs: they cover your
-  change once it lands, through the nightly run, or when the maintainer
-  reimplements it.
+  [E2E scenarios](AGENTS.md#e2e-scenarios) do not run on PRs: if your change
+  affects them, the maintainer may reimplement it on a Taxiway branch so they
+  can run before merging, crediting you.
 - **Follow-up.** If a PR or claim waits on you for two weeks, you get a
   friendly reminder. After another month without an answer, a claim is
   released so someone else can take it, and a PR may be closed with thanks;

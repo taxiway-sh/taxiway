@@ -108,9 +108,15 @@ issue is summarized for the maintainer; a new problem goes through
    run as the [contributor-code rule](#contributor-code) says. Lifecycle E2Es
    do not run on PRs
    ([CI structure](../../../docs/contributing/testing.md#ci-structure)).
-6. **Follow up.** After new commits, re-review the new range as
+6. **Merge path.** When the change affects lifecycle scenarios that could not
+   run, the [E2E merge rule](../../../AGENTS.md#e2e-scenarios) is unmet: the
+   maintainer either reimplements the change on a maintainer branch,
+   [crediting](#credit) the contributor, and runs the scenarios before merging,
+   or merges only changes that affect no lifecycle scenario. Say which path
+   applies in the report.
+7. **Follow up.** After new commits, re-review the new range as
    `taxiway-review` says and answer the contributor's replies.
-7. **On merge,** thank the contributor and record the [credit](#credit).
+8. **On merge,** thank the contributor and record the [credit](#credit).
 
 ### Stale contributions
 
@@ -154,7 +160,7 @@ One report per run or request, items oldest first, each with:
    draft: comment text in the contributor's language, assignment, label
    change, review event with its summary and inline comments, closure with its
    reason.
-4. **Maintainer-only actions**: approve the fork CI run, merge, decide scope
-   or priority.
+4. **Maintainer-only actions**: approve the fork CI run, choose the
+   [merge path](#external-pr), merge, decide scope or priority.
 
 When nothing needs an action, say so in one line.
