@@ -22,6 +22,13 @@ describe('docs loader', () => {
     });
   });
 
+  it('lists the agentic system page after Issues in Contributing', () => {
+    const pages = navGroups.find(group => group.name === 'Contributing').pages;
+    const issues = pages.findIndex(page => page.rel === 'contributing/issues');
+    expect(pages[issues + 1].route).toBe('/docs/contributing/agentic-system');
+    expect(pages[issues + 1].title).toBe('How Taxiway is maintained with agents');
+  });
+
   it('derives a title from the first H1', () => {
     expect(titleFromRaw('Intro\n\n# First title\n\n# Second title', 'Fallback')).toBe('First title');
     expect(titleFromRaw('No heading', 'Fallback')).toBe('Fallback');

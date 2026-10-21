@@ -72,5 +72,6 @@ Typical flow:
 - [Model gateway tests](contributing/model-gateway-tests.md)
 - [Model catalog updates](contributing/model-catalog.md)
 - [Issues](contributing/issues.md)
+- [How Taxiway is maintained with agents](contributing/agentic-system.md)
 - [Release](contributing/release.md)
 - [Installation qualification](contributing/installation-qualification.md)

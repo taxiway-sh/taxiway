@@ -69,7 +69,8 @@ const PAGE_ORDER = [
   'drivers/lima', 'drivers/docker',
   'orchestrators/claude-code', 'orchestrators/codex', 'orchestrators/gastown', 'orchestrators/gascity',
   'how-to/gateway', 'how-to/observability', 'how-to/recordings',
-  'contributing/development', 'contributing/testing', 'contributing/issues', 'contributing/release',
+  'contributing/development', 'contributing/testing', 'contributing/issues', 'contributing/agentic-system',
+  'contributing/release',
   'contributing/release-qualification',
   'contributing/installation-qualification',
 ];
