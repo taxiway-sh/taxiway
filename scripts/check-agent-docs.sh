@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Check agent docs and docs/ pages: skill frontmatter and discovery symlinks,
-# scheduled agent declarations, autonomy and heartbeat schema (approval log
-# and frictions),
+# scheduled agent declarations, autonomy, heartbeat schema (approval log and
+# frictions) and machine queue schema,
 # relative Markdown links (pages under docs/ reach other files through blob
 # URLs), and normative phrases that must stay in their owner.
 # Usage: scripts/check-agent-docs.sh [repository-root]
@@ -126,7 +126,11 @@ def check_skills():
             errors.append(f".claude/skills/{entry.name}: no matching .agents/skills/{entry.name}")
 
 
-AGENT_FIELDS = {"id", "title", "schedule", "model", "repositories", "workdir", "skills", "outputs", "autonomy"}
+AGENT_FIELDS = {"id", "title", "model", "repositories", "workdir", "skills", "outputs", "autonomy"}
+# Optional fields: runs (where the agent runs, cloud by default) and schedule,
+# required in the cloud and absent on the machine, where runs are event-driven.
+AGENT_OPTIONAL = {"runs", "schedule"}
+RUNS = ["cloud", "machine"]
 LEVELS = ["propose", "ask", "auto"]
 # The fixed never list: the agents skill must list exactly these actions, and
 # no declaration may use one as an action class.
@@ -142,6 +146,15 @@ NEVER_AUTO = {"change-agent-system", "merge-pr"}
 PUSH_CLASSES = {"push-pr-branch", "change-agent-system"}
 AGENTS_SKILL = ".agents/skills/taxiway-agents/SKILL.md"
 HEARTBEAT_SCHEMA = "status.schema.json"
+QUEUE_SCHEMA = "queue.schema.json"
+QUEUE_REQUIRED = {"id", "link", "commit", "checks", "maxMinutes", "expires", "requester", "created", "status"}
+QUEUE_STATUSES = ["pending", "running", "done", "failed", "expired", "rejected"]
+QUEUE_DATES = ["expires", "created", "started", "finished"]
+ONE_LINE = "^[^\\n]*$"
+UTC_DATE = "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+# A machine agent reads Taxiway, writes only the state repository, and takes
+# no action class: its queue and heartbeat writes are its run contract.
+MACHINE_REPOSITORIES = {"taxiway-sh/taxiway": "read", "taxiway-sh/agents": "write"}
 APPROVAL_FIELDS = {"class", "proposal", "answer", "date", "link"}
 APPROVAL_ANSWERS = ["ok", "refused", "corrected"]
 FRICTION_FIELDS = {"kind", "summary"}
@@ -266,6 +279,36 @@ def check_heartbeat_schema(schema):
             errors.append(f"{rel(schema)}: frictions must hold at most {FRICTIONS_MAX} items")
 
 
+def check_queue_schema(schema):
+    """Shape of the machine queue item schema; samples are validated by its tests."""
+    data = json.loads(schema.read_text())
+    if not isinstance(data, dict):
+        errors.append(f"{rel(schema)}: must be a JSON object")
+        return
+    if data.get("additionalProperties") is not False:
+        errors.append(f"{rel(schema)}: queue items must not allow additional properties")
+    required = data.get("required")
+    if not isinstance(required, list) or set(required) != QUEUE_REQUIRED:
+        errors.append(f"{rel(schema)}: queue items must require exactly {sorted(QUEUE_REQUIRED)}")
+    props = data.get("properties") if isinstance(data.get("properties"), dict) else {}
+    status = props.get("status")
+    if not isinstance(status, dict) or status.get("enum") != QUEUE_STATUSES:
+        errors.append(f"{rel(schema)}: queue status must be one of {QUEUE_STATUSES}")
+    commit = props.get("commit")
+    if not isinstance(commit, dict) or commit.get("pattern") != "^[0-9a-f]{40}$":
+        errors.append(f"{rel(schema)}: queue commit must be a full SHA")
+    checks = props.get("checks") if isinstance(props.get("checks"), dict) else {}
+    items = checks.get("items") if isinstance(checks.get("items"), dict) else {}
+    fields = items.get("properties") if isinstance(items.get("properties"), dict) else {}
+    scope = fields.get("scope")
+    if not isinstance(scope, dict) or scope.get("pattern") != ONE_LINE:
+        errors.append(f"{rel(schema)}: queue check scope must be one line ({ONE_LINE})")
+    for field in QUEUE_DATES:
+        date = props.get(field)
+        if not isinstance(date, dict) or date.get("pattern") != UTC_DATE:
+            errors.append(f"{rel(schema)}: queue {field} must be a UTC date ({UTC_DATE})")
+
+
 def check_agents():
     """Scheduled agent declarations: .agents/agents/<id>.json + <id>.prompt.md."""
     agents = root / ".agents/agents"
@@ -277,8 +320,13 @@ def check_agents():
             check_heartbeat_schema(schema)
         except (OSError, ValueError) as err:
             errors.append(f"{rel(schema)}: unreadable heartbeat schema: {err}")
+        queue = agents / QUEUE_SCHEMA
+        try:
+            check_queue_schema(queue)
+        except (OSError, ValueError) as err:
+            errors.append(f"{rel(queue)}: unreadable queue schema: {err}")
         classes = action_classes()
-    decls = [p for p in agents.glob("*.json") if p.name != HEARTBEAT_SCHEMA] if agents.is_dir() else []
+    decls = [p for p in agents.glob("*.json") if not p.name.endswith(".schema.json")] if agents.is_dir() else []
     for decl in sorted(decls):
         name = rel(decl)
         try:
@@ -290,7 +338,7 @@ def check_agents():
             errors.append(f"{name}: must be a JSON object")
             continue
         missing = AGENT_FIELDS - data.keys()
-        extra = data.keys() - AGENT_FIELDS
+        extra = data.keys() - AGENT_FIELDS - AGENT_OPTIONAL
         if missing:
             errors.append(f"{name}: missing fields {sorted(missing)}")
         if extra:
@@ -299,8 +347,18 @@ def check_agents():
             errors.append(f"{name}: id must be {decl.stem!r}")
         if not (agents / f"{decl.stem}.prompt.md").is_file():
             errors.append(f"{name}: missing {decl.stem}.prompt.md")
+        runs = data.get("runs", "cloud")
+        if runs not in RUNS:
+            errors.append(f"{name}: runs must be one of {RUNS}")
         schedule = data.get("schedule")
-        if not isinstance(schedule, str) or len(schedule.split()) != 5:
+        if runs == "machine":
+            if "schedule" in data:
+                errors.append(f"{name}: a machine agent is event-driven and has no schedule")
+            if data.get("repositories") != MACHINE_REPOSITORIES:
+                errors.append(f"{name}: a machine agent's repositories must be exactly {MACHINE_REPOSITORIES}")
+            if data.get("autonomy") != {}:
+                errors.append(f"{name}: a machine agent takes no action class; autonomy must be empty")
+        elif not isinstance(schedule, str) or len(schedule.split()) != 5:
             errors.append(f"{name}: schedule must be five cron fields")
         elif schedule in schedules:
             errors.append(f"{name}: schedule {schedule!r} already used by {schedules[schedule]}")

@@ -79,8 +79,8 @@ fix the findings, and re-review as it says.
 Push the branch and open the PR under the approvals matrix. Its title is a
 [Conventional Commits](../../../docs/contributing/development.md#commit-messages)
 subject; its body follows the
-[PR template](../../../.github/pull_request_template.md); its labels are
-existing ones from [Labels](../../../docs/contributing/issues.md#labels).
+[PR template](../../../.github/pull_request_template.md); its labels follow
+[Pull request labels](../../../docs/contributing/issues.md#pull-request-labels).
 
 ## 7. CI and follow-up
 

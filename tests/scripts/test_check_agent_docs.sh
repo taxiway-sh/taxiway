@@ -106,6 +106,7 @@ MD
 JSON
   printf '# Watch\n' > "$tree/.agents/agents/watch.prompt.md"
   cp "$repo_dir/.agents/agents/status.schema.json" "$tree/.agents/agents/status.schema.json"
+  cp "$repo_dir/.agents/agents/queue.schema.json" "$tree/.agents/agents/queue.schema.json"
   printf '%s\n' "$tree"
 }
 
@@ -325,6 +326,60 @@ json.dump(data, open(sys.argv[1], "w"))
 PY2
 }
 
+machine_agent() {
+  cat > "$1/.agents/agents/machine.json" <<'JSON'
+{"id": "machine", "title": "Machine", "runs": "machine", "model": "default",
+ "repositories": {"taxiway-sh/taxiway": "read", "taxiway-sh/agents": "write"},
+ "workdir": "taxiway", "skills": ["demo"], "outputs": ["report"], "autonomy": {}}
+JSON
+  printf '# Machine\n' > "$1/.agents/agents/machine.prompt.md"
+}
+
+tree="$(fixture machine-agent)"
+machine_agent "$tree"
+bash "$checker" "$tree" > "$test_dir/out"
+echo 'PASS: machine agent without schedule accepted'
+
+tree="$(fixture machine-agent-schedule)"
+machine_agent "$tree"
+sed -i.bak 's/"runs": "machine",/"runs": "machine", "schedule": "0 5 * * *",/' "$tree/.agents/agents/machine.json"
+expect_fail 'machine agent with a schedule' "$tree" 'machine.json: a machine agent is event-driven and has no schedule'
+
+tree="$(fixture machine-agent-write-taxiway)"
+machine_agent "$tree"
+sed -i.bak 's/"taxiway-sh\/taxiway": "read"/"taxiway-sh\/taxiway": "write"/' "$tree/.agents/agents/machine.json"
+expect_fail 'machine agent writing taxiway' "$tree" "machine.json: a machine agent's repositories must be exactly"
+
+tree="$(fixture machine-agent-extra-repository)"
+machine_agent "$tree"
+sed -i.bak 's/"taxiway-sh\/agents": "write"}/"taxiway-sh\/agents": "write", "taxiway-sh\/site": "read"}/' "$tree/.agents/agents/machine.json"
+expect_fail 'machine agent with an extra repository' "$tree" "machine.json: a machine agent's repositories must be exactly"
+
+tree="$(fixture machine-agent-action-class)"
+machine_agent "$tree"
+sed -i.bak 's/"autonomy": {}/"autonomy": {"comment-issue": "ask"}/' "$tree/.agents/agents/machine.json"
+expect_fail 'machine agent with an action class' "$tree" 'machine.json: a machine agent takes no action class; autonomy must be empty'
+
+tree="$(fixture agent-unknown-runs)"
+sed -i.bak 's/"title": "Watch",/"title": "Watch", "runs": "laptop",/' "$tree/.agents/agents/watch.json"
+expect_fail 'agent with an unknown runs value' "$tree" "watch.json: runs must be one of ['cloud', 'machine']"
+
+tree="$(fixture cloud-agent-no-schedule)"
+sed -i.bak 's/"schedule": "0 4 \* \* \*", //' "$tree/.agents/agents/watch.json"
+expect_fail 'cloud agent without a schedule' "$tree" 'watch.json: schedule must be five cron fields'
+
+tree="$(fixture queue-schema-missing)"
+rm "$tree/.agents/agents/queue.schema.json"
+expect_fail 'missing queue schema' "$tree" 'queue.schema.json: unreadable queue schema'
+
+set_queue_schema() {
+  python3 - "$1/.agents/agents/queue.schema.json" "$2" <<'PY2'
+import json, sys
+data = json.load(open(sys.argv[1])); exec(sys.argv[2])
+json.dump(data, open(sys.argv[1], "w"))
+PY2
+}
+
 tree="$(fixture heartbeat-frictions-required)"
 edit_schema "$tree" 'data["required"].append("frictions")'
 expect_fail 'required frictions' "$tree" 'status.schema.json: frictions must stay optional'
@@ -370,6 +425,34 @@ expect_fail 'frictions with an extra field' "$tree" "status.schema.json: frictio
 tree="$(fixture heartbeat-frictions-link)"
 edit_schema "$tree" 'frictions["items"]["properties"]["link"]["pattern"] = "^https://"'
 expect_fail 'frictions link outside the project' "$tree" 'status.schema.json: frictions link must match'
+
+tree="$(fixture queue-schema-status)"
+set_queue_schema "$tree" 'data["properties"]["status"]["enum"].remove("expired")'
+expect_fail 'queue schema without the expired status' "$tree" 'queue.schema.json: queue status must be one of'
+
+tree="$(fixture queue-schema-rejected)"
+set_queue_schema "$tree" 'data["properties"]["status"]["enum"].remove("rejected")'
+expect_fail 'queue schema without the rejected status' "$tree" 'queue.schema.json: queue status must be one of'
+
+tree="$(fixture queue-schema-date)"
+set_queue_schema "$tree" 'del data["properties"]["started"]["pattern"]'
+expect_fail 'queue schema with a date without the UTC pattern' "$tree" 'queue.schema.json: queue started must be a UTC date'
+
+tree="$(fixture queue-schema-scope)"
+set_queue_schema "$tree" 'del data["properties"]["checks"]["items"]["properties"]["scope"]["pattern"]'
+expect_fail 'queue schema with a multi-line scope' "$tree" 'queue.schema.json: queue check scope must be one line'
+
+tree="$(fixture queue-schema-open)"
+set_queue_schema "$tree" 'del data["additionalProperties"]'
+expect_fail 'queue schema allowing additional properties' "$tree" 'queue.schema.json: queue items must not allow additional properties'
+
+tree="$(fixture queue-schema-required)"
+set_queue_schema "$tree" 'data["required"].remove("expires")'
+expect_fail 'queue schema without a time bound' "$tree" 'queue.schema.json: queue items must require exactly'
+
+tree="$(fixture queue-schema-commit)"
+set_queue_schema "$tree" 'data["properties"]["commit"]["pattern"] = "^[0-9a-f]{7,40}$"'
+expect_fail 'queue schema accepting a short commit' "$tree" 'queue.schema.json: queue commit must be a full SHA'
 
 tree="$(fixture agent-orphan-prompt)"
 printf '# Gone\n' > "$tree/.agents/agents/gone.prompt.md"
@@ -417,6 +500,61 @@ if validator.is_valid(dict(base, frictions=[friction] * 21)):
     sys.exit("FAIL: more than 20 frictions were accepted")
 PY2
   echo 'PASS: heartbeat schema validates the approval log and frictions'
+  python3 - "$repo_dir/.agents/agents/queue.schema.json" <<'PY2'
+import json, sys
+import jsonschema
+schema = json.load(open(sys.argv[1]))
+validator = jsonschema.Draft202012Validator(schema, format_checker=jsonschema.FormatChecker())
+item = {"id": "20261021-091500-steward", "link": "https://github.com/taxiway-sh/taxiway/pull/185",
+        "commit": "0" * 40, "checks": [{"kind": "lima", "scope": "Up and PrepareRun on Lima"}],
+        "maxMinutes": 90, "expires": "2026-10-24T09:15:00Z", "requester": "steward",
+        "created": "2026-10-21T09:15:00Z", "status": "pending"}
+started = {"started": "2026-10-21T10:00:00Z"}
+report = "https://github.com/taxiway-sh/agents/blob/main/queue/machine/20261021-091500-steward.md"
+done = dict(item, status="done", finished="2026-10-21T11:00:00Z", **started,
+            result={"summary": "Lima: pass.", "link": report,
+                    "outcomes": [{"kind": "lima", "outcome": "pass"}]})
+real = dict(item, checks=[{"kind": "real-account", "scope": "Claude Code delegation"}],
+            approval="https://github.com/taxiway-sh/taxiway/pull/185#issuecomment-1")
+# approval is optional in the schema: the machine agent decides when it is needed.
+valid = [item, {k: v for k, v in real.items() if k != "approval"}, dict(item, status="running", **started), done, real,
+         dict(item, status="failed", finished="2026-10-21T10:05:00Z", **started,
+              result={"summary": "Lima is not installed."}),
+         dict(item, status="expired", finished="2026-10-24T10:00:00Z",
+              result={"summary": "Expired before the machine was online."}),
+         dict(item, status="rejected", finished="2026-10-21T09:20:00Z",
+              result={"summary": "Rejected: the commit is not on a branch of taxiway-sh/taxiway."}),
+         dict(real, status="rejected", finished="2026-10-21T09:20:00Z",
+              result={"summary": "Rejected: the approval comment does not name this item."})]
+invalid = {
+    "extra field": dict(item, host="mac"),
+    "short commit": dict(item, commit="abc1234"),
+    "unknown check": dict(item, checks=[{"kind": "windows", "scope": "x"}]),
+    "no checks": dict(item, checks=[]),
+    "foreign link": dict(item, link="https://github.com/other/repo/pull/1"),
+    "unknown status": dict(item, status="queued"),
+    "pending with a result": dict(item, result={"summary": "x"}),
+    "running without started": dict(item, status="running"),
+    "done without outcomes": dict(done, result={"summary": "x", "link": report}),
+    "done without report link": dict(done, result={"summary": "x", "outcomes": done["result"]["outcomes"]}),
+    "expired after starting": dict(item, status="expired", finished="2026-10-24T10:00:00Z",
+                                   result={"summary": "x"}, **started),
+    "rejected after starting": dict(item, status="rejected", finished="2026-10-21T10:05:00Z",
+                                    result={"summary": "x"}, **started),
+    "rejected without a result": dict(item, status="rejected", finished="2026-10-21T10:05:00Z"),
+    "date with an offset": dict(item, created="2026-10-21T09:15:00+02:00"),
+    "date without a time": dict(item, expires="2026-10-24"),
+    "date with fractions": dict(item, created="2026-10-21T09:15:00.5Z"),
+    "report outside the queue": dict(done, result=dict(done["result"], link="https://example.invalid/r.md")),
+    "multi-line scope": dict(item, checks=[{"kind": "lima", "scope": "Up on Lima\nthen more"}]),
+}
+for sample in valid:
+    validator.validate(sample)
+for name, sample in invalid.items():
+    if validator.is_valid(sample):
+        sys.exit(f"FAIL: queue item with {name} was accepted")
+PY2
+  echo 'PASS: queue schema validates queue items'
 else
-  echo 'SKIP: heartbeat schema samples (python jsonschema not installed)'
+  echo 'SKIP: heartbeat and queue schema samples (python jsonschema not installed)'
 fi
