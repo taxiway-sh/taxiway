@@ -30,9 +30,10 @@ Review adversarially: look for what is wrong, not for confirmation.
 - **Rule preservation.** Every rule removed, moved or merged still exists in
   its owner, or its removal is stated and justified.
 - **Single owner.** No rule restated outside its owner; other files link to it.
-- **Links.** Links and anchors resolve
-  ([docs links](../../../docs/contributing/testing.md#local-checks));
-  `make lint` runs `check-agent-docs`.
+- **Links.** Links and anchors resolve; `make lint` runs `check-agent-docs`.
+  Pages under `docs/` and the landing page follow
+  [`taxiway-docs`](../taxiway-docs/SKILL.md), [links](../taxiway-docs/SKILL.md#links)
+  included.
 - **Tests.** Claimed checks were actually run on this head, and skipped or
   blocked ones are reported as such. New behavior has tests where
   [Testing](../../../docs/contributing/testing.md) puts them, and lifecycle

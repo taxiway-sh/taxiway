@@ -62,11 +62,10 @@ npm test
 npm run build
 ```
 
-The site renders Markdown from `docs/` directly. Check links and navigation
-as well as the production build when adding or moving a page. Pages under
-`docs/` link to files outside `docs/` with GitHub blob URLs
-(`https://github.com/taxiway-sh/taxiway/blob/main/<path>`), because the site
-cannot resolve relative paths outside `docs/`.
+The site renders Markdown from `docs/` directly. The
+[`taxiway-docs` skill](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-docs/SKILL.md)
+owns how pages are written to render on GitHub and on the site: links,
+navigation, titles and diagrams.
 
 ### End-to-end
 

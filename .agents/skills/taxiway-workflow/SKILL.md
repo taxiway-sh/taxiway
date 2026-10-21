@@ -68,7 +68,8 @@ maintainer.
 - **Routing.** A selected issue follows
   [`taxiway-issue`](../taxiway-issue/SKILL.md) with one implementation agent;
   its review follows [`taxiway-review`](../taxiway-review/SKILL.md) and its PR
-  follow-up [`steward`](../steward/SKILL.md).
+  follow-up [`steward`](../steward/SKILL.md). A change to pages under `docs/`
+  or to the landing site also follows [`taxiway-docs`](../taxiway-docs/SKILL.md).
 - **Capacity.** There is no fixed agent quota: size concurrency to measured
   host capacity (memory, swap, running VMs and containers) and client limits.
   The launcher's `--max-agents` is an optional ceiling; `--max-heavy-tests`

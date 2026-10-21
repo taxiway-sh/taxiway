@@ -61,3 +61,4 @@ Skills are named `taxiway-<topic>`; `steward` keeps the name Claude Code reads f
 | Upstream dependency bugs, workarounds, dependency bumps, model catalog review | [`taxiway-upstream` skill](.agents/skills/taxiway-upstream/SKILL.md), [Model catalog](docs/contributing/model-catalog.md) |
 | Releases, release and installation qualification | [`taxiway-release` skill](.agents/skills/taxiway-release/SKILL.md), [Installation qualification](docs/contributing/installation-qualification.md) |
 | Where documentation lives | User docs in `docs/`, contributor docs in [`docs/contributing/`](docs/contributing/README.md) |
+| Writing docs pages and landing copy: GitHub and site rendering, links, navigation, titles, diagrams | [`taxiway-docs` skill](.agents/skills/taxiway-docs/SKILL.md) |

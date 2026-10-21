@@ -94,6 +94,12 @@ One line each; follow the link for the rules.
   which checks a change needs, E2E scenarios, Docker or Lima, installation
   qualification and cloud sessions.
 
+**Documentation**
+
+- [`taxiway-docs`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-docs/SKILL.md):
+  how pages under `docs/` and the landing copy are written to render on
+  GitHub and on the site: links, navigation, titles and diagrams.
+
 **Releases**
 
 - [`taxiway-release`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-release/SKILL.md):
