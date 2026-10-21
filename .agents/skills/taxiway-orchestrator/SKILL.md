@@ -182,22 +182,19 @@ lab capability).
   it into a Lima supervisor unit
   ([Gateway key exposure](../../../docs/orchestrators/gascity.md#gateway-key-exposure),
   tracked in [#180](https://github.com/taxiway-sh/taxiway/issues/180)).
-  Gateway-key and secrets handling beyond this belongs to the
-  `taxiway-security` skill.
+  Gateway-key and secrets handling beyond this belongs to
+  [`taxiway-security`](../taxiway-security/SKILL.md#gateway-keys-and-lab-isolation).
 
 ## Upstream workarounds
 
-When the pinned version has a bug Taxiway must work around:
-
-- a code comment at the workaround names the upstream report or PR and the
-  local tracking issue (example: `orchestrators/gascity/start.sh` cites
-  gastownhall/gascity#5985 and #178);
-- the adapter page lists it under Limitations when users can observe it;
-- the tracking issue follows
-  [Upstream dependency fixes](../taxiway-intake/SKILL.md#upstream-dependency-fixes).
-
-Investigation and upstream reports follow the `taxiway-upstream` skill and the
-[upstream procedure](../../../docs/contributing/development.md#upstream-dependency-bugs).
+A bug in the pinned version follows
+[`taxiway-upstream`](../taxiway-upstream/SKILL.md#suspected-upstream-bug);
+a workaround Taxiway keeps follows its
+[Workaround and tracking issue](../taxiway-upstream/SKILL.md#workaround-and-tracking-issue).
+In an adapter, the code comment sits in the adapter script that carries the
+workaround (example: `orchestrators/gascity/start.sh` cites
+gastownhall/gascity#5985 and #178), and the documented limitation goes in the
+Limitations section of `docs/orchestrators/<name>.md`.
 
 ## Keeping this skill current
 
