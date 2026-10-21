@@ -88,7 +88,7 @@ MD
   ln -s ../../.agents/skills/taxiway-agents "$tree/.claude/skills/taxiway-agents"
   mkdir -p "$tree/.agents/agents"
   cat > "$tree/.agents/agents/watch.json" <<'JSON'
-{"id": "watch", "title": "Watch", "schedule": "0 4 * * *", "model": "default",
+{"id": "watch", "title": "Taxiway – watch agent (fixture)", "schedule": "0 4 * * *", "model": "default",
  "repositories": {"taxiway-sh/taxiway": "read", "taxiway-sh/agents": "write"},
  "workdir": "taxiway", "skills": ["demo"], "outputs": ["report"],
  "autonomy": {"comment-issue": "auto", "merge-pr": "ask"}}
@@ -171,9 +171,31 @@ sed -i.bak 's/"demo"\]/"gone"]/' "$tree/.agents/agents/watch.json"
 expect_fail 'agent with unknown skill' "$tree" "unknown skill 'gone'"
 
 tree="$(fixture agent-duplicate-schedule)"
-sed 's/"watch"/"other"/; s/"Watch"/"Other"/' "$tree/.agents/agents/watch.json" > "$tree/.agents/agents/other.json"
+sed 's/"watch"/"other"/; s/watch agent/other agent/' "$tree/.agents/agents/watch.json" > "$tree/.agents/agents/other.json"
 printf '# Other\n' > "$tree/.agents/agents/other.prompt.md"
 expect_fail 'two agents on one schedule' "$tree" "schedule '0 4 * * *' already used by"
+
+tree="$(fixture agent-duplicate-title)"
+sed 's/"watch"/"other"/; s/"0 4 \* \* \*"/"0 5 * * *"/' "$tree/.agents/agents/watch.json" > "$tree/.agents/agents/other.json"
+printf '# Other\n' > "$tree/.agents/agents/other.prompt.md"
+expect_fail 'two agents with one title' "$tree" "title 'Taxiway – watch agent (fixture)' already used by"
+
+tree="$(fixture agent-title-hyphen)"
+sed -i.bak 's/Taxiway – watch agent/Taxiway - watch agent/' "$tree/.agents/agents/watch.json"
+expect_fail 'agent title without the en dash' "$tree" "title must be 'Taxiway – <role> agent (<scope>)'"
+
+tree="$(fixture agent-title-old-form)"
+sed -i.bak 's/"title": "[^"]*"/"title": "Taxiway agent: watch"/' "$tree/.agents/agents/watch.json"
+expect_fail 'agent title in the old form' "$tree" "title must be 'Taxiway – <role> agent (<scope>)'"
+
+tree="$(fixture agent-watchdog-title)"
+sed 's/"watch"/"watchdog"/' "$tree/.agents/agents/watch.json" > "$tree/.agents/agents/watchdog.json"
+rm "$tree/.agents/agents/watch.json" "$tree/.agents/agents/watch.prompt.md"
+printf '# Watchdog\n' > "$tree/.agents/agents/watchdog.prompt.md"
+expect_fail 'watchdog with an agent title' "$tree" "watchdog.json: title must be 'Taxiway – agents watchdog'"
+sed -i.bak 's/"title": "[^"]*"/"title": "Taxiway – agents watchdog"/' "$tree/.agents/agents/watchdog.json"
+bash "$checker" "$tree" > "$test_dir/out"
+echo 'PASS: watchdog title accepted'
 
 tree="$(fixture agent-missing-field)"
 python3 - "$tree/.agents/agents/watch.json" <<'PY2'

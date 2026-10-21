@@ -13,8 +13,10 @@ a scheduled agent follows the [approvals](../taxiway-workflow/SKILL.md#approvals
 
 Each agent is declared in this repository and changes only through reviewed PRs:
 
-- `.agents/agents/<id>.json`: `id` (the file name), `title`, `schedule` (five
-  cron fields, UTC), `model` (a model ID, or `default` for the account's
+- `.agents/agents/<id>.json`: `id` (the file name), `title` (the name of its
+  session and scheduled task, `Taxiway – <role> agent (<scope>)` with an en
+  dash, for example `Taxiway – triage agent (backlog)`; the watchdog is
+  `Taxiway – agents watchdog`), `schedule` (five cron fields, UTC), `model` (a model ID, or `default` for the account's
   default), `repositories` (`read` or `write` per repository),
   `workdir`, `skills`, `outputs` and `autonomy` (see [Autonomy](#autonomy));
 - `.agents/agents/<id>.prompt.md`: the job, read at the start of every run.
@@ -177,25 +179,28 @@ declaration-only PR.
 
 For each declaration, or the one `id` requested:
 
-1. Look up the agent's session with `list_sessions` (tag
-   `taxiway-agent:<id>`; if the tag filter is refused, list your own sessions
-   and match the title `Taxiway agent: <id>`), and its scheduled task by the
-   same name, paging through `list_triggers`. Reuse them when they exist;
-   never create a second one for the same agent.
+1. Look up the agent's session with `list_sessions`, by the tag
+   `taxiway-agent:<id>` first; if the tag filter is refused or finds nothing,
+   list your own sessions and match the declared `title`. Its scheduled task
+   is the one bound to that session or named with the same `title`, paging
+   through `list_triggers`. Reuse them when they exist; never create a second
+   one for the same agent. A session or scheduled task found under another
+   name is renamed to the declared `title`.
 2. Otherwise create one standing session for the agent from the `taxiway`
-   repository, with the declared `model`, titled `Taxiway agent: <id>` and
+   repository, with the declared `model`, titled with the declared `title` and
    tagged `taxiway-agent:<id>`, and send a setup-only first prompt: attach
    `taxiway-sh/agents` with `add_repo` (`access: push`), verify both clones
    and the tools, then stop. Tools cannot be pre-approved from another
    session, so the maintainer approves that one `add_repo` call in the
    agent's session; the repository then stays attached as a source of the
    session.
-3. Create a scheduled task named `Taxiway agent: <id>`, bound to that session,
-   with the declared schedule and the bootstrap prompt. Never use a new
+3. Create a scheduled task named with the declared `title`, bound to that
+   session, with the declared schedule and the bootstrap prompt. Never use a new
    session per run: such a session has no repository access.
 4. When the schedule or the prompt changed, update the existing scheduled task.
-   When the model changed, archive the session, create a new one as in
-   step 2 and rebind the task.
+   When the model changed, create a new session as in step 2, rebind the task
+   to it, then rename the old session `OLD session – <title>` and archive it,
+   so title lookups find only the new one.
 5. Record the schedule, `model` and `promptVersion` in `deployed.json`.
 
 Installation is idempotent: running it again changes nothing that already
@@ -210,6 +215,7 @@ then report:
   schedule (late, failed or missing is a finding);
 - the scheduled task: present, enabled, last run;
 - the session: present and not failed;
+- a session or scheduled task whose name is not the declared `title`;
 - a `promptVersion` behind `main`, which shows the run read older
   instructions.
 

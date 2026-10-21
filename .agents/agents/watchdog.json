@@ -1,6 +1,6 @@
 {
   "id": "watchdog",
-  "title": "Morning watchdog",
+  "title": "Taxiway – agents watchdog",
   "schedule": "45 4 * * *",
   "model": "default",
   "repositories": {

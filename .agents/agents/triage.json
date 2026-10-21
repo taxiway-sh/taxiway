@@ -1,6 +1,6 @@
 {
   "id": "triage",
-  "title": "Backlog triage",
+  "title": "Taxiway – triage agent (backlog)",
   "schedule": "15 4 * * 1-5",
   "model": "default",
   "repositories": {
