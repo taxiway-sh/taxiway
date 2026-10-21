@@ -181,8 +181,9 @@ model: pause it between checks as
 [Pause the City](../orchestrators/gascity.md#pause-the-city) says.
 
 Prepare Gas Town and Gas City before copying authentication so their agents
-first start with a usable login. If a lab already exists, inspect and reuse it instead of
-creating a replacement or overwriting its authentication automatically.
+first start with a usable login. If a lab already exists, inspect and reuse it
+instead of creating a replacement or overwriting its authentication
+automatically.
 
 Leave persistent labs available after automated checks for the user's manual
 validation. Connect with `direnv exec . ./taxiway shell <lab>`; in Gas Town,

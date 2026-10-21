@@ -129,8 +129,9 @@ selection, delegation, tools and patrols. Temporary feature scripts and sanitize
 reports stay outside Git; do not grow a committed live regression suite.
 
 Real model requests consume account usage and are explicitly opt-in, outside
-unattended CI. Persistent labs keep generic names `test-claude`, `test-codex`,
-`test-gastown` (or their existing names) and remain available for manual checks.
+unattended CI. Persistent labs keep the names listed in
+[Persistent labs for manual validation](live-tests.md#persistent-labs-for-manual-validation)
+(or their existing names) and remain available for manual checks.
 Remove only owned temporary labs automatically.
 
 ### Disposition of former live scenarios
