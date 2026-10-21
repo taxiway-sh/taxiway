@@ -175,7 +175,7 @@ scheduled.
 |---|---|---|
 | Coordinator | Starts or resumes a session, routes needs, tracks approvals and status | [`taxiway-workflow`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-workflow/SKILL.md) |
 | Implementer | Works one selected issue in its own worktree and branch | [`taxiway-issue`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-issue/SKILL.md) |
-| Reviewer | Reviews a change it did not write | [`taxiway-review`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-review/SKILL.md) |
+| Reviewer | Reviews a change it did not write, as a read-only agent: a subagent by default, or a child session in auto mode with a stall check when the review needs its own environment | [`taxiway-review`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-review/SKILL.md) |
 | PR steward | Follows an open PR until it is merged or closed | [`steward`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/steward/SKILL.md) |
 | Release | Qualifies a candidate and prepares the release | [`taxiway-release`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-release/SKILL.md) |
 
@@ -193,11 +193,15 @@ is the same for every scheduled agent:
    maintainer's answers to its previous proposals, and notes any friction: a
    missing, ambiguous or contradictory rule, a workaround, a check it could
    not run or a refused tool.
-3. **Heartbeat.** It writes `status/<id>.json` to the state repository, valid
-   against
+3. **Heartbeat.** It writes `status/<id>.json` in its clone of the state
+   repository, valid against
    [`status.schema.json`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/agents/status.schema.json):
    result, a one-sentence summary, `waiting` (what needs the maintainer, with
-   links), `approvals` (answers recorded) and `frictions`.
+   links), `approvals` (answers recorded) and `frictions`. It then runs
+   [`scripts/agents/push-heartbeat.sh <id>`](https://github.com/taxiway-sh/taxiway/blob/main/scripts/agents/push-heartbeat.sh),
+   never a commit by hand: the script sets the date, validates the state,
+   commits only that file and pushes it without force. When the push fails,
+   the run reports the heartbeat as not pushed.
 4. **Report.** It ends with a short report in its session, where the
    maintainer reads it and answers each proposal by its id.
 
@@ -235,14 +239,25 @@ owns the rules.
 - [Contributor code](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-security/SKILL.md#contributor-code)
   runs only in fork-PR CI after the maintainer approves the run; agents read
   it and never execute it.
+- [Upstream repositories](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-upstream/SKILL.md#reading-upstream-from-a-cloud-session)
+  are read through git only (tags, raw files, `refs/pull/<n>/head`); their
+  code is read, never built or run.
 - No agent pushes to `main`: every change goes through a branch and a
   reviewed PR, including changes to the agents themselves.
+- The heartbeat push script is
+  [sensitive](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-security/SKILL.md#agent-push-script):
+  no rule in the repository's Claude Code settings pre-approves it, and no
+  run may edit it.
 - A machine check of a commit that is not on `main` runs under the
   [approval rule](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-agents/SKILL.md#approval).
 - The state repository is
   [public](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-security/SKILL.md#public-writing):
   it carries no secrets, host details, private paths, session or scheduled
   task IDs, or raw logs.
+- Commit messages and PR bodies carry no Claude session link and no
+  `Claude-Session:` trailer, as the
+  [security rules](https://github.com/taxiway-sh/taxiway/blob/main/AGENTS.md#security)
+  say.
 
 ## What contributors see
 
@@ -267,5 +282,7 @@ To build something similar for another project, start from these files:
   declarations, prompts and the heartbeat and queue schemas;
 - [`scripts/check-agent-docs.sh`](https://github.com/taxiway-sh/taxiway/blob/main/scripts/check-agent-docs.sh):
   the `make lint` check of skills, declarations, autonomy and links;
+- [`scripts/agents/push-heartbeat.sh`](https://github.com/taxiway-sh/taxiway/blob/main/scripts/agents/push-heartbeat.sh):
+  the one way a run commits and pushes its heartbeat;
 - [`taxiway-sh/agents`](https://github.com/taxiway-sh/agents): the public state
   layout.
