@@ -13,8 +13,9 @@ heartbeat or with a manual [Check](../skills/taxiway-agents/SKILL.md#check).
    [Check](../skills/taxiway-agents/SKILL.md#check), which owns lateness
    against the declared schedule and the not-installed state.
 2. Check that the last scheduled run of each nightly workflow (`e2e.yml`,
-   `install.yml`, `model-catalog-update.yml`) started within the past 24 hours,
-   and report its conclusion; a run not finished yet is pending.
+   `install.yml`, `model-catalog-update.yml`) started within the past 24
+   hours, and report only a run that is missing or did not start. Failures
+   come from the [CI watch agent](ci-watch.prompt.md)'s `waiting` items.
 3. Collect every heartbeat's `waiting` items.
 4. Collect the `approvals` entries of every `status/<id>.json` commit since
    the watchdog's previous heartbeat (`git log`; with no previous heartbeat,
