@@ -17,7 +17,9 @@ Each rule has one owner; link to it instead of restating it.
 Follow the [E2E scenario rule](.agents/skills/taxiway-testing/SKILL.md#e2e-scenarios).
 See [testing](docs/contributing/testing.md#writing-tests), the
 [skill](.agents/skills/demo/SKILL.md), [helpers](docs/contributing/testing.md#run-test_helperssh),
-[emphasis](docs/contributing/testing.md#emphasis-word) and
+[emphasis](docs/contributing/testing.md#emphasis-word),
+[code](docs/contributing/testing.md#failed-to-mount-overlay),
+[mixed](docs/contributing/testing.md#run-__init__--co-docs) and
 [custom](docs/contributing/testing.md#custom-anchor).
 MD
   cat > "$tree/docs/contributing/testing.md" <<'MD'
@@ -38,6 +40,10 @@ Other sites are not checked: [example](https://example.invalid/missing.md).
 ## Run test_helpers.sh
 
 ## _Emphasis_ word
+
+### `failed to mount overlay`
+
+## Run `__init__` &amp; <b>co</b> [docs](testing.md)
 
 <a id="custom-anchor"></a>
 MD

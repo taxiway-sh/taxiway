@@ -8,6 +8,7 @@
 set -euo pipefail
 root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 exec python3 -I - "$root" <<'PY'
+import html
 import json
 import pathlib
 import re
@@ -43,8 +44,9 @@ def rel(path):
     return path.relative_to(root).as_posix()
 
 
-def strip_code(text):
-    """Drop fenced blocks (3+ backticks or tildes) and blank inline code."""
+def strip_code(text, inline=True):
+    """Drop fenced blocks (3+ backticks or tildes) and, unless inline is
+    False, blank inline code."""
     kept, fence = [], None
     for line in text.splitlines():
         match = re.match(r" {0,3}(`{3,}|~{3,})(.*)$", line)
@@ -52,7 +54,7 @@ def strip_code(text):
             if match:
                 fence = match.group(1)
             else:
-                kept.append(re.sub(r"`[^`\n]*`", "``", line))
+                kept.append(re.sub(r"`[^`\n]*`", "``", line) if inline else line)
         elif (match and match.group(1)[0] == fence[0]
               and len(match.group(1)) >= len(fence) and not match.group(2).strip()):
             fence = None
@@ -60,17 +62,29 @@ def strip_code(text):
 
 
 def slug(heading):
-    """GitHub-style heading anchor."""
-    heading = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", heading.strip().lower())
-    heading = re.sub(r"[`*]|(?<!\w)_|_(?!\w)", "", heading)
-    return re.sub(r"[^\w\- ]", "", heading).replace(" ", "-")
+    """Heading anchor, an approximation of github-slugger, which GitHub and the
+    site (rehype-slug) both use: the heading's rendered text, lowercased, keeps
+    letters, digits, `_`, `-` and spaces, and each space becomes `-`. Inline
+    code keeps its text verbatim; outside it, links and images keep their text,
+    HTML tags, escapes, entities and emphasis markers are dropped. Not handled:
+    setext headings and a duplicate suffix that collides with another heading.
+    The site's docs link test checks docs/ pages with the real algorithm."""
+    parts = re.split(r"(`+)(.+?)\1", heading.strip())
+    text = ""
+    for index in range(0, len(parts), 3):
+        prose = re.sub(r"!?\[([^\]]*)\]\([^)]*\)", r"\1", parts[index])
+        prose = html.unescape(re.sub(r"\\(\W)", r"\1", re.sub(r"<[^>]*>", "", prose)))
+        text += re.sub(r"\*|(?<!\w)_|_(?!\w)", "", prose)
+        if index + 2 < len(parts):
+            text += parts[index + 2].strip() or parts[index + 2]
+    return re.sub(r"[^\w\- ]", "", text.lower()).replace(" ", "-")
 
 
 def anchors(path):
     text = path.read_text()
     result = set(re.findall(r"<a\s+(?:id|name)=[\"']([^\"']+)[\"']", text))
     seen = {}
-    for line in strip_code(text).splitlines():
+    for line in strip_code(text, inline=False).splitlines():
         match = re.match(r"#{1,6}\s+(.*?)\s*#*\s*$", line)
         if not match:
             continue
