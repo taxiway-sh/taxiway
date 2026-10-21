@@ -16,8 +16,9 @@ heartbeat or with a manual [Check](../skills/taxiway-agents/SKILL.md#check).
    `install.yml`, `model-catalog-update.yml`) started within the past 24 hours,
    and report its conclusion; a run not finished yet is pending.
 3. Collect every heartbeat's `waiting` items.
-4. Collect every heartbeat's `approvals` entries answered `corrected` for a
-   class that agent's declaration sets to `auto`: each is a demotion incident
+4. Collect the `approvals` entries of every `status/<id>.json` commit since
+   the watchdog's previous heartbeat (`git log`), answered `corrected` for a
+   class the declaration sets to `auto`: each is a demotion incident
    ([Promotion and demotion](../skills/taxiway-agents/SKILL.md#promotion-and-demotion)).
 
 ## Report

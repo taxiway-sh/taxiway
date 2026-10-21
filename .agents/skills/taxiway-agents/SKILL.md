@@ -19,11 +19,15 @@ Each agent is declared in this repository and changes only through reviewed PRs:
   `workdir`, `skills`, `outputs` and `autonomy` (see [Autonomy](#autonomy));
 - `.agents/agents/<id>.prompt.md`: the job, read at the start of every run.
 
-`read` means the agent never pushes to that repository; issue and PR writes
-follow `autonomy`. This is declared, not enforced: a cloud session can usually
-push, so agents cannot change their own instructions only because `main` is
-protected and changes go through reviewed PRs. `make lint` checks the
-declarations and the heartbeat schema
+`read` means the agent never pushes to that repository. `write` on
+`taxiway-sh/taxiway` means pushing, without force, to branches other than
+`main`; `make lint` requires it exactly when `push-pr-branch` or
+`change-agent-system` is at `ask` or `auto`. Issue and PR writes follow
+[Autonomy](#autonomy). This is declared, not enforced: a cloud session can
+usually push, so agents cannot change their own instructions only because
+`main` is protected and changes go through reviewed PRs. A Taxiway workflow may
+regenerate its bot branch (`automation/*`) and drop an agent's commits there.
+`make lint` checks the declarations and the heartbeat schema
 ([`status.schema.json`](../../agents/status.schema.json)).
 
 ## State repository
@@ -38,6 +42,7 @@ declarations and the heartbeat schema
   recorded, each with `class` (an [action class](#action-classes)),
   `proposal` (its id or link), `answer` (`ok`, `refused` or `corrected`),
   `date` (of the answer) and `link` (the GitHub item or the action taken).
+  A heartbeat holds at most 50 answers; the rest are carried to the next run.
   The history of `status/<id>.json` is the approval log;
 - `deployed.json`: for each installed agent, its schedule, `model` and the
   `promptVersion` it was installed from. Session and scheduled task IDs stay
@@ -89,8 +94,8 @@ and says why.
 ## Autonomy
 
 A declaration's `autonomy` maps each action class the agent takes to a level.
-A class missing from the map stays at `propose`. Levels apply to the
-repositories the declaration allows; `read` access still forbids pushing.
+A class missing from the map stays at `propose`. Levels apply within the
+declared [repository access](#declarations).
 
 | Level | The agent |
 |---|---|
@@ -98,14 +103,16 @@ repositories the declaration allows; `read` access still forbids pushing.
 | `ask` | proposes it in its report and takes it only after the maintainer's OK in its session; the initial level |
 | `auto` | takes it, then reports it with a link that undoes it or shows how |
 
-Each proposal in a report carries an id, `<id>-<UTC date YYYYMMDD>-<n>`, which
-the maintainer answers and `approvals` records.
+Each proposal and each `auto` action in a report carries an id,
+`<id>-<UTC date YYYYMMDD>-<n>`, which the maintainer answers and `approvals`
+records.
 
 ### Action classes
 
 `make lint` rejects any other class and any level above a class's highest
-level. A class whose highest level is `ask` changes the agentic system itself
-and is never `auto`.
+level. A class whose highest level is `ask` is never `auto`, because it
+changes the agentic system or is reserved to the maintainer by
+[`AGENTS.md`](../../../AGENTS.md).
 
 | Class | Covers | Highest level |
 |---|---|---|
@@ -114,9 +121,9 @@ and is never `auto`.
 | `label-issue` | Applying or removing labels on an issue or PR | `auto` |
 | `assign-issue` | Assigning or unassigning an issue or PR | `auto` |
 | `review-pr` | Submitting a PR review | `auto` |
-| `push-pr-branch` | Pushing, without force, to a PR branch the agent created | `auto` |
+| `push-pr-branch` | Pushing, without force, to a PR branch the agent created, or to a bot PR branch opened by a Taxiway workflow (`automation/*`) | `auto` |
 | `mark-pr-ready` | Marking a draft PR ready for review | `auto` |
-| `merge-pr` | Merging a PR | `auto` |
+| `merge-pr` | Merging a PR | `ask` |
 | `close-issue` | Closing or reopening an issue | `auto` |
 | `close-pr` | Closing or reopening a PR | `auto` |
 | `rerun-workflow` | Rerunning a GitHub Actions run | `auto` |
@@ -126,7 +133,10 @@ and is never `auto`.
 ### Never
 
 No level allows these actions and none is an action class: `make lint` rejects
-them in a declaration, and rejects this list unless it matches the checker's.
+them in a declaration. The checker locks this list, and the never-`auto`
+classes, by id: it fails unless the ids here match its own. It cannot check
+what an id covers, so changing a description changes this list and needs the
+maintainer's review.
 
 | Action | Never |
 |---|---|
@@ -154,7 +164,9 @@ but the agent's declaration, reviewed and merged by the maintainer:
   run.
 
 The weekly improvement agent proposes these PRs once it is declared; until
-then, an interactive session proposes them when the maintainer asks.
+then, an interactive session proposes them when the maintainer asks. Raising a
+class from `propose` to `ask` is the maintainer's call, through the same
+declaration-only PR.
 
 ## Install
 

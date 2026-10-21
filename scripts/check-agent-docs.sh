@@ -132,6 +132,11 @@ NEVER = {
     "handle-secrets", "skip-tests", "change-own-instructions",
     "change-approvals", "change-never-list",
 }
+# Classes pinned at highest level ask: they change the agentic system, or
+# AGENTS.md reserves them to the maintainer.
+NEVER_AUTO = {"change-agent-system", "merge-pr"}
+# Classes that need write access to taxiway-sh/taxiway, and only they grant it.
+PUSH_CLASSES = {"push-pr-branch", "change-agent-system"}
 AGENTS_SKILL = ".agents/skills/taxiway-agents/SKILL.md"
 HEARTBEAT_SCHEMA = "status.schema.json"
 APPROVAL_FIELDS = {"class", "proposal", "answer", "date", "link"}
@@ -148,6 +153,8 @@ def skill_table(text, heading):
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
         first = re.fullmatch(r"`([a-z0-9-]+)`", cells[0]) if line.startswith("|") else None
         if first:
+            if first.group(1) in rows:
+                errors.append(f"{AGENTS_SKILL}: duplicate {heading} row {first.group(1)!r}")
             last = re.fullmatch(r"`([a-z]+)`", cells[-1])
             rows[first.group(1)] = last.group(1) if last else None
     return rows
@@ -167,9 +174,14 @@ def action_classes():
         if highest not in ("ask", "auto"):
             errors.append(f"{AGENTS_SKILL}: action class {name!r} highest level must be ask or auto")
             classes[name] = "ask"
+    for name in sorted(NEVER_AUTO):
+        if classes.get(name) != "ask":
+            errors.append(f"{AGENTS_SKILL}: action class {name!r} must have highest level ask")
+            classes[name] = "ask"
     never = set(skill_table(text, "Never"))
     if never != NEVER:
-        errors.append(f"{AGENTS_SKILL}: Never list must be exactly {sorted(NEVER)}")
+        errors.append(f"{AGENTS_SKILL}: Never list must match the checker:"
+                      f" missing {sorted(NEVER - never)}, extra {sorted(never - NEVER)}")
     for name in classes.keys() & NEVER:
         errors.append(f"{AGENTS_SKILL}: {name!r} is on the never list, not an action class")
     return classes
@@ -192,17 +204,29 @@ def check_autonomy(name, autonomy, classes):
 
 def check_heartbeat_schema(schema):
     data = json.loads(schema.read_text())
-    if "promptVersion" not in data.get("required", []):
+    if not isinstance(data, dict):
+        errors.append(f"{rel(schema)}: must be a JSON object")
+        return
+    required = data.get("required", [])
+    if "promptVersion" not in required:
         errors.append(f"{rel(schema)}: must require promptVersion")
-    approvals = data.get("properties", {}).get("approvals", {})
-    items = approvals.get("items", {}) if isinstance(approvals, dict) else {}
-    if (approvals.get("type") != "array" or items.get("additionalProperties") is not False
-            or set(items.get("required", [])) != APPROVAL_FIELDS
-            or items.get("properties", {}).get("answer", {}).get("enum") != APPROVAL_ANSWERS):
-        errors.append(f"{rel(schema)}: approvals must be an array of {sorted(APPROVAL_FIELDS)}"
-                      f" with answer one of {APPROVAL_ANSWERS}")
-    if "approvals" in data.get("required", []):
+    if "approvals" in required:
         errors.append(f"{rel(schema)}: approvals must stay optional")
+    props = data.get("properties")
+    approvals = props.get("approvals") if isinstance(props, dict) else None
+    if not isinstance(approvals, dict) or approvals.get("type") != "array":
+        errors.append(f"{rel(schema)}: approvals must be an array")
+        return
+    items = approvals.get("items")
+    if not isinstance(items, dict) or items.get("additionalProperties") is not False:
+        errors.append(f"{rel(schema)}: approvals items must be objects without additional properties")
+        return
+    if set(items.get("required", [])) != APPROVAL_FIELDS:
+        errors.append(f"{rel(schema)}: approvals items must require exactly {sorted(APPROVAL_FIELDS)}")
+    fields = items.get("properties")
+    answer = fields.get("answer") if isinstance(fields, dict) else None
+    if not isinstance(answer, dict) or answer.get("enum") != APPROVAL_ANSWERS:
+        errors.append(f"{rel(schema)}: approvals answer must be one of {APPROVAL_ANSWERS}")
 
 
 def check_agents():
@@ -214,7 +238,7 @@ def check_agents():
     if agents.is_dir():
         try:
             check_heartbeat_schema(schema)
-        except (OSError, ValueError, AttributeError) as err:
+        except (OSError, ValueError) as err:
             errors.append(f"{rel(schema)}: unreadable heartbeat schema: {err}")
         classes = action_classes()
     decls = [p for p in agents.glob("*.json") if p.name != HEARTBEAT_SCHEMA] if agents.is_dir() else []
@@ -248,8 +272,16 @@ def check_agents():
         repos = data.get("repositories")
         if not isinstance(repos, dict) or any(v not in ("read", "write") for v in repos.values()):
             errors.append(f"{name}: repositories must map each repository to read or write")
-        elif repos.get("taxiway-sh/taxiway") != "read":
-            errors.append(f"{name}: taxiway-sh/taxiway access must be read")
+        elif repos.get("taxiway-sh/taxiway") not in ("read", "write"):
+            errors.append(f"{name}: taxiway-sh/taxiway access must be declared")
+        else:
+            autonomy = data.get("autonomy") if isinstance(data.get("autonomy"), dict) else {}
+            pushes = sorted(c for c in PUSH_CLASSES if autonomy.get(c) in ("ask", "auto"))
+            if repos["taxiway-sh/taxiway"] == "write" and not pushes:
+                errors.append(f"{name}: write on taxiway-sh/taxiway requires"
+                              f" {sorted(PUSH_CLASSES)} at ask or auto")
+            elif repos["taxiway-sh/taxiway"] == "read" and pushes:
+                errors.append(f"{name}: {pushes} at ask or auto requires write on taxiway-sh/taxiway")
         for field in ("title", "workdir", "model"):
             if not isinstance(data.get(field), str) or not data.get(field):
                 errors.append(f"{name}: {field} must be a non-empty string")

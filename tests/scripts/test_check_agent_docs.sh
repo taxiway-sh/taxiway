@@ -65,6 +65,8 @@ description: Use for the fixture.
 | Class | Covers | Highest level |
 |---|---|---|
 | `comment-issue` | Commenting | `auto` |
+| `push-pr-branch` | Pushing a PR branch | `auto` |
+| `merge-pr` | Merging | `ask` |
 | `change-agent-system` | Changing the agentic system | `ask` |
 
 ### Never
@@ -89,7 +91,7 @@ MD
 {"id": "watch", "title": "Watch", "schedule": "0 4 * * *", "model": "default",
  "repositories": {"taxiway-sh/taxiway": "read", "taxiway-sh/agents": "write"},
  "workdir": "taxiway", "skills": ["demo"], "outputs": ["report"],
- "autonomy": {"comment-issue": "auto", "change-agent-system": "ask"}}
+ "autonomy": {"comment-issue": "auto", "merge-pr": "ask"}}
 JSON
   printf '# Watch\n' > "$tree/.agents/agents/watch.prompt.md"
   cp "$repo_dir/.agents/agents/status.schema.json" "$tree/.agents/agents/status.schema.json"
@@ -158,7 +160,7 @@ expect_fail 'orphan discovery entry' "$tree" '.claude/skills/gone: no matching .
 
 tree="$(fixture agent-write-taxiway)"
 sed -i.bak 's/"taxiway-sh\/taxiway": "read"/"taxiway-sh\/taxiway": "write"/' "$tree/.agents/agents/watch.json"
-expect_fail 'agent with write access to taxiway' "$tree" 'taxiway-sh/taxiway access must be read'
+expect_fail 'write on taxiway without a pushing class' "$tree" "write on taxiway-sh/taxiway requires ['change-agent-system', 'push-pr-branch'] at ask or auto"
 
 tree="$(fixture agent-no-prompt)"
 rm "$tree/.agents/agents/watch.prompt.md"
@@ -217,9 +219,29 @@ tree="$(fixture agent-autonomy-never-auto)"
 set_autonomy "$tree" '{"change-agent-system": "auto"}'
 expect_fail 'auto for a never-auto action class' "$tree" "autonomy 'change-agent-system' can never be auto"
 
+tree="$(fixture agent-push-without-write)"
+set_autonomy "$tree" '{"push-pr-branch": "ask"}'
+expect_fail 'pushing class without write on taxiway' "$tree" "['push-pr-branch'] at ask or auto requires write on taxiway-sh/taxiway"
+
+tree="$(fixture agent-push-with-write)"
+set_autonomy "$tree" '{"push-pr-branch": "auto", "change-agent-system": "ask"}'
+sed -i.bak 's/"taxiway-sh\/taxiway": "read"/"taxiway-sh\/taxiway": "write"/' "$tree/.agents/agents/watch.json"
+bash "$checker" "$tree" > "$test_dir/out"
+echo 'PASS: write on taxiway with a pushing class accepted'
+
+tree="$(fixture skill-merge-auto)"
+sed -i.bak 's/^| `merge-pr` | Merging | `ask` |/| `merge-pr` | Merging | `auto` |/' "$tree/.agents/skills/taxiway-agents/SKILL.md"
+set_autonomy "$tree" '{"merge-pr": "auto"}'
+expect_fail 'never-auto class raised in the skill' "$tree" "action class 'merge-pr' must have highest level ask"
+grep -qF "autonomy 'merge-pr' can never be auto" "$test_dir/out" || { echo 'FAIL: merge-pr auto accepted' >&2; exit 1; }
+
+tree="$(fixture skill-duplicate-class)"
+sed -i.bak 's/^| `merge-pr` | Merging | `ask` |/&\n| `merge-pr` | Again | `auto` |/' "$tree/.agents/skills/taxiway-agents/SKILL.md"
+expect_fail 'duplicate action class row' "$tree" "duplicate Action classes row 'merge-pr'"
+
 tree="$(fixture skill-never-list-shortened)"
-sed -i.bak '/`skip-tests`/d' "$tree/.agents/skills/taxiway-agents/SKILL.md"
-expect_fail 'never list missing an action' "$tree" 'Never list must be exactly'
+sed -i.bak 's/^| `skip-tests` | Skipping tests |/| `push-tags` | Tags |/' "$tree/.agents/skills/taxiway-agents/SKILL.md"
+expect_fail 'never list missing an action' "$tree" "Never list must match the checker: missing ['skip-tests'], extra ['push-tags']"
 
 tree="$(fixture skill-never-as-class)"
 sed -i.bak 's/^| `comment-issue` | Commenting |/| `skip-tests` | Skipping |/' "$tree/.agents/skills/taxiway-agents/SKILL.md"
@@ -244,7 +266,22 @@ expect_fail 'heartbeat schema without promptVersion' "$tree" 'status.schema.json
 
 tree="$(fixture heartbeat-approvals-answers)"
 sed -i.bak 's/"answer": {"enum": \["ok", "refused", "corrected"\]}/"answer": {"enum": ["ok", "refused"]}/' "$tree/.agents/agents/status.schema.json"
-expect_fail 'approval log without the corrected answer' "$tree" 'status.schema.json: approvals must be an array of'
+expect_fail 'approval log without the corrected answer' "$tree" 'status.schema.json: approvals answer must be one of'
+
+tree="$(fixture heartbeat-approvals-list)"
+python3 - "$tree/.agents/agents/status.schema.json" <<'PY2'
+import json, sys
+data = json.load(open(sys.argv[1])); data["properties"]["approvals"] = []
+json.dump(data, open(sys.argv[1], "w"))
+PY2
+expect_fail 'malformed approval log' "$tree" 'status.schema.json: approvals must be an array'
+if grep -q 'unreadable heartbeat schema' "$test_dir/out"; then
+  echo 'FAIL: malformed approval log reported as unreadable' >&2; exit 1
+fi
+
+tree="$(fixture heartbeat-approvals-fields)"
+sed -i.bak 's/"required": \["class", "proposal", "answer", "date", "link"\]/"required": ["class", "answer"]/' "$tree/.agents/agents/status.schema.json"
+expect_fail 'approval log missing required fields' "$tree" 'status.schema.json: approvals items must require exactly'
 
 tree="$(fixture heartbeat-approvals-required)"
 sed -i.bak 's/"waiting", "promptVersion"\]/"waiting", "promptVersion", "approvals"]/' "$tree/.agents/agents/status.schema.json"
@@ -270,7 +307,10 @@ entry = {"class": "label-issue", "proposal": "triage-20261020-1", "answer": "cor
          "date": "2026-10-20T09:00:00Z", "link": "https://github.com/taxiway-sh/taxiway/issues/1"}
 validator.validate(base)
 validator.validate(dict(base, approvals=[entry]))
-for change in ({"answer": "maybe"}, {"link": "https://example.invalid/1"}, {"extra": 1}):
+validator.validate(dict(base, approvals=[dict(entry, proposal=entry["link"])]))
+for change in ({"answer": "maybe"}, {"link": "https://example.invalid/1"}, {"extra": 1},
+               {"link": "https://github.com/other/repo/issues/1"}, {"proposal": "label it"},
+               {"proposal": "https://github.com/other/repo/issues/1"}):
     bad = dict(base, approvals=[dict(copy.deepcopy(entry), **change)])
     if validator.is_valid(bad):
         sys.exit(f"FAIL: approval entry {change} was accepted")
