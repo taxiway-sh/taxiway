@@ -1,0 +1,19 @@
+{
+  "id": "model-catalog",
+  "title": "Taxiway – model catalog agent (catalog PR)",
+  "schedule": "50 3 * * *",
+  "model": "default",
+  "repositories": {
+    "taxiway-sh/taxiway": "write",
+    "taxiway-sh/agents": "write"
+  },
+  "workdir": "taxiway",
+  "skills": ["taxiway-upstream", "taxiway-intake", "taxiway-security"],
+  "outputs": ["report", "status/model-catalog.json"],
+  "autonomy": {
+    "push-pr-branch": "ask",
+    "mark-pr-ready": "ask",
+    "merge-pr": "ask",
+    "create-issue": "ask"
+  }
+}

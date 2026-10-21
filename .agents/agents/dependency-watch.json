@@ -1,0 +1,17 @@
+{
+  "id": "dependency-watch",
+  "title": "Taxiway – dependency watch agent (upstream releases)",
+  "schedule": "40 3 * * 1",
+  "model": "default",
+  "repositories": {
+    "taxiway-sh/taxiway": "read",
+    "taxiway-sh/agents": "write"
+  },
+  "workdir": "taxiway",
+  "skills": ["taxiway-upstream", "taxiway-intake", "taxiway-security"],
+  "outputs": ["report", "status/dependency-watch.json"],
+  "autonomy": {
+    "comment-issue": "ask",
+    "create-issue": "ask"
+  }
+}
