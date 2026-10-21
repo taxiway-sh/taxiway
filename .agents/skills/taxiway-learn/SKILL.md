@@ -113,7 +113,7 @@ campaign. Nothing else changes: the [guardrails](#guardrails),
 
 - **Where it runs.** Transcripts are processed where they live and never
   uploaded. Cloud sessions are read through the session tools, as data. Local
-  transcripts of each client are read on the maintainer's machine by the
+  transcripts of each client are read on the machine that holds them, by the
   machine agent ([#197](https://github.com/taxiway-sh/taxiway/issues/197)), so
   that part waits until it exists; their storage locations are checked at run
   time, not assumed.

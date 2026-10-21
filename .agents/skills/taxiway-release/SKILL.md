@@ -57,7 +57,7 @@ documentation-only and agent-tooling changes wait for the next one.
    to publish authorizes only the explicit requested publication after the recipe;
    follow `release.md`. After authorized publication, start
    a separate `--phase post --candidate vX.Y.Z` report. Inspect all six installation
-   matrix jobs and test installed archives on the actual Mac. Report failures;
+   matrix jobs and test installed archives on a real macOS machine. Report failures;
    never silently overwrite an existing tag/release.
 
 Clean only scenario-owned resources using existing helpers. Preserve reference
