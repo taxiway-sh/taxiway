@@ -21,9 +21,9 @@ is done. Read [`AGENTS.md`](../../../AGENTS.md) first.
 
 - **Subagent by default.** Run the reviewer as a read-only subagent: it
   returns its report directly and leaves nothing behind. A subagent cannot
-  start its own, so an implementer that is a subagent hands back the exact
-  range and leaves the review to the agent that delegated to it, unless it can
-  run a child session and wait for its report itself.
+  start a subagent of its own, so an implementer that is a subagent hands back
+  the exact range and leaves the review to the agent that delegated to it,
+  unless it can run a child session and wait for its report itself.
 - **Child session.** Only when the review needs its own environment, such as
   a long E2E run or a separate container, or when no subagent can be started.
   It clones from the remote, so the range must be pushed under the
@@ -31,16 +31,18 @@ is done. Read [`AGENTS.md`](../../../AGENTS.md) first.
   so it is created with `permission_mode: "auto"`, never `"default"` or
   `"plan"`, which wait on a prompt nobody sees; a caller that cannot grant
   `auto` does not use one. It is archived as soon as its report is read.
-- **Stall check.** About 10 minutes after a child session's last event,
-  scheduled with a tool the client provides rather than by waiting idle,
-  check its events for a pending prompt or a stopped turn. If it is stuck,
-  interrupt and archive it, then rerun the review as a subagent when one can
-  be started.
-- **Finish before handing back.** The agent that delegated the review waits
-  for the report and handles its findings before it ends its turn. When no
-  reviewer can be started or the review cannot finish, say so plainly: the
-  PR's Limitations list the review as pending and its Validation has no
-  `Independent review` line. Never present your own review as independent.
+- **Stall check.** About 10 minutes after a child session's last event, and
+  again until its report arrives, check its events for a pending prompt or a
+  stopped turn: schedule the check with a tool the client provides, or poll
+  between other work when there is none. If it is stuck, interrupt and archive
+  it, then rerun the review as a subagent when one can be started.
+- **Finish before handing back.** The agent that delegated the review does not
+  hand back or end the session until the report is handled and its findings
+  addressed; while a child session runs, it may end a turn after scheduling
+  the stall check. When no reviewer can be started or the review cannot
+  finish, say so plainly: the PR, when it is opened, lists the review as
+  pending in Limitations and has no `Independent review` line in Validation.
+  Never present your own review as independent.
 
 ## Checklist
 
