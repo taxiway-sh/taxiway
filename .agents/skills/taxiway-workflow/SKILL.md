@@ -43,6 +43,7 @@ without an actual artifact, process or result.
 | Releases: follow [`taxiway-release`](../taxiway-release/SKILL.md) | |
 | Upstream issues, PRs, comments, pushes or forks ([procedure](../../../docs/contributing/development.md#upstream-dependency-bugs)) | |
 | Real-provider (paid) live checks | |
+| Installing, changing or removing a [scheduled agent](../taxiway-agents/SKILL.md) | |
 | Discarding commits, user edits or persistent labs | |
 
 Authorization for Taxiway work never authorizes upstream publication. A pending

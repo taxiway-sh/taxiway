@@ -1,0 +1,13 @@
+{
+  "id": "triage",
+  "title": "Backlog triage",
+  "schedule": "15 4 * * 1-5",
+  "repositories": {
+    "taxiway-sh/taxiway": "read",
+    "taxiway-sh/agents": "write"
+  },
+  "workdir": "taxiway",
+  "skills": ["taxiway-triage"],
+  "outputs": ["report", "status/triage.json"],
+  "autonomy": "ask"
+}

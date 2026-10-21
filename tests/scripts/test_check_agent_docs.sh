@@ -53,6 +53,14 @@ Read [AGENTS.md](../../../AGENTS.md#e2e-scenarios).
 MD
   printf '# Live\n' > "$tree/tests/live/AGENTS.md"
   ln -s ../../.agents/skills/demo "$tree/.claude/skills/demo"
+  mkdir -p "$tree/.agents/agents"
+  cat > "$tree/.agents/agents/watch.json" <<'JSON'
+{"id": "watch", "title": "Watch", "schedule": "0 4 * * *",
+ "repositories": {"taxiway-sh/taxiway": "read", "taxiway-sh/agents": "write"},
+ "workdir": "taxiway", "skills": ["demo"], "outputs": ["report"], "autonomy": "ask"}
+JSON
+  printf '# Watch\n' > "$tree/.agents/agents/watch.prompt.md"
+  printf '{"required": ["id", "promptVersion"]}\n' > "$tree/.agents/agents/status.schema.json"
   printf '%s\n' "$tree"
 }
 
@@ -115,6 +123,55 @@ expect_fail 'missing discovery symlink' "$tree" '.claude/skills/demo: must be a 
 tree="$(fixture orphan-symlink)"
 ln -s ../../.agents/skills/gone "$tree/.claude/skills/gone"
 expect_fail 'orphan discovery entry' "$tree" '.claude/skills/gone: no matching .agents/skills/gone'
+
+tree="$(fixture agent-write-taxiway)"
+sed -i.bak 's/"taxiway-sh\/taxiway": "read"/"taxiway-sh\/taxiway": "write"/' "$tree/.agents/agents/watch.json"
+expect_fail 'agent with write access to taxiway' "$tree" 'taxiway-sh/taxiway access must be read'
+
+tree="$(fixture agent-no-prompt)"
+rm "$tree/.agents/agents/watch.prompt.md"
+expect_fail 'agent without prompt' "$tree" '.agents/agents/watch.json: missing watch.prompt.md'
+
+tree="$(fixture agent-unknown-skill)"
+sed -i.bak 's/"demo"\]/"gone"]/' "$tree/.agents/agents/watch.json"
+expect_fail 'agent with unknown skill' "$tree" "unknown skill 'gone'"
+
+tree="$(fixture agent-duplicate-schedule)"
+sed 's/"watch"/"other"/; s/"Watch"/"Other"/' "$tree/.agents/agents/watch.json" > "$tree/.agents/agents/other.json"
+printf '# Other\n' > "$tree/.agents/agents/other.prompt.md"
+expect_fail 'two agents on one schedule' "$tree" "schedule '0 4 * * *' already used by"
+
+tree="$(fixture agent-missing-field)"
+python3 - "$tree/.agents/agents/watch.json" <<'PY2'
+import json, sys
+data = json.load(open(sys.argv[1])); del data["workdir"]; data["extra"] = 1
+json.dump(data, open(sys.argv[1], "w"))
+PY2
+expect_fail 'agent with missing and unknown fields' "$tree" "missing fields ['workdir']"
+
+tree="$(fixture agent-wrong-id)"
+sed -i.bak 's/"id": "watch"/"id": "other"/' "$tree/.agents/agents/watch.json"
+expect_fail 'agent id not matching its file' "$tree" "id must be 'watch'"
+
+tree="$(fixture agent-invalid-json)"
+printf '{' > "$tree/.agents/agents/watch.json"
+expect_fail 'invalid agent JSON' "$tree" '.agents/agents/watch.json: invalid JSON'
+
+tree="$(fixture agent-bad-autonomy)"
+sed -i.bak 's/"autonomy": "ask"/"autonomy": {"label": "auto"}/' "$tree/.agents/agents/watch.json"
+expect_fail 'agent with unsupported autonomy' "$tree" "autonomy must be one of ['ask']"
+
+tree="$(fixture agent-string-skills)"
+sed -i.bak 's/"skills": \["demo"\]/"skills": "demo"/' "$tree/.agents/agents/watch.json"
+expect_fail 'agent skills as a string' "$tree" 'skills must be a list of strings'
+
+tree="$(fixture heartbeat-schema)"
+printf '{"required": ["id"]}\n' > "$tree/.agents/agents/status.schema.json"
+expect_fail 'heartbeat schema without promptVersion' "$tree" 'status.schema.json: must require promptVersion'
+
+tree="$(fixture agent-orphan-prompt)"
+printf '# Gone\n' > "$tree/.agents/agents/gone.prompt.md"
+expect_fail 'prompt without declaration' "$tree" '.agents/agents/gone.prompt.md: no matching declaration'
 
 bash "$checker" "$repo_dir" > /dev/null
 echo 'PASS: repository agent docs'
