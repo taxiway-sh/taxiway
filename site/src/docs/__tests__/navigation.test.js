@@ -61,6 +61,12 @@ describe('docs navigation', () => {
     });
   }
 
+  // The sidebar column is 232px wide; a longer H1 wraps onto a second line.
+  it('keeps every sidebar title within 28 characters', () => {
+    const long = navGroups.flatMap((g) => g.pages).filter((p) => p.title.length > 28);
+    expect(long.map((p) => `${p.rel}: ${p.title}`)).toEqual([]);
+  });
+
   it('lists the same pages, order and titles in the contributing index', () => {
     const table = raw['contributing/README']
       .split('\n')
