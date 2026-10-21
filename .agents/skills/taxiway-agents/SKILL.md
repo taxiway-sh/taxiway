@@ -109,26 +109,26 @@ Each run then:
    `frictions` ([State repository](#state-repository)): a rule that was
    missing, ambiguous or contradictory, a workaround it used, a check it could
    not run or a tool that was refused;
-5. writes `status/<id>.json` in the `agents` clone with the file-writing
-   tool, never with a shell heredoc or redirection, valid against
+5. writes `status/<id>.json` in the `agents` clone with the file-writing tool,
+   never with a shell command such as a heredoc or redirection, valid against
    [`status.schema.json`](../../agents/status.schema.json). Then it runs
    `scripts/agents/push-heartbeat.sh <id>` from the `taxiway` clone as a
    command of its own, with nothing chained before or after it: a `cd` to the
    clone, when needed, is an earlier, separate command. The permission check
-   judges a command as a whole, and has refused a heartbeat write, a `cd` and
-   the script chained in one command while allowing the script alone. It never
-   commits the heartbeat by hand, and never edits that script or the
-   `agents` clone's git configuration or hooks. The script owns `date`, which
-   it sets to the current time; it validates the state, commits only that
-   file and pushes it to `main` of `taxiway-sh/agents`, without force, and
-   prints the commit SHA. When it fails after committing, it undoes its own
-   commit; when it fails or the session's permission check refuses it, the
-   run reports the heartbeat as not pushed, with the reason, and does not
-   commit or push it another way. A machine
-   agent also writes the status changes and reports of its [queue](#queue)
-   items, which belong to its run contract like its heartbeat and need no
-   action class, and commits and pushes them before running the script,
-   which refuses any other uncommitted change in the clone;
+   judges a command as a whole, so a chained command can be refused where the
+   script alone is allowed. It never commits the heartbeat by hand, and never
+   edits that script or the `agents` clone's git configuration or hooks. The
+   script owns `date`, which it sets to the current time; it validates the
+   state, commits only that file and pushes it to `main` of
+   `taxiway-sh/agents`, without force, and prints the commit SHA. When it fails
+   after committing, it undoes its own commit; when it fails or the session's
+   permission check refuses it, the run reports the heartbeat as not pushed,
+   with the reason, and does not commit or push it another way. A machine agent
+   also writes the status changes and reports of its [queue](#queue) items with
+   the file-writing tool, which belong to its run contract like its heartbeat
+   and need no action class, and commits and pushes them with git commands of
+   their own before running the script, which refuses any other uncommitted
+   change in the clone;
 6. ends with its report in the agent's session, where the maintainer reads and
    answers it; the heartbeat's `waiting` lists what needs them. Unattended
    reports are in English; when someone replies in the session, continue in
@@ -514,7 +514,8 @@ or simulating it:
    [approvals](../taxiway-workflow/SKILL.md#approvals);
 2. when the item needs an [approval](#approval), asks the maintainer for
    it and records the comment's link in `approval`;
-3. writes, commits and pushes the `pending` item;
+3. writes the `pending` item with the file-writing tool, then commits and
+   pushes it with git commands of their own;
 4. optionally sends the machine session (found by its title, which is the
    declaration's `title`) a one-line message asking it to drain the queue; a
    session the cloud cannot reach drains the item on its local schedule or at

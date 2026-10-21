@@ -201,9 +201,9 @@ is the same for every scheduled agent:
    [`scripts/agents/push-heartbeat.sh <id>`](https://github.com/taxiway-sh/taxiway/blob/main/scripts/agents/push-heartbeat.sh)
    as a command of its own, with nothing chained to it, never a commit by
    hand: the script sets the date, validates the state, commits only that
-   file and pushes it without force. When the script fails
-   or is refused, the run reports the heartbeat as not pushed, with the
-   reason, and pushes it no other way.
+   file and pushes it without force. When the script fails or is refused,
+   the run reports the heartbeat as not pushed, with the reason, and pushes
+   it no other way.
 4. **Report.** It ends with a short report in its session, where the
    maintainer reads it and answers each proposal by its id.
 
