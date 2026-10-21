@@ -41,12 +41,18 @@ without an actual artifact, process or result.
 | Force-pushing | Cleaning resources owned by a scenario with existing helpers |
 | Applying, removing or creating labels; comments, assignments, closures, reopenings and reviews on issues and PRs, unless already authorized | Recording in the issue a decision the maintainer has just given |
 | Releases: follow [`taxiway-release`](../taxiway-release/SKILL.md) | |
-| Upstream issues, PRs, comments, pushes or forks ([procedure](../../../docs/contributing/development.md#upstream-dependency-bugs)) | |
+| Upstream issues, PRs, comments, pushes or forks ([`taxiway-upstream`](../taxiway-upstream/SKILL.md#approvals)) | |
 | Real-provider (paid) live checks | |
 | Installing, changing or removing a [scheduled agent](../taxiway-agents/SKILL.md) | |
 | Discarding commits, user edits or persistent labs | |
 
-Authorization for Taxiway work never authorizes upstream publication. A pending
+A scheduled agent takes the actions covered by an
+[action class](../taxiway-agents/SKILL.md#action-classes) at the level its
+declaration sets; every other action here keeps this matrix, and the
+[never list](../taxiway-agents/SKILL.md#never) applies whatever the level.
+
+Upstream publication follows
+[`taxiway-upstream`](../taxiway-upstream/SKILL.md#approvals). A pending
 approval blocks only that action on that subject: keep other authorized,
 independent implementation, tests and reviews moving within capacity. An
 approval wait alone is not a reason to end the session. If every remaining
@@ -114,10 +120,15 @@ maintainer.
 Record a maintainer decision in the rule it creates, in the skill or document
 that owns that rule (see the routing table in `AGENTS.md`), with a link to the
 issue or PR where it was taken. Do not write ADRs or separate decision logs, and
-do not restate the rule elsewhere: link to its owner.
+do not restate the rule elsewhere: link to its owner. Refused improvement
+proposals and learning candidates are the exception: they are recorded as
+[rejected proposals](../taxiway-improve/SKILL.md#rejected-proposals).
 
 When the user corrects you, or answers a question that applies beyond the
-current task, propose on the spot to record it this way.
+current task, propose on the spot to record it this way in its owner. When you
+do something that no skill or document describes, such as a new procedure, a
+workaround or a check that turned out to matter, say so briefly and offer the
+same.
 
 ## Status on demand
 
@@ -148,8 +159,9 @@ actionable request per blocker, and never invent percentages or finish dates.
   states delivered behavior, actual checks and remaining limits, and
   distinguishes code-ready, independently reviewed, PR-open, merged and
   cleaned-up states.
-- **Frictions observed and rules to record:** end with this short list for the
-  user: missing, ambiguous or contradictory rules, workarounds used, checks
-  that could not run and refused tools. Propose each as a change to its owner
-  ([Decisions](#decisions)) or an issue through
-  [`taxiway-intake`](../taxiway-intake/SKILL.md).
+- **Frictions observed and rules to record:** end by running
+  [`taxiway-learn`](../taxiway-learn/SKILL.md) on the session and presenting
+  its candidates the way it says. Its list includes the frictions observed,
+  each once: missing, ambiguous or contradictory rules, workarounds used,
+  checks that could not run and refused tools. Nothing is written until the
+  maintainer picks.
