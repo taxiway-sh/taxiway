@@ -324,7 +324,17 @@ expect_fail 'machine agent with a schedule' "$tree" 'machine.json: a machine age
 tree="$(fixture machine-agent-write-taxiway)"
 machine_agent "$tree"
 sed -i.bak 's/"taxiway-sh\/taxiway": "read"/"taxiway-sh\/taxiway": "write"/' "$tree/.agents/agents/machine.json"
-expect_fail 'machine agent writing taxiway' "$tree" 'machine.json: a machine agent reads taxiway-sh/taxiway and writes taxiway-sh/agents'
+expect_fail 'machine agent writing taxiway' "$tree" "machine.json: a machine agent's repositories must be exactly"
+
+tree="$(fixture machine-agent-extra-repository)"
+machine_agent "$tree"
+sed -i.bak 's/"taxiway-sh\/agents": "write"}/"taxiway-sh\/agents": "write", "taxiway-sh\/site": "read"}/' "$tree/.agents/agents/machine.json"
+expect_fail 'machine agent with an extra repository' "$tree" "machine.json: a machine agent's repositories must be exactly"
+
+tree="$(fixture machine-agent-action-class)"
+machine_agent "$tree"
+sed -i.bak 's/"autonomy": {}/"autonomy": {"comment-issue": "ask"}/' "$tree/.agents/agents/machine.json"
+expect_fail 'machine agent with an action class' "$tree" 'machine.json: a machine agent takes no action class; autonomy must be empty'
 
 tree="$(fixture agent-unknown-runs)"
 sed -i.bak 's/"title": "Watch",/"title": "Watch", "runs": "laptop",/' "$tree/.agents/agents/watch.json"
@@ -349,6 +359,14 @@ PY2
 tree="$(fixture queue-schema-status)"
 set_queue_schema "$tree" 'data["properties"]["status"]["enum"].remove("expired")'
 expect_fail 'queue schema without the expired status' "$tree" 'queue.schema.json: queue status must be one of'
+
+tree="$(fixture queue-schema-rejected)"
+set_queue_schema "$tree" 'data["properties"]["status"]["enum"].remove("rejected")'
+expect_fail 'queue schema without the rejected status' "$tree" 'queue.schema.json: queue status must be one of'
+
+tree="$(fixture queue-schema-date)"
+set_queue_schema "$tree" 'del data["properties"]["started"]["pattern"]'
+expect_fail 'queue schema with a date without the UTC pattern' "$tree" 'queue.schema.json: queue started must be a UTC date'
 
 tree="$(fixture queue-schema-open)"
 set_queue_schema "$tree" 'del data["additionalProperties"]'
@@ -414,7 +432,11 @@ valid = [item, dict(item, status="running", **started), done, real,
          dict(item, status="failed", finished="2026-10-21T10:05:00Z", **started,
               result={"summary": "Lima is not installed."}),
          dict(item, status="expired", finished="2026-10-24T10:00:00Z",
-              result={"summary": "Expired before the machine was online."})]
+              result={"summary": "Expired before the machine was online."}),
+         dict(item, status="rejected", finished="2026-10-21T09:20:00Z",
+              result={"summary": "Rejected: the commit is not on a branch of taxiway-sh/taxiway."}),
+         dict(real, status="rejected", finished="2026-10-21T09:20:00Z",
+              result={"summary": "Rejected: the approval comment does not name this item."})]
 invalid = {
     "extra field": dict(item, host="mac"),
     "short commit": dict(item, commit="abc1234"),
@@ -428,6 +450,12 @@ invalid = {
     "done without report link": dict(done, result={"summary": "x", "outcomes": done["result"]["outcomes"]}),
     "expired after starting": dict(item, status="expired", finished="2026-10-24T10:00:00Z",
                                    result={"summary": "x"}, **started),
+    "rejected after starting": dict(item, status="rejected", finished="2026-10-21T10:05:00Z",
+                                    result={"summary": "x"}, **started),
+    "rejected without a result": dict(item, status="rejected", finished="2026-10-21T10:05:00Z"),
+    "date with an offset": dict(item, created="2026-10-21T09:15:00+02:00"),
+    "date without a time": dict(item, expires="2026-10-24"),
+    "date with fractions": dict(item, created="2026-10-21T09:15:00.5Z"),
     "report outside the queue": dict(done, result=dict(done["result"], link="https://example.invalid/r.md")),
     "real account without approval": {k: v for k, v in real.items() if k != "approval"},
 }

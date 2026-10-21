@@ -145,7 +145,12 @@ AGENTS_SKILL = ".agents/skills/taxiway-agents/SKILL.md"
 HEARTBEAT_SCHEMA = "status.schema.json"
 QUEUE_SCHEMA = "queue.schema.json"
 QUEUE_REQUIRED = {"id", "link", "commit", "checks", "maxMinutes", "expires", "requester", "created", "status"}
-QUEUE_STATUSES = ["pending", "running", "done", "failed", "expired"]
+QUEUE_STATUSES = ["pending", "running", "done", "failed", "expired", "rejected"]
+QUEUE_DATES = ["expires", "created", "started", "finished"]
+UTC_DATE = "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+# A machine agent reads Taxiway, writes only the state repository, and takes
+# no action class: its queue and heartbeat writes are its run contract.
+MACHINE_REPOSITORIES = {"taxiway-sh/taxiway": "read", "taxiway-sh/agents": "write"}
 APPROVAL_FIELDS = {"class", "proposal", "answer", "date", "link"}
 APPROVAL_ANSWERS = ["ok", "refused", "corrected"]
 
@@ -257,6 +262,10 @@ def check_queue_schema(schema):
     commit = props.get("commit")
     if not isinstance(commit, dict) or commit.get("pattern") != "^[0-9a-f]{40}$":
         errors.append(f"{rel(schema)}: queue commit must be a full SHA")
+    for field in QUEUE_DATES:
+        date = props.get(field)
+        if not isinstance(date, dict) or date.get("pattern") != UTC_DATE:
+            errors.append(f"{rel(schema)}: queue {field} must be a UTC date ({UTC_DATE})")
 
 
 def check_agents():
@@ -304,10 +313,10 @@ def check_agents():
         if runs == "machine":
             if "schedule" in data:
                 errors.append(f"{name}: a machine agent is event-driven and has no schedule")
-            repos = data.get("repositories")
-            if isinstance(repos, dict) and (repos.get("taxiway-sh/taxiway") != "read"
-                                            or repos.get("taxiway-sh/agents") != "write"):
-                errors.append(f"{name}: a machine agent reads taxiway-sh/taxiway and writes taxiway-sh/agents")
+            if data.get("repositories") != MACHINE_REPOSITORIES:
+                errors.append(f"{name}: a machine agent's repositories must be exactly {MACHINE_REPOSITORIES}")
+            if data.get("autonomy") != {}:
+                errors.append(f"{name}: a machine agent takes no action class; autonomy must be empty")
         elif not isinstance(schedule, str) or len(schedule.split()) != 5:
             errors.append(f"{name}: schedule must be five cron fields")
         elif schedule in schedules:

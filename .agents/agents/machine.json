@@ -10,7 +10,5 @@
   "workdir": "taxiway",
   "skills": ["taxiway-agents", "taxiway-release", "taxiway-security"],
   "outputs": ["report", "queue/machine/", "status/machine.json"],
-  "autonomy": {
-    "write-state": "auto"
-  }
+  "autonomy": {}
 }
