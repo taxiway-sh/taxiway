@@ -88,7 +88,9 @@ maintainer.
   The launcher's `--max-agents` is an optional ceiling; `--max-heavy-tests`
   limits concurrent heavy Docker and Lima runs. Identify context
   ownership, defer work when memory, network pools or client capacity are
-  exhausted, and do not duplicate agents or tests. Diagnose and retry
+  exhausted, and do not duplicate agents or tests. Parallel agents give their
+  working files, such as PR body files, unique names: a shared one once made
+  a PR briefly show another PR's description. Diagnose and retry
   narrowly; never globally prune resources or delete another context. Prefer
   asynchronous execution for long-running tools.
 - **Preflight.** Before tests or live runs, confirm the working directory,

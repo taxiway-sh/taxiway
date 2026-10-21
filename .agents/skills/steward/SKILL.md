@@ -60,6 +60,8 @@ open. CI does not re-run on a retarget: update the branch from `main` as in
   branch of your own that nobody else builds on.
 - On another agent's branch, coordinate with that agent at a safe point so its
   ongoing edits and tests are preserved.
+- When a PR conflicts with a sibling open PR that touches the same files,
+  flag it on both PRs or to the maintainer before either is merged.
 - Resolve, rerun the affected checks, then push. Pushing the update needs
   approval under the [approvals matrix](../taxiway-workflow/SKILL.md#approvals);
   a force-push always needs explicit approval, even during post-merge cleanup.
