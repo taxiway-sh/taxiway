@@ -32,10 +32,11 @@ is done. Read [`AGENTS.md`](../../../AGENTS.md) first.
   `"plan"`, which wait on a prompt nobody sees; a caller that cannot grant
   `auto` does not use one. It is archived as soon as its report is read.
 - **Stall check.** About 10 minutes after a child session's last event, and
-  again until its report arrives, check its events for a pending prompt or a
-  stopped turn: schedule the check with a tool the client provides, or poll
-  between other work when there is none. If it is stuck, interrupt and archive
-  it, then rerun the review as a subagent when one can be started.
+  every 10 minutes after that until its report arrives, check its events for
+  a pending prompt or a stopped turn: schedule the check with a tool the
+  client provides, or, without one, keep the turn open and poll. If it is
+  stuck, interrupt and archive it, then rerun the review as a subagent when
+  one can be started.
 - **Finish before handing back.** The agent that delegated the review does not
   hand back or end the session until the report is handled and its findings
   addressed; while a child session runs, it may end a turn after scheduling
