@@ -222,7 +222,8 @@ such as commenting, labelling, reviewing or pushing to a PR branch: `propose`
 - A [never list](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-agents/SKILL.md#never)
   holds what no level allows, such as pushing to Taxiway's `main`, publishing
   a release or upstream, handling secrets, skipping tests or changing an
-  agent's own instructions. `make lint` rejects a declaration that breaks these limits.
+  agent's own instructions. `make lint` rejects a declaration that breaks
+  these limits.
 - [Promotion and demotion](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-agents/SKILL.md#promotion-and-demotion)
   are based on the recorded answers: a run of approved proposals lets a class
   be promoted to `auto`, and a corrected action demotes it. Either change is a
