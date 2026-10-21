@@ -204,7 +204,7 @@ declaration-only PR.
 
 ## Install
 
-[`/install-agents`](../install-agents/SKILL.md) runs this section. It covers
+[`/taxiway-install-agents`](../taxiway-install-agents/SKILL.md) runs this section. It covers
 every declaration, or the one `id` requested; machine declarations only get a
 [pointer](#plan). It runs in one of three modes:
 
@@ -308,7 +308,7 @@ model change replace both:
 6. archive the old session with `archive_session` once it is ready to
    archive: an `ok` `status/<id>.json` dated after `replaced`. Then clear
    `replaced`. The Install run that sees that heartbeat archives it,
-   otherwise the next `/install-agents` run does, listed in that run's plan;
+   otherwise the next `/taxiway-install-agents` run does, listed in that run's plan;
    until then [Check](#check) reports it.
 
 The new scheduled task's run history starts empty.
@@ -346,7 +346,7 @@ archive, machine setup).
 
 ## Check
 
-[`/check-agents`](../check-agents/SKILL.md) runs this section. For each cloud
+[`/taxiway-check-agents`](../taxiway-check-agents/SKILL.md) runs this section. For each cloud
 declaration, or the one `id` requested, find the agent's session and scheduled
 task as in [Install](#steps) step 1, which stops for that agent and reports it
 when it has more than one session or scheduled task, then report:
@@ -365,7 +365,7 @@ when it has more than one session or scheduled task, then report:
 - a `promptVersion` behind `main`, which shows the run read older
   instructions;
 - an old session (`OLD session – <title>`, not archived): `old session ready
-  to archive: run /install-agents` when the agent's `deployed.json` entry has
+  to archive: run /taxiway-install-agents` when the agent's `deployed.json` entry has
   `replaced` and an `ok` heartbeat is dated after it
   ([ready to archive](#replacing-an-agent)), otherwise waiting for that
   heartbeat.

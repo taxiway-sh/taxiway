@@ -5,6 +5,8 @@ description: Use when following up a Taxiway pull request after it is opened, in
 
 # Taxiway PR steward
 
+Claude Code reads this skill by the name `steward` when it follows a PR; do not rename it.
+
 Follows one Taxiway PR from publication until it is merged or closed; usually
 the session that opened it. Read [`AGENTS.md`](../../../AGENTS.md) first. Fixes
 are made in the issue's worktree as in [`taxiway-issue`](../taxiway-issue/SKILL.md);

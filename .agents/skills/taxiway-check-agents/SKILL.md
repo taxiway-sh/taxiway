@@ -1,6 +1,6 @@
 ---
-name: check-agents
-description: Use when asked for the state of Taxiway's scheduled agents, or when invoked as /check-agents.
+name: taxiway-check-agents
+description: Use when asked for the state of Taxiway's scheduled agents, or when invoked as /taxiway-check-agents.
 argument-hint: "[id]"
 ---
 

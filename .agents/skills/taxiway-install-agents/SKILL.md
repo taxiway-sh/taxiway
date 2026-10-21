@@ -1,6 +1,6 @@
 ---
-name: install-agents
-description: Use when asked to install, update, reinstall or remove Taxiway's scheduled agents, or when invoked as /install-agents.
+name: taxiway-install-agents
+description: Use when asked to install, update, reinstall or remove Taxiway's scheduled agents, or when invoked as /taxiway-install-agents.
 argument-hint: "[id] [reinstall|remove]"
 ---
 

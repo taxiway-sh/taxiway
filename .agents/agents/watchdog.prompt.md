@@ -42,7 +42,7 @@ When something needs the maintainer, send one `PushNotification` titled
    says;
 5. agents not installed, each linked to its declaration on `main`;
 6. old sessions ready to archive, as Check reports them:
-   `old session ready to archive: run /install-agents`.
+   `old session ready to archive: run /taxiway-install-agents`.
 
 An agent not installed, or an old session ready to archive, is listed in the
 reply and in `waiting` at every run, but calls for a `PushNotification` only
