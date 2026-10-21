@@ -318,6 +318,23 @@ tree="$(fixture heartbeat-frictions-missing)"
 edit_schema "$tree" 'del data["properties"]["frictions"]'
 expect_fail 'heartbeat schema without frictions' "$tree" 'status.schema.json: frictions must be an array'
 
+tree="$(fixture heartbeat-frictions-object)"
+edit_schema "$tree" 'frictions["type"] = "object"'
+expect_fail 'frictions as an object' "$tree" 'status.schema.json: frictions must be an array'
+
+tree="$(fixture heartbeat-frictions-max-items)"
+edit_schema "$tree" 'del frictions["maxItems"]'
+expect_fail 'frictions without an item limit' "$tree" 'status.schema.json: frictions must hold at most 20 items'
+
+n=0
+for change in 'del frictions["items"]["properties"]["summary"]["maxLength"]' \
+              'frictions["items"]["properties"]["summary"]["type"] = "array"'; do
+  n=$((n + 1))
+  tree="$(fixture "heartbeat-frictions-summary-$n")"
+  edit_schema "$tree" "$change"
+  expect_fail "frictions summary ($change)" "$tree" 'status.schema.json: frictions summary must be a string of at most 200 characters'
+done
+
 tree="$(fixture heartbeat-frictions-open-items)"
 edit_schema "$tree" 'frictions["items"]["additionalProperties"] = True'
 expect_fail 'frictions items with additional properties' "$tree" 'status.schema.json: frictions items must be objects without additional properties'

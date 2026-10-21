@@ -145,6 +145,8 @@ APPROVAL_ANSWERS = ["ok", "refused", "corrected"]
 FRICTION_FIELDS = {"kind", "summary"}
 FRICTION_KINDS = ["missing-rule", "ambiguous-rule", "contradictory-rule",
                   "workaround", "check-not-run", "tool-refused"]
+FRICTIONS_MAX = 20
+FRICTION_SUMMARY_MAX = 200
 # Heartbeat links stay on the project's own GitHub items.
 PROJECT_LINK = "^https://github\\.com/taxiway-sh/"
 
@@ -252,6 +254,13 @@ def check_heartbeat_schema(schema):
         link = frictions.get("link")
         if not isinstance(link, dict) or link.get("pattern") != PROJECT_LINK:
             errors.append(f"{rel(schema)}: frictions link must match {PROJECT_LINK}")
+        summary = frictions.get("summary")
+        if (not isinstance(summary, dict) or summary.get("type") != "string"
+                or summary.get("maxLength") != FRICTION_SUMMARY_MAX):
+            errors.append(f"{rel(schema)}: frictions summary must be a string of at most"
+                          f" {FRICTION_SUMMARY_MAX} characters")
+        if props["frictions"].get("maxItems") != FRICTIONS_MAX:
+            errors.append(f"{rel(schema)}: frictions must hold at most {FRICTIONS_MAX} items")
 
 
 def check_agents():

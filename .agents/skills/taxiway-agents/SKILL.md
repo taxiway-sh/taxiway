@@ -47,7 +47,9 @@ never rules:
   Optionally, `frictions`: what got in the run's way, at most 20, each with
   `kind` (`missing-rule`, `ambiguous-rule`, `contradictory-rule`,
   `workaround`, `check-not-run` or `tool-refused`), `summary` (one sentence)
-  and, when there is one, `link` (a `taxiway-sh` GitHub item).
+  and, when there is one, `link` (a `taxiway-sh` GitHub item). Beyond 20,
+  frictions of the same kind and cause are merged into one, and the 20 that
+  cost the run most are kept.
   The history of `status/<id>.json` is the approval log and the friction log;
 - `deployed.json`: for each installed agent, its schedule, `model` and the
   `promptVersion` it was installed from. Session and scheduled task IDs stay
