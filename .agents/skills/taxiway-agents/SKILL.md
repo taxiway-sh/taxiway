@@ -59,8 +59,10 @@ never rules:
   frictions of the same kind and cause are merged into one, and the 20 that
   cost the run most are kept.
   The history of `status/<id>.json` is the approval log and the friction log;
-- `deployed.json`: for each installed agent, its schedule, `model` and the
-  `promptVersion` it was installed from. Session and scheduled task IDs stay
+- `deployed.json`: for each installed agent, its schedule, `model`, the
+  `promptVersion` it was installed from and, while an old session waits for
+  archive, `replaced`: the UTC date-time its old scheduled task was deleted
+  ([Replacing an agent](#replacing-an-agent)). Session and scheduled task IDs stay
   out of it: install and check look them up as [Install](#steps) step 1
   says;
 - `queue/machine/`, the [machine queue](#queue);
@@ -114,6 +116,12 @@ Each run then:
 
 A run that cannot finish still writes its heartbeat with `failed` or `partial`
 and says why.
+
+### Dry run
+
+A run whose prompt ends with `Dry run: write nothing; report what you would
+write.` writes nothing, heartbeat and `approvals` included: the answers it
+does not record stay for the next run. It reports what it would have written.
 
 ## Autonomy
 
@@ -229,8 +237,9 @@ Install session itself needs `taxiway-sh/agents` attached with push
 Before any write, look up each agent as [step 1](#steps) says, then list per
 agent what will be created, renamed, updated, replaced or removed (session,
 scheduled task, `deployed.json` entry), the old sessions to
-[archive](#replacing-an-agent), the dry runs and real test runs of
-[Verification](#verification), and the agents left unchanged. Undeclared
+[archive](#replacing-an-agent), the dry runs of [Verification](#verification),
+each awaiting the maintainer's OK before its scheduled task is created or
+updated, the real test runs, and the agents left unchanged. Undeclared
 agents found in the default mode are listed as removable with `remove`. Wait
 for one maintainer OK covering the whole plan, as the
 [approvals](../taxiway-workflow/SKILL.md#approvals) require; a step that
@@ -272,11 +281,14 @@ For each cloud agent in the approved plan:
    session, so the maintainer approves that one `add_repo` call in the
    agent's session; the repository then stays attached as a source of the
    session.
-3. Create a scheduled task named with the declared `title`, bound to that
-   session, with the declared schedule and the bootstrap prompt. Never use a
-   new session per run: such a session has no repository access.
-4. When the schedule or the prompt changed, update the existing scheduled
-   task. When the model changed, [replace](#replacing-an-agent) the agent.
+3. For a new session or a prompt change, run the [dry run](#verification)
+   and wait for the maintainer's OK on its report.
+4. Only then create a scheduled task named with the declared `title`, bound
+   to that session, with the declared schedule and the bootstrap prompt, or
+   update the existing scheduled task when the schedule or the bootstrap
+   prompt changed. Never use a new session per run: such a session has no
+   repository access. When the model changed,
+   [replace](#replacing-an-agent) the agent instead.
 5. Record the schedule, `model` and `promptVersion` in `deployed.json`.
 
 ### Replacing an agent
@@ -286,42 +298,46 @@ model change replace both:
 
 1. create a new session as in step 2, and wait until its setup is verified,
    with the `add_repo` call approved;
-2. only then create a new scheduled task bound to it as in step 3, with the
+2. run the [dry run](#verification) in it and wait for the maintainer's OK;
+3. only then create a new scheduled task bound to it as in step 4, with the
    same `title`, schedule and bootstrap prompt;
-3. delete the old scheduled task with `delete_trigger`;
-4. rename the old session `OLD session – <title>` with `set_session_title`
+4. delete the old scheduled task with `delete_trigger`, and record `replaced`,
+   the UTC date-time of that deletion, in the agent's `deployed.json` entry;
+5. rename the old session `OLD session – <title>` with `set_session_title`
    and remove its `taxiway-agent:<id>` tag, so lookups find only the new one;
-5. archive the old session with `archive_session` once it is ready: an `ok`
-   `status/<id>.json` dated after the old scheduled task was deleted (step 3),
-   or after the real test run of [Verification](#verification) started. The
-   Install run that sees that heartbeat archives it, otherwise the next
-   `/install-agents` run does, listed in that run's plan; until then
-   [Check](#check) reports it.
+6. archive the old session with `archive_session` once it is ready to
+   archive: an `ok` `status/<id>.json` dated after `replaced`. Then clear
+   `replaced`. The Install run that sees that heartbeat archives it,
+   otherwise the next `/install-agents` run does, listed in that run's plan;
+   until then [Check](#check) reports it.
 
 The new scheduled task's run history starts empty.
 
 ### Verification
 
-After the steps, for each new or changed agent:
+Verification applies to a new session, a prompt change (the agent's prompt
+file, or the bootstrap prompt, changed since the `promptVersion` in
+`deployed.json`) and a model change. A rename-only or schedule-only change
+needs no dry run and no test run. In order:
 
 1. a new session's setup is verified: both clones, the tools, and the
    `add_repo` call approved by the maintainer in that session;
 2. a dry run, as the [approvals](../taxiway-workflow/SKILL.md#approvals)
    require before an agent's first GitHub write: the
-   [bootstrap prompt](#every-run) followed by `Dry run: write nothing; report
-   what you would write.`, sent to the agent's session with `send_message`;
-   show its report to the maintainer;
-3. after the maintainer's OK on that report, the real test run: fire the new
-   scheduled task (`fire_trigger`), which tests its prompt and its binding. If
-   no new turn appears in the session within about 10 minutes, send the
-   bootstrap prompt with `send_message` and report that the fire did not reach
-   the session; this has been observed with a standing session. A
-   `send_message` run is peer-initiated: the agent may ask the maintainer's OK
-   in its session before writing;
+   [bootstrap prompt](#every-run) followed by the [dry run](#dry-run) line,
+   sent to the agent's session with `send_message`. Show its report to the
+   maintainer and wait for their OK; the scheduled task is created or updated
+   only after it;
+3. once the scheduled task exists, the real test run: fire it
+   (`fire_trigger`), which tests its prompt and its binding. If, after about
+   10 minutes, `get_session` shows the session idle and no turn started from
+   the fire, send the bootstrap prompt with `send_message` and report that the
+   fire did not reach the session; this has been observed with a standing
+   session. A `send_message` run is peer-initiated: the agent may ask the
+   maintainer's OK in its session before writing;
 4. its heartbeat: a new `status/<id>.json`, valid and dated after the real
    test run started. One that has not arrived when the run ends is reported as
-   pending; [Check](#check) picks it up. An `ok` one makes the old session of a
-   [replacement](#replacing-an-agent) ready to archive.
+   pending; [Check](#check) picks it up.
 
 End with one table, one row per agent: the mode and what was done, the
 session, the scheduled task, the dry run, the test heartbeat's result or
@@ -349,8 +365,9 @@ when it has more than one session or scheduled task, then report:
 - a `promptVersion` behind `main`, which shows the run read older
   instructions;
 - an old session (`OLD session – <title>`, not archived): `old session ready
-  to archive: run /install-agents` once it is
-  [ready](#replacing-an-agent), otherwise waiting for the new session's `ok`
+  to archive: run /install-agents` when the agent's `deployed.json` entry has
+  `replaced` and an `ok` heartbeat is dated after it
+  ([ready to archive](#replacing-an-agent)), otherwise waiting for that
   heartbeat.
 
 A check writes nothing. Repairs go through [Install](#install).
