@@ -147,6 +147,23 @@ func TestDiscoverReadsEachKnownChatGPTRetirementForm(t *testing.T) {
 	}
 }
 
+func TestDiscoverParsesEffectiveNoticeUnderAnyHeading(t *testing.T) {
+	const notice = "## Codex updates\nEffective October 14, 2026, GPT-5.5 retires from Codex for users signed in\nwith ChatGPT."
+	s := fixtureSources()
+	s.ChatGPT = []byte("# Models\n" + notice + " The OpenAI API and Codex sessions authenticated with an API key aren't affected.\nReplace `gpt-5.5`\nchoose `gpt-6-sol` when available.\n")
+	d, err := Discover(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := d.Retirements["gpt-5.5"]; got.Date != "2026-10-14" || got.Scope != "subscription" {
+		t.Fatalf("notice under another heading ignored: %#v", d.Retirements)
+	}
+	s.ChatGPT = []byte("# Models\n" + notice + "\nReplace `gpt-5.5`\nchoose `gpt-6-sol` when available.\n")
+	if _, err := Discover(s); err == nil || !strings.Contains(err.Error(), "API scope unclear") {
+		t.Fatalf("unscoped notice under another heading: error = %v", err)
+	}
+}
+
 func TestDiscoverRejectsAmbiguousEffectiveRetirement(t *testing.T) {
 	const notice = "Effective October 14, 2026, at noon PDT (19:00 UTC), GPT-5.5 retires from Codex for users signed in with ChatGPT."
 	const exclusion = " The OpenAI API and Codex sessions authenticated with an API key aren't affected.\n"
@@ -159,6 +176,13 @@ func TestDiscoverRejectsAmbiguousEffectiveRetirement(t *testing.T) {
 		{"second past retirement", notice + exclusion + "GPT-5.4 retired from Codex on August 31, 2026.\n", "unrecognized retirement notice"},
 		{"unknown model", "Effective October 14, 2026, GPT-6 Mystery retires from Codex for users signed in with ChatGPT." + exclusion, "ambiguous retirement model"},
 		{"ambiguous date", "Effective mid-October 2026, GPT-5.5 retires from Codex for users signed in with ChatGPT." + exclusion, "unrecognized retirement notice"},
+		{"at the earliest", "Effective October 14, 2026, at the earliest, GPT-5.5 retires from Codex for users signed in with ChatGPT." + exclusion, "unrecognized retirement notice"},
+		{"at a later date", "Effective October 14, 2026, at a later date, GPT-5.5 retires from Codex for users signed in with ChatGPT." + exclusion, "unrecognized retirement notice"},
+		{"qualified notice", "Unless postponed, Effective October 14, 2026, GPT-5.5 retires from Codex for users signed in with ChatGPT." + exclusion, "unrecognized retirement notice"},
+		{"qualified exclusion", notice + " Until December 1, 2026, The OpenAI API and Codex sessions authenticated with an API key aren't affected.\n", "API scope unclear"},
+		{"exclusion for another model", notice + " Replace `gpt-5.5`. For GPT-5.4: The OpenAI API and Codex sessions authenticated with an API key aren't affected.\n", "API scope unclear"},
+		{"second retiring model", notice + exclusion + "GPT-5.4 is retiring soon.\n", "unrecognized retirement notice"},
+		{"second retirement of", notice + exclusion + "The retirement of GPT-5.4 follows.\n", "unrecognized retirement notice"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			s := fixtureSources()

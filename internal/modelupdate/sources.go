@@ -62,24 +62,32 @@ var ReferenceURLs = map[string]string{
 // chatRetirementForm is one known wording of a ChatGPT subscription retirement
 // notice. A section must state exactly one notice in exactly one known form,
 // with that form's own OpenAI API exclusion; anything else needs manual review.
+// Both patterns run on a section body whose whitespace is collapsed.
 type chatRetirementForm struct {
-	notice, apiExclusion *regexp.Regexp
+	notice, scoped *regexp.Regexp
 }
+
+// A notice starts a sentence, so a qualifier in front of it never goes unseen.
+const sentenceStart = `(?:^|[.!?:] )`
+
+// The effective form's API exclusion must be the sentence right after it, so
+// a qualified or unrelated exclusion never lends it a scope.
+const chatEffectiveNotice = sentenceStart + `Effective ([A-Z][a-z]+ [0-9]{1,2}, [0-9]{4})(?:, at (?:noon|midnight|[0-9]{1,2}(?::[0-9]{2})?(?: ?[AaPp]M)?) [A-Z]{2,4}(?: \([0-9]{1,2}:[0-9]{2} UTC\))?)?, ((?i:GPT)-[A-Za-z0-9. -]+?) retires from Codex for users signed in with ChatGPT\.`
 
 // Both forms retire the model from Codex signed in with ChatGPT, which is the
 // `chatgpt` route, and explicitly leave the OpenAI API out of scope.
 var chatRetirementForms = []chatRetirementForm{
 	{
-		regexp.MustCompile(`On ([A-Z][a-z]+ [0-9]{1,2}, [0-9]{4}), ((?i:GPT)-[A-Za-z0-9. -]+?) will retire from ChatGPT, ChatGPT Work, and Codex`),
+		regexp.MustCompile(sentenceStart + `On ([A-Z][a-z]+ [0-9]{1,2}, [0-9]{4}), ((?i:GPT)-[A-Za-z0-9. -]+?) will retire from ChatGPT, ChatGPT Work, and Codex`),
 		regexp.MustCompile(`retirement does not apply to the OpenAI API`),
 	},
 	{
-		regexp.MustCompile(`Effective ([A-Z][a-z]+ [0-9]{1,2}, [0-9]{4})(?:, at [^,.]+)?, ((?i:GPT)-[A-Za-z0-9. -]+?) retires from Codex for users signed in with ChatGPT\.`),
-		regexp.MustCompile(`The OpenAI API and Codex sessions authenticated with an API key (?:aren't|aren’t|are not) affected\.`),
+		regexp.MustCompile(chatEffectiveNotice),
+		regexp.MustCompile(chatEffectiveNotice + ` The OpenAI API and Codex sessions authenticated with an API key (?:aren't|aren’t|are not) affected\.`),
 	},
 }
 
-var chatRetirementAnnouncement = regexp.MustCompile(`(?i)\b(?:will retire|will be retired|retire[sd]? (?:from|on))\b`)
+var chatRetirementAnnouncement = regexp.MustCompile(`(?i)\b(?:will retire|will be retired|retire[sd]? (?:from|on)|retiring|retirement of)\b`)
 var whitespace = regexp.MustCompile(`\s+`)
 var chatVersionID = regexp.MustCompile(`^gpt-[0-9.]+$`)
 
@@ -281,14 +289,11 @@ func Discover(s Sources) (Discovery, error) {
 	sections := regexp.MustCompile(`(?m)^#{1,6} `).Split(string(s.ChatGPT), -1)
 	for _, section := range sections {
 		// Historical summaries and links are not primary announcements.
-		// A retirement heading or future announcement always requires parsing.
-		heading, _, _ := strings.Cut(section, "\n")
+		// A retirement heading, a future announcement or a notice in a known
+		// form always requires parsing.
+		heading, body, _ := strings.Cut(section, "\n")
 		// Markdown wraps sentences at arbitrary points.
-		text := whitespace.ReplaceAllString(section, " ")
-		lower := strings.ToLower(text)
-		if !strings.Contains(strings.ToLower(heading), "retirement") && !strings.Contains(lower, "will retire") && !strings.Contains(lower, "will be retired") {
-			continue
-		}
+		text := strings.TrimSpace(whitespace.ReplaceAllString(body, " "))
 		var match []string
 		var form chatRetirementForm
 		notices := 0
@@ -298,10 +303,14 @@ func Discover(s Sources) (Discovery, error) {
 				match, form = m, f
 			}
 		}
-		if notices != 1 || len(chatRetirementAnnouncement.FindAllString(text, -1)) != 1 {
+		lower := strings.ToLower(heading + " " + text)
+		if notices == 0 && !strings.Contains(strings.ToLower(heading), "retirement") && !strings.Contains(lower, "will retire") && !strings.Contains(lower, "will be retired") {
+			continue
+		}
+		if notices != 1 || len(chatRetirementAnnouncement.FindAllString(heading+" "+text, -1)) != 1 {
 			return d, fmt.Errorf("chatgpt: unrecognized retirement notice; manual source review required")
 		}
-		if !form.apiExclusion.MatchString(text) {
+		if !form.scoped.MatchString(text) {
 			return d, fmt.Errorf("ChatGPT retirement API scope unclear")
 		}
 		dt, e := date(match[1])
