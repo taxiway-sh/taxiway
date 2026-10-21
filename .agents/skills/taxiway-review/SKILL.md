@@ -94,7 +94,10 @@ Review adversarially: look for what is wrong, not for confirmation.
   subagent, or a fresh child session when
   [Running the reviewer](#running-the-reviewer) calls for one, that is not
   given, and does not read, the reports of earlier rounds in any form, posted
-  or not; a round that covers less, or was run with them, cannot approve.
+  or not, nor follows the review links in the PR's Validation section; a round
+  that covers less, or was run with them, cannot approve. A finding it reports
+  that the maintainer already declined does not count against its verdict; the
+  agent that ran the round notes it as declined.
 - Problems that are global or outside the change become issue proposals
   through [`taxiway-intake`](../taxiway-intake/SKILL.md), not fixes in this
   change.
