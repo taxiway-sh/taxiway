@@ -37,7 +37,7 @@ PR):
   approved Taxiway studies and plans are posted as described in
   [`taxiway-workflow`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-workflow/SKILL.md).
   Host details and private paths follow the
-  [invariants](https://github.com/taxiway-sh/taxiway/blob/main/AGENTS.md#invariants).
+  [security rules](https://github.com/taxiway-sh/taxiway/blob/main/AGENTS.md#security).
 
 ## Issue format
 
@@ -58,8 +58,8 @@ release". New facts enrich the existing issue instead of opening a duplicate.
 A defect found in delivered work gets a new issue that links the closed one;
 the closed issue is neither reopened nor commented on.
 
-Reference real commands, files, and symbols. Avoid step-by-step exploitation
-details for security-sensitive reports — describe what to harden and the impact.
+Reference real commands, files, and symbols. Security-sensitive reports follow
+[public writing](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-security/SKILL.md#public-writing).
 
 ## Labels
 

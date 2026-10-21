@@ -54,8 +54,7 @@ never rules:
   `learn/campaigns/`, history campaign progress, defined by
   [`taxiway-learn`](../taxiway-learn/SKILL.md#history-campaigns).
 
-Everything written there is public: no secrets, host details, private paths or
-raw logs.
+Everything written there is [public](../taxiway-security/SKILL.md#public-writing).
 
 ## Every run
 
