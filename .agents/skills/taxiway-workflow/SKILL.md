@@ -158,8 +158,8 @@ actionable request per blocker, and never invent percentages or finish dates.
   running. List each subject's remaining work and pending decisions, any
   still-running tests with their owners, and the resume action. The final
   report links issues and PRs, states delivered behavior, actual checks and
-  remaining limits, and distinguishes code-ready, independently reviewed, PR-
-  open, merged and cleaned-up states.
+  remaining limits, and distinguishes code-ready, independently reviewed,
+  PR-open, merged and cleaned-up states.
 - **Frictions observed and rules to record:** end by running
   [`taxiway-learn`](../taxiway-learn/SKILL.md) on the session and presenting
   its candidates the way it says. Its list includes the frictions observed,
