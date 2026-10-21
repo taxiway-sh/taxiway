@@ -46,8 +46,9 @@ A cloud session's GitHub proxy opens the GitHub API and github.com pages only
 to the repositories attached to the session, public ones included; any other
 repository gets HTTP 403. Attaching does not help: `add_repo` with access
 `read` on a public repository attaches nothing (anonymous git already reads
-public repositories, so the call only reports that), and attaching with credentials needs access `push`, which is
-never requested for any repository other than `taxiway-sh/agents`. Upstream
+public repositories, so the call only reports that), and attaching with
+credentials needs access `push`, which is never requested for any repository
+other than `taxiway-sh/agents`. Upstream
 reads therefore go through git alone, where `<url>` is
 `https://github.com/<owner>/<repository>` and
 `git ls-remote --symref <url> HEAD` names the default branch:
@@ -66,14 +67,14 @@ reads therefore go through git alone, where `<url>` is
    the PR is merged when that commit is reachable from the default branch, and
    its fix shipped when it is reachable from a release tag. In a fresh scratch
    repository (`git init <dir>`, `git -C <dir> remote add origin <url>`; never
-   a shallow one from step 2, whose history stays cut), fetch the PR head and that branch or tag without file contents,
-   so the history is complete
+   a shallow one from step 2, whose history stays cut), fetch the PR head and
+   that branch or tag without file contents, so the history is complete
    (`git fetch --filter=blob:none origin refs/pull/<n>/head +<ref>:refs/upstream`),
    then run `git merge-base --is-ancestor <commit> refs/upstream`; a `--depth`
    fetch can cut the history short and report a merged PR as not merged. A
    squash merge leaves that commit unreachable, and its subject usually ends in
    `(#<n>)`; a rebase merge keeps the PR's commit subjects under new SHAs. Look
-   for either on `refs/upstream`: `git log --grep='(#<n>)'`, or
+   for either on `refs/upstream`: `git log -F --grep='(#<n>)'`, or
    `git log -F --grep='<subject>'` for a commit subject. A `refs/pull/<n>/merge`
    ref shows an open PR that GitHub can merge; without it, an open PR with
    conflicts and a PR closed without merging cannot be told apart this way:
