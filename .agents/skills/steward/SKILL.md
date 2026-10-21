@@ -30,7 +30,7 @@ closed, or when the user says stop.
 - Lifecycle E2Es (`e2e.yml`) run nightly or on manual dispatch, not on PRs
   ([CI structure](../../../docs/contributing/testing.md#ci-structure)). The PR's
   Validation section states which affected scenarios
-  ([E2E scenario rule](../../../AGENTS.md#e2e-scenarios)) were run, on which
+  ([E2E scenario rule](../taxiway-testing/SKILL.md#e2e-scenarios)) were run, on which
   head and where: local Docker, a cloud session, or a dispatched run.
 - When an E2E run finishes, post its result on the PR (under the approvals
   matrix): head commit, scenarios, result, environment and any local

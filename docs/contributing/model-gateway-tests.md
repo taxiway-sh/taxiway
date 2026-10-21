@@ -2,7 +2,7 @@
 
 Gateway assertions protect each orchestrator's lifecycle: configured, started,
 routed and restarted. They follow the
-[E2E scenario rule](https://github.com/taxiway-sh/taxiway/blob/main/AGENTS.md#e2e-scenarios). Agents validate real
+[E2E scenario rule](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-testing/SKILL.md#e2e-scenarios). Agents validate real
 account/model behavior as temporary manual checks using the shared tooling in
 [Live validation](live-tests.md). Real-provider requests are explicitly opt-in;
 choose only the checks relevant to the feature, with short prompts, command

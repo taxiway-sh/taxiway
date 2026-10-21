@@ -54,11 +54,13 @@ since rewriting it needs a force-push ([Conflicts](../steward/SKILL.md#conflicts
 
 ## 4. Checks
 
-- Choose and run the checks with [Testing](../../../docs/contributing/testing.md);
-  durable E2E assertions and the merge criterion follow the
-  [E2E scenario rule](../../../AGENTS.md#e2e-scenarios).
-- To test the feature like a manual tester, pick Docker or Lima according to
-  the feature and follow [Live validation](../../../docs/contributing/live-tests.md)
+- Choose the checks with [`taxiway-testing`](../taxiway-testing/SKILL.md) and
+  run them with [Testing](../../../docs/contributing/testing.md); durable E2E
+  assertions and the merge criterion follow the
+  [E2E scenario rule](../taxiway-testing/SKILL.md#e2e-scenarios).
+- To test the feature like a manual tester, pick Docker or Lima as
+  [`taxiway-testing`](../taxiway-testing/SKILL.md#live-validation-docker-or-lima)
+  says and follow [Live validation](../../../docs/contributing/live-tests.md)
   (including its [Lima recipes](../../../docs/contributing/live-tests.md#lima-driver-and-recording-recipes))
   and [`tests/live/AGENTS.md`](../../../tests/live/AGENTS.md). When a live check
   reports an authentication failure, follow
@@ -87,7 +89,7 @@ Follow [`steward`](../steward/SKILL.md) until the PR is merged or closed.
 ## 8. Merge
 
 Merge only under the [invariants](../../../AGENTS.md#invariants) and the
-[E2E scenario rule](../../../AGENTS.md#e2e-scenarios).
+[E2E scenario rule](../taxiway-testing/SKILL.md#e2e-scenarios).
 
 ## Post-merge cleanup
 
