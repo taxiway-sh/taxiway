@@ -89,6 +89,9 @@ Review adversarially: look for what is wrong, not for confirmation.
 - The maintainer's default is to fix every finding, nits included. A finding
   the implementer disagrees with goes to the maintainer with both positions.
 - Re-review after fixes, and after any scope change, on the new range.
+- The round that approves covers the whole range of the PR, `<base>...<head>`,
+  not only the fixes. It goes to a fresh subagent that is not given the
+  reports of earlier rounds; a round run with them cannot approve.
 - Problems that are global or outside the change become issue proposals
   through [`taxiway-intake`](../taxiway-intake/SKILL.md), not fixes in this
   change.
