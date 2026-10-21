@@ -10,13 +10,33 @@ is done. Read [`AGENTS.md`](../../../AGENTS.md) first.
 
 ## Reviewer
 
-- A different, fresh agent (subagent or child session), never the implementer
-  and never an agent that wrote part of the change.
+- A different, fresh agent, never the implementer and never an agent that
+  wrote part of the change; [Running the reviewer](#running-the-reviewer) says
+  how to start it.
 - It reviews the exact commit range or diff (`git diff <base>...<head>`, with
   both SHAs), plus the issue and its acceptance criteria. It does not edit
   the branch.
 - If delegation is unavailable, report the missing review; never present your
   own review as independent.
+
+### Running the reviewer
+
+- **Default to a subagent.** The reviewer is a read-only subagent: it returns
+  its report directly and leaves nothing behind. Use a child session only when
+  the review needs its own environment, such as a long E2E run or a separate
+  container.
+- **Child session.** Nobody watches it, so it is created with
+  `permission_mode: "auto"`, never `"default"` or `"plan"`, which wait on a
+  prompt nobody sees. Its prompt says to write nothing. It is archived as soon
+  as its report is read, as [Finish](../taxiway-workflow/SKILL.md#pause-resume-and-finish)
+  closes ended subagents.
+- **Stall check.** A child session that shows no progress for about 10 minutes
+  is checked for a pending permission prompt in its events. If it is stuck,
+  interrupt it, archive it and rerun the review as a subagent.
+- **Finish before handing back.** The agent that delegated the review waits
+  for the report and handles its findings before it ends its turn. If it
+  cannot, it says plainly that the review is unfinished and the PR states it
+  as pending; never a placeholder body.
 
 ## Checklist
 
