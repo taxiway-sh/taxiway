@@ -18,9 +18,8 @@ itself. An action, by a scheduled agent or an interactive session, merging a
 PR included, keeps the maintainer's approval until recorded results show it
 works; the maintainer then grants more through a reviewed change to the rule
 that holds it, such as `AGENTS.md`, the
-[approvals](../taxiway-workflow/SKILL.md#approvals) matrix, an agent's
-declaration or an [action class](../taxiway-agents/SKILL.md#action-classes)'s
-highest level. When it stops working, autonomy is withdrawn the same way. A
+[approvals](../taxiway-workflow/SKILL.md#approvals) matrix or an agent's
+declaration. When it stops working, autonomy is withdrawn the same way. A
 scheduled agent's level follows
 [Promotion and demotion](../taxiway-agents/SKILL.md#promotion-and-demotion);
 other proposals follow [Steps](#steps).
