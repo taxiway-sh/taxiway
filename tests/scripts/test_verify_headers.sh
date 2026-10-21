@@ -51,7 +51,9 @@ assert_first_header() {
   local output
   local first
 
-  output="$(HOME="$HOME_DIR" PATH="$BIN_DIR:/usr/local/bin:/usr/bin:/bin" bash "$script" 2>&1)"
+  # Only the first header is checked: a verify script may still fail on a
+  # binary the host keeps outside this PATH (tmux under Homebrew on macOS).
+  output="$(HOME="$HOME_DIR" PATH="$BIN_DIR:/usr/local/bin:/usr/bin:/bin" bash "$script" 2>&1)" || true
   first="$(printf '%s\n' "$output" | first_content_line | strip_ansi)"
 
   if [[ "$first" == *"$expected"* ]]; then
