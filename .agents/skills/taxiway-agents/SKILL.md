@@ -185,13 +185,17 @@ For each declaration, or the one `id` requested:
    1. the session, not archived, tagged `taxiway-agent:<id>` (`list_sessions`
       with the tag filter, which an in-session caller may be refused), and
       the scheduled task bound to it;
-   2. the scheduled task whose stored prompt is the bootstrap prompt naming
+   2. the scheduled task whose stored prompt contains the path
       `taxiway/.agents/agents/<id>.prompt.md`, paging through
       `list_triggers`; its `persistent_session_id` is the agent's session.
-      This finds an agent whatever its names;
+      This finds an agent whatever its names and however its bootstrap
+      prompt was worded;
    3. the session and the scheduled task named with the declared `title`.
 
-   Reuse them when they exist; never create a second one for the same agent.
+   When a step finds more than one session or scheduled task for the agent,
+   stop and report them to the maintainer; never guess which one is the
+   agent's. Reuse them when they exist; never create a second one for the
+   same agent.
    A session or scheduled task found under another name is renamed to the
    declared `title` (`set_session_title`, `update_trigger`).
 2. Otherwise create one standing session for the agent from the `taxiway`
@@ -208,9 +212,10 @@ For each declaration, or the one `id` requested:
 4. When the schedule or the prompt changed, update the existing scheduled task.
    When the model changed, a scheduled task cannot be rebound to another
    session, so:
-   1. create a new session as in step 2;
-   2. create a new scheduled task bound to it as in step 3, with the same
-      `title`, schedule and bootstrap prompt;
+   1. create a new session as in step 2, and wait until its setup is
+      verified, with the `add_repo` call approved;
+   2. only then create a new scheduled task bound to it as in step 3, with
+      the same `title`, schedule and bootstrap prompt;
    3. delete the old scheduled task with `delete_trigger`;
    4. rename the old session `OLD session – <title>` with
       `set_session_title`, then archive it with `archive_session`, so title
@@ -225,7 +230,8 @@ matches the declarations.
 ## Check
 
 Find each agent's session and scheduled task as in [Install](#install) step 1,
-then report:
+which stops and reports an agent with more than one session or scheduled
+task, then report:
 
 - the last heartbeat's date and result against the declared `schedule`: a
   heartbeat older than the latest time that cron expression fired, whether
