@@ -29,6 +29,7 @@ full guide lives in [docs/contributing](docs/contributing/README.md).
   only after a maintainer approves it, so the first run may wait for that.
   Lifecycle [E2E scenarios](AGENTS.md#e2e-scenarios) do not run on PRs; the
   maintainer runs the affected ones on GitHub-hosted runners before merging.
+  Your code is never run on a workstation or in a Taxiway lab.
 - **Follow-up.** If a PR or claim waits on you for two weeks, you get a
   friendly reminder. After another month without an answer, a claim is
   released so someone else can take it, and a PR may be closed with thanks;
