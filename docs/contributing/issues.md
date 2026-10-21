@@ -63,13 +63,23 @@ Reference real commands, files, and symbols. Security-sensitive reports follow
 
 ## Labels
 
-| Axis | Values | Set by |
-|------|--------|--------|
-| **type** | `bug` \| `enhancement` \| `documentation` | reporter (via template), confirmed at triage |
-| **priority** | `priority:p0` \| `priority:p1` \| `priority:p2` | maintainer at triage |
-| **area** | `capability:*`, `driver:*`, `orchestrator:*`, `agent:*` | maintainer at triage |
-| **intake** | `needs-triage` | applied by the templates; removal per [conventions](#label-conventions) |
-| **onboarding** | `good first issue` | maintainer |
+| Axis | Values | Colour | Set by |
+|------|--------|--------|--------|
+| **type** | `bug` \| `enhancement` \| `documentation` | `d73a4a` \| `a2eeef` \| `0075ca` | reporter (via template), confirmed at triage |
+| **priority** | `priority:p0` \| `priority:p1` \| `priority:p2` | `b60205` \| `d93f0b` \| `fbca04` | maintainer at triage |
+| **area** | `capability:*` | `0e8a16` | maintainer at triage |
+| | `driver:*` | `d29922` | |
+| | `orchestrator:*` | `1d76db` | |
+| | `agent:*` | `5319e7` | |
+| **intake** | `needs-triage` | `ededed` | applied by the templates; removal per [conventions](#label-conventions) |
+| **onboarding** | `good first issue` | `7057ff` | maintainer |
+
+An area label's description names its axis and subject, for example
+`Orchestrator: Gas City` or `Capability: lab lifecycle`.
+`capability:contributing` ("Capability: contribution workflow, skills and
+project agents") locates changes to how Taxiway is contributed to: the
+contribution docs, the project skills under `.agents/skills/` and the
+scheduled project agents.
 
 Type means:
 
@@ -91,12 +101,43 @@ fragility, near-term · **p2** cleanliness or later.
   locate the change.
 - Adding an orchestrator creates its `orchestrator:<name>` label: it extends an
   existing axis rather than adding one.
+- A label exists before it is applied. Applying a label that does not exist
+  makes GitHub create it grey and without a description, so a new label (for
+  example `orchestrator:<name>`) is first created with its axis colour from
+  [Labels](#labels) and a description in its axis's form, then applied. A
+  marker label, which has no axis (for example `automation`), keeps GitHub's
+  default grey `ededed` unless documented otherwise. Both steps are label
+  changes under the
+  [approvals matrix](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-workflow/SKILL.md#approvals).
 - `needs-triage` is removed at triage, or as soon as work on the issue starts.
 - GitHub's default `duplicate`, `invalid`, `question`, `wontfix` and
   `help wanted` labels are accepted as resolution and onboarding markers, like
   `good first issue`; they are not area axes.
 - `Security` marks a security-sensitive issue, in addition to its type,
   priority and area labels; write it as described in [Issue format](#issue-format).
+- `automation` ("Opened by a Taxiway workflow") marks a PR opened by a
+  Taxiway workflow; like `Security`, it is a marker, not an axis.
+
+### Pull request labels
+
+- A PR is linked to the issues it fixes (`Fixes #n`, `Closes #n`) and to the
+  issues it is part of (`Refs #n`, or the equivalent `Part of #n`). A
+  `Related:` line is not a link.
+- A PR's type is the type of the issue it primarily fixes (its first `Fixes`
+  or `Closes`), otherwise of its first `Refs` or `Part of`. A PR with no
+  linked issue gets a type chosen for the change, as for an issue.
+- A PR's area labels are the union of its linked issues' area labels and the
+  areas the PR itself changes. When it changes an area its issue lacks, the PR
+  gets that label and the label is proposed on the issue.
+- A PR carries no priority: priority stays on the issue.
+- A PR opened by a Taxiway workflow carries `automation` plus a type and its
+  area labels like any PR; the workflow sets them so they survive each
+  regeneration. The model catalog PR carries `automation`, `enhancement` and
+  `capability:gateway`.
+- Whoever opens the PR copies these labels when they can; otherwise they are
+  added at triage. Existing labels are never removed to satisfy this rule.
+- Triage flags a PR missing its type or area labels, or carrying a priority
+  label.
 
 ## What happens after you open an issue
 
