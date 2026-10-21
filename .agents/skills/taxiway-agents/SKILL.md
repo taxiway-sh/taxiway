@@ -35,8 +35,10 @@ declarations and the heartbeat schema
   `summary` (one sentence), `waiting` (items that need the maintainer, each with
   a link and the action) and `promptVersion` (the `taxiway` `main` SHA the run
   read);
-- `deployed.json`: for each installed agent, its session ID, scheduled task ID,
-  schedule and the `promptVersion` it was installed from.
+- `deployed.json`: for each installed agent, its schedule and the
+  `promptVersion` it was installed from. Session and scheduled task IDs stay
+  out of it: install and check look them up, the session by tag and the
+  scheduled task by name.
 
 Everything written there is public: no secrets, host details, private paths or
 raw logs.
@@ -66,22 +68,28 @@ and says why.
 
 For each declaration, or the one `id` requested:
 
-1. Read `deployed.json`. Reuse a recorded session and scheduled task when they
-   still exist; never create a second one for the same agent.
+1. Look up the agent's session with `list_sessions` (tag
+   `taxiway-agent:<id>`; if the tag filter is refused, list your own sessions
+   and match the title `Taxiway agent: <id>`), and its scheduled task by the
+   same name, paging through `list_triggers`. Reuse them when they exist;
+   never create a second one for the same agent.
 2. Otherwise create one standing session for the agent from the `taxiway`
-   repository, attach `taxiway-sh/agents` with `add_repo` (`access: push`), and
-   send a setup-only first prompt: verify both clones and the tools, then stop.
-3. Create a scheduled task bound to that session with the declared schedule and
-   the bootstrap prompt. Never use a new session per run.
+   repository, titled `Taxiway agent: <id>` and tagged `taxiway-agent:<id>`;
+   attach `taxiway-sh/agents` with `add_repo` (`access: push`) and send a
+   setup-only first prompt: verify both clones and the tools, then stop.
+3. Create a scheduled task named `Taxiway agent: <id>`, bound to that session,
+   with the declared schedule and the bootstrap prompt. Never use a new
+   session per run.
 4. When the schedule or the prompt changed, update the existing scheduled task.
-5. Record the IDs, schedule and `promptVersion` in `deployed.json`.
+5. Record the schedule and `promptVersion` in `deployed.json`.
 
 Installation is idempotent: running it again changes nothing that already
 matches the declarations.
 
 ## Check
 
-For each declared agent, report:
+Find each agent's session and scheduled task as in [Install](#install) step 1,
+then report:
 
 - the last heartbeat's date and result against the schedule (late, failed or
   missing is a finding);
