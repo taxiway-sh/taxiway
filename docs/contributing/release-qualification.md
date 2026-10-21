@@ -188,7 +188,7 @@ stable evidence. Retain the pre-publication report and link the release/tag SHA.
 |---|---|---|
 | `published-assets` | Inspect the exact GitHub release, notes, archive names, checksums and installer | All supported assets present; checksums verify downloaded files; binary/assets/tag agree. |
 | `install-matrix` | Inspect automatic `install.yml` for that exact release input, or authorized rerun | All six x64 platform × driver jobs pass; inspect each job, skips and logs. Workflow head alone is not proof of installed tag. |
-| `mac-install` | Install exact published archive in isolated paths on the user's actual Mac | Apple Silicon/Docker Desktop installation, version, runtime/catalog/player and CLI smoke pass. Preserve existing host installation. |
+| `mac-install` | Install exact published archive in isolated paths on a real macOS machine | Apple Silicon/Docker Desktop installation, version, runtime/catalog/player and CLI smoke pass. Preserve existing host installation. |
 | `installed-smoke` | Use installed binary/runtime to create, run, stop/restart and delete a scoped lab; representative bounded real-agent/recording smoke | Installed artifacts actually work; report adapter/driver/account coverage distinctly from creation-only matrix. |
 
 See [Installation qualification](installation-qualification.md) for matrix

@@ -617,10 +617,11 @@ or syntax can change: check them against the installed version.
      directories;
    - `permissions.allow`: `Bash(cd:*)`, `Bash(git:*)`, `Bash(gh:*)`,
      `Bash(make:*)`, `Bash(go:*)`, `Bash(docker:*)`, `Bash(limactl:*)`,
-     `Bash(direnv:*)`, `Bash(python3:*)`, `Bash(bash:*)`, `Bash(./taxiway:*)`
-     and `Bash(scripts/agents/push-heartbeat.sh:*)`, plus `Edit` and `Write`
-     limited to the `agents` clone, the run worktree directory and the
-     evidence directory, as path rules such as
+     `Bash(direnv:*)`, `Bash(python3:*)`, `Bash(bash:*)`, `Bash(./taxiway:*)`,
+     `Bash(scripts/agents/push-heartbeat.sh:*)`, and for the `install` kind's
+     installer and archive checks `Bash(sh:*)`, `Bash(curl:*)`, `Bash(tar:*)`
+     and `Bash(shasum:*)`, plus `Edit` and `Write` limited to the `agents`
+     clone, the run worktree directory and the evidence directory, as path rules such as
      `Edit(//<absolute path of the agents clone>/**)` and
      `Write(//<absolute path of the agents clone>/**)`, never the `taxiway`
      clone;
@@ -628,9 +629,9 @@ or syntax can change: check them against the installed version.
      `Bash(git push --force-with-lease:*)` and `Bash(git push -f:*)`.
 
    The deny list is defence in depth: never force-pushing is the rule, and the
-   token's scope is the real bound. Broad `make`, `docker`, `python3` and
-   `bash` entries amount to arbitrary execution: they are acceptable only
-   under this dedicated account. Do not bypass permissions.
+   token's scope is the real bound. Broad `make`, `docker`, `python3`, `bash`,
+   `sh` and `curl` entries amount to arbitrary execution: they are acceptable
+   only under this dedicated account. Do not bypass permissions.
 9. Start a new session with Remote Control from the working directory
    (`claude remote-control`, *verify at setup*); never resume an existing
    session. Name it with the declaration's `title` (*verify at setup*). Keep
@@ -640,7 +641,7 @@ or syntax can change: check them against the installed version.
     > Setup only. Check that the `taxiway` and `agents` clones are on `main`
     > and fast-forward, that `gh` can push to `taxiway-sh/agents` and read
     > `taxiway-sh/taxiway`, that the `agents` clone has a local git identity
-    > with no user or host name in it, that `docker`, `limactl`, `go`,
+    > with no OS user name or hostname in it, that `docker`, `limactl`, `go`,
     > `python3` and `direnv` respond, that the run worktree and evidence
     > directories exist outside the working directory, and that the reference
     > labs exist. Report what is missing without showing any credential, then
