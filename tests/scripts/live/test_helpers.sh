@@ -382,14 +382,24 @@ with tempfile.TemporaryDirectory(prefix="taxiway-diagnostic-test-") as root:
     assert "postgres://taxiway:<redacted>@db:5432/langfuse" in shown and "--port 4000" in shown, shown
     print("PASS: URL, environment, header, option and vendor token credentials are redacted")
 
-    with tempfile.TemporaryDirectory(prefix="taxiway-home-") as home:
-        with patch.dict(os.environ, dict(environment, HOME=home)):
-            shown = live.diagnostic_output(live.CommandFailed("x", (
-                f"{home}/.config/taxiway {home}name/other {root}/labs "
-                f"{os.path.realpath(home)}/resolved {live.Path(live.__file__).resolve().parents[2]}/tests\n").encode()))
-            assert "$HOME/.config/taxiway" in shown and "$HOME/resolved" in shown, shown
-            assert "$TAXIWAY_RUNTIME_DIR/labs" in shown and "<repository>/tests" in shown, shown
-            assert f"{home}name/other" in shown and "$HOMEname" not in shown, shown
+    with tempfile.TemporaryDirectory(prefix="taxiway-home-") as base:
+        real = os.path.realpath(os.path.join(base, "real-home"))
+        os.mkdir(real)
+        home = os.path.join(base, "home-link")
+        os.symlink(real, home)  # HOME is a symlink: its resolved form must be named too.
+        runtime = f"{home}/runtime"  # Under HOME: the longer path must win.
+        repo = live.Path(live.__file__).resolve().parents[2]
+        with patch.dict(os.environ, dict(environment, HOME=home, TAXIWAY_RUNTIME_DIR=runtime)):
+            lines = [f"{home}/.config/taxiway", f"{real}/resolved", f"{runtime}/labs",
+                     f"{home}name/other", f"x{home}/a", f"No such file: {home}.",
+                     f"{home}.bak", f"{repo}/tests"]
+            shown = live.diagnostic_output(live.CommandFailed("x", "\n".join(lines).encode()))
+            for expected in ("$HOME/.config/taxiway", "$HOME/resolved", "$TAXIWAY_RUNTIME_DIR/labs",
+                             f"{home}name/other", f"x{home}/a", "No such file: $HOME.",
+                             f"{home}.bak", "<repository>/tests"):
+                assert expected in shown, (expected, shown)
+            for unexpected in ("$HOMEname", "x$HOME", "$HOME.bak", "$HOME/runtime"):
+                assert unexpected not in shown, (unexpected, shown)
     print("PASS: host paths are named on path boundaries, including resolved forms")
 
     error = None
@@ -407,13 +417,17 @@ with tempfile.TemporaryDirectory(prefix="taxiway-diagnostic-test-") as root:
     # Each credential path marks the process; diagnostics are refused afterwards.
     def reject(*args, **kwargs):
         raise live.CommandFailed("bash exited 1", b"fixture")
-    marks = (lambda: live.require_claude_auth("reference"),
-             lambda: live.propagate_claude_auth("source", "target"),
-             lambda: live.propagate_claude_onboarding("source", "target"))
-    for mark in marks:
+    # propagate_claude_auth runs with require_claude_auth stubbed, so its own mark is tested.
+    marks = ((lambda: live.require_claude_auth("reference"), False),
+             (lambda: live.propagate_claude_auth("source", "target"), True),
+             (lambda: live.propagate_claude_onboarding("source", "target"), False))
+    for mark, stub_preflight in marks:
         live._credentials_handled = False
         assert live.diagnostic_output(error)
-        with patch.object(live, "guest", side_effect=reject):
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(patch.object(live, "guest", side_effect=reject))
+            if stub_preflight:
+                stack.enter_context(patch.object(live, "require_claude_auth"))
             try:
                 mark()
             except live.CommandFailed:

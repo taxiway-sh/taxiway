@@ -64,7 +64,7 @@ def _sanitize(data):
     for pattern, replacement in _REDACTIONS:
         text = pattern.sub(replacement, text)
     for path, name in _host_paths():
-        text = re.sub(r"(?<![A-Za-z0-9._-])" + re.escape(path) + r"(?![A-Za-z0-9._-])", name, text)
+        text = re.sub(r"(?<![A-Za-z0-9._-])" + re.escape(path) + r"(?![A-Za-z0-9_-]|\.[A-Za-z0-9_-])", name, text)
     if len(text) > DIAGNOSTIC_LIMIT:
         text = "[... truncated ...]\n" + text[-DIAGNOSTIC_LIMIT:]
     return text
