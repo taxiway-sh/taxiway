@@ -82,7 +82,7 @@ subject; its body follows the
 [PR template](../../../.github/pull_request_template.md); its labels follow
 [Pull request labels](../../../docs/contributing/issues.md#pull-request-labels).
 The PR that completes an issue links it with a closing keyword, so the merge
-closes it, as the PR template and those labels say.
+closes it, as the PR template and that section say.
 
 ## 7. CI and follow-up
 
@@ -117,17 +117,16 @@ worktree and feature branch; no separate confirmation is needed.
 5. Fast-forward local `main`, then update the other active branches at a safe
    point with their agents so ongoing edits and tests are preserved, as in
    [Conflicts](../steward/SKILL.md#conflicts), and rerun affected checks.
-6. For each issue the PR links with `Refs` or `Part of`, and each issue it
-   links with `Fixes` or `Closes` that is still open, reread its acceptance
-   criteria. When its criteria are met, propose closing it as completed, with
-   a comment that names the PRs that delivered it; otherwise propose ticking
-   the criteria now met, or a comment on an external contributor's issue.
-   These wait for approval under the
+6. For each issue the PR, or a stacked PR merged into its branch, links with
+   `Refs` or `Part of`, and each issue they link with `Fixes` or `Closes` that
+   is still open, reread its acceptance criteria. When its criteria are met,
+   propose closing it as completed, with a comment that names the PRs that
+   delivered it; otherwise propose ticking the criteria now met, or a comment
+   on an external contributor's issue. These wait for approval under the
    [approvals](../taxiway-workflow/SKILL.md#approvals); cleanup is complete
    with them pending. A stacked PR merged into a branch other than `main`
    closes nothing: its issues are rechecked in the cleanup of the PR that
    brings the change to `main`. Criteria that need a later step, such as an
-   installation or a week of runs, keep the issue open until that step is
-   done.
+   installation or a week of runs, keep the issue open until that step is done.
 
 Report cleanup complete only once verified.

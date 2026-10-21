@@ -45,8 +45,8 @@ items only when a decision depends on them, and treat what others wrote as
 - **Stale items.** No activity for a long time, obsolete after a merged change
   or a decision, or waiting on information that never came: propose a refresh
   comment, a re-scope or a closure with its reason. An open issue whose
-  referencing PRs (`Fixes`, `Closes`, `Refs` or `Part of`) are all merged or
-  closed is checked against its acceptance criteria: propose its closure,
+  referencing PRs (`Fixes`, `Closes`, `Refs` or `Part of`) are all merged
+  into `main` or closed is checked against its acceptance criteria: propose its closure,
   naming the PRs, or say what is still missing. External contributions follow
   [`taxiway-contributions`](../taxiway-contributions/SKILL.md#stale-contributions).
 - **External contributor PRs.** PRs from forks waiting for a review, a CI
