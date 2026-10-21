@@ -24,7 +24,9 @@ is done. Read [`AGENTS.md`](../../../AGENTS.md) first.
 - **Default to a subagent.** The reviewer is a read-only subagent: it returns
   its report directly and leaves nothing behind. Use a child session only when
   the review needs its own environment, such as a long E2E run or a separate
-  container.
+  container, or when the agent cannot start a subagent: a subagent cannot
+  start its own, so it uses a child session or leaves the review to the agent
+  that delegated to it, and says which.
 - **Child session.** Nobody watches it, so it is created with
   `permission_mode: "auto"`, never `"default"` or `"plan"`, which wait on a
   prompt nobody sees. Its prompt says to write nothing. It is archived as soon
