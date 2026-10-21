@@ -125,8 +125,8 @@ session identifiers or links, transcript content or other projects.
 
 ## Guardrails
 
-- A change to the agentic system (`AGENTS.md`, skills, agent declarations and
-  prompts, contributor docs and their checks) is always a draft PR that the
+- A change to the agentic system (`AGENTS.md`, skills, agent declarations or
+  prompts, contributor docs or their checks) is always a draft PR that the
   maintainer reviews. No autonomy level ever applies it automatically.
 - A trial is time-boxed and reversible. It never changes the approvals matrix
   or the actions agents must never take, and an agent never changes its own

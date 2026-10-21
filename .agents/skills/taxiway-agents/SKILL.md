@@ -141,7 +141,7 @@ changes the agentic system or is reserved to the maintainer by
 | `close-pr` | Closing or reopening a PR | `auto` |
 | `rerun-workflow` | Rerunning a GitHub Actions run | `auto` |
 | `write-state` | Writing its own files in `taxiway-sh/agents` other than its heartbeat, which every run writes | `auto` |
-| `change-agent-system` | A draft PR changing skills, agent declarations or prompts, `AGENTS.md`, contributor docs or the agent docs checker | `ask` |
+| `change-agent-system` | A draft PR changing `AGENTS.md`, skills, agent declarations or prompts, [contributor docs](../../../docs/contributing/) or their checks, the agent docs checker included; a PR touching any of these is `change-agent-system` as a whole | `ask` |
 
 ### Never
 
