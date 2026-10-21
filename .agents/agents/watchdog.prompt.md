@@ -1,4 +1,4 @@
-# Morning watchdog
+# Taxiway – agents watchdog
 
 Scheduled run. Follow [`taxiway-agents`](../skills/taxiway-agents/SKILL.md#every-run)
 for the run contract; this file only adds the job. The watchdog reads and
@@ -9,12 +9,9 @@ heartbeat or with a manual [Check](../skills/taxiway-agents/SKILL.md#check).
 
 ## Checks
 
-1. For each other agent declared in `.agents/agents/` on `main`, whatever its
-   job, apply [Check](../skills/taxiway-agents/SKILL.md#check). Compare its
-   last heartbeat with the latest time its schedule fired, whether it runs
-   weekly or several times a day. A run still in progress is reported as
-   running, not as late. A declared agent missing from `deployed.json` is
-   reported as not installed, not as failed.
+1. For each other agent declared in `.agents/agents/` on `main`, apply
+   [Check](../skills/taxiway-agents/SKILL.md#check), which owns lateness
+   against the declared schedule and the not-installed state.
 2. Check that the last scheduled run of each nightly workflow (`e2e.yml`,
    `install.yml`, `model-catalog-update.yml`) started within the past 24 hours,
    and report its conclusion; a run not finished yet is pending.
@@ -34,7 +31,12 @@ When something needs the maintainer, send one `PushNotification` titled
    the action and its link (the agent's session for its proposals, the run or
    issue otherwise);
 2. demotion incidents: agent, action class and the corrected action's link;
-3. failed, late or missing agents and workflows, with the evidence link.
+3. failed, late or missing agents and workflows, with the evidence link;
+4. agents not installed, each linked to its declaration on `main`.
+
+An agent not installed is listed in the reply and in `waiting` at every run,
+but calls for a `PushNotification` only on the first day it appears; when it
+is the only item, later runs reply with the list and send no notification.
 
 When nothing needs the maintainer, send no notification and reply only
 `Nothing needs you today.`; the heartbeat records the run.

@@ -227,8 +227,14 @@ matches the declarations.
 Find each agent's session and scheduled task as in [Install](#install) step 1,
 then report:
 
-- the last heartbeat's date and result against the
-  schedule (late, failed or missing is a finding);
+- the last heartbeat's date and result against the declared `schedule`: a
+  heartbeat older than the latest time that cron expression fired, whether
+  it fires weekly or several times a day, is late; late, failed or missing
+  is a finding. Lateness comes from the declared cron, never from the
+  scheduled task's last run. A run still in progress is running, not late;
+- a declared agent that is missing from `deployed.json` and has no session
+  or scheduled task: not installed, which is reported as such, not as a
+  failed or late agent;
 - the scheduled task: present, enabled, last run;
 - the session: present and not failed;
 - a session or scheduled task whose name is not the declared `title`;
