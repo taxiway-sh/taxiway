@@ -586,7 +586,7 @@ or syntax can change: check them against the installed version.
 1. Create a standard (non-administrator) user account for the agent, with no
    personal accounts signed in. Install what needs an administrator from
    another account. While the agent serves the queue, the machine stays awake
-   and the container runtime runs in this account.
+   and the container runtime is running and usable from this account.
 2. In that account, install the prerequisites and check that `docker`,
    `limactl`, `go`, `python3`, `direnv`, `git` and `gh` run.
 3. Create a fine-grained GitHub token limited to `taxiway-sh/agents` with
@@ -619,8 +619,10 @@ or syntax can change: check them against the installed version.
      `Bash(make:*)`, `Bash(go:*)`, `Bash(docker:*)`, `Bash(limactl:*)`,
      `Bash(direnv:*)`, `Bash(python3:*)`, `Bash(bash:*)`, `Bash(./taxiway:*)`,
      `Bash(scripts/agents/push-heartbeat.sh:*)`, and for the `install` kind's
-     installer and archive checks `Bash(sh:*)`, `Bash(curl:*)`, `Bash(tar:*)`
-     and `Bash(shasum:*)`, plus `Edit` and `Write` limited to the `agents`
+     installer and archive checks `Bash(sh:*)`, `Bash(curl:*)`, `Bash(tar:*)`,
+     `Bash(shasum:*)`, `Bash(mktemp:*)` and the run worktree directory's
+     executables, `Bash(<absolute path of the run worktree directory>/*)`, since
+     it installs into an isolated directory inside its run worktree, plus `Edit` and `Write` limited to the `agents`
      clone, the run worktree directory and the evidence directory, as path rules such as
      `Edit(//<absolute path of the agents clone>/**)` and
      `Write(//<absolute path of the agents clone>/**)`, never the `taxiway`
