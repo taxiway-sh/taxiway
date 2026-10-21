@@ -94,9 +94,10 @@ line, and any new allow rule needs their explicit decision.
 The rule approves whatever that path holds in the agent's clone when it runs.
 An agent that edits the script in its clone, which the classifier does not
 review, could run any code under the rule. The
-[run contract](../taxiway-agents/SKILL.md#every-run) forbids it; the script
-runs the state validator from `origin/main` and disables git hooks, but it
-cannot protect itself.
+[run contract](../taxiway-agents/SKILL.md#every-run) forbids it. The script
+guards the `agents` clone: it refuses git configuration a plain clone does
+not write, disables hooks and the file system monitor, and runs the state
+validator from `origin/main`; it cannot protect itself.
 
 ## Public writing
 
