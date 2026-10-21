@@ -6,6 +6,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -118,7 +119,7 @@ exit 0
 	lines := readCommandLog(t, logPath)
 	require.Equal(t, []string{
 		"volume create taxiway-taxiway-demo-lab",
-		"run -d --name taxiway-demo --add-host demo.litellm.internal:host-gateway -e USER=taxiway -e HOME=/home/taxiway -e SHELL=/bin/bash -e LANG=C.UTF-8 -e LC_ALL=C.UTF-8 -e LC_CTYPE=C.UTF-8 -e TERM=xterm-256color -v taxiway-taxiway-demo-lab:/lab -v " + repoDir + "/infra:/lab/infra:ro -v " + repoDir + "/agents:/lab/agents:ro -v " + repoDir + "/orchestrators/gastown:/lab/orchestrators/gastown:ro -v " + gitDir + ":/lab/git -v " + recordingsDir + ":/lab/recordings ubuntu:test sleep infinity",
+		"run -d --init --name taxiway-demo --add-host demo.litellm.internal:host-gateway -e USER=taxiway -e HOME=/home/taxiway -e SHELL=/bin/bash -e LANG=C.UTF-8 -e LC_ALL=C.UTF-8 -e LC_CTYPE=C.UTF-8 -e TERM=xterm-256color -v taxiway-taxiway-demo-lab:/lab -v " + repoDir + "/infra:/lab/infra:ro -v " + repoDir + "/agents:/lab/agents:ro -v " + repoDir + "/orchestrators/gastown:/lab/orchestrators/gastown:ro -v " + gitDir + ":/lab/git -v " + recordingsDir + ":/lab/recordings ubuntu:test sleep infinity",
 		"exec taxiway-demo apt-get update -qq",
 		"exec taxiway-demo apt-get install -y -qq sudo",
 		"exec taxiway-demo sh -c id -u 'taxiway' >/dev/null 2>&1 || useradd -m -s '/bin/bash' 'taxiway' && usermod -aG sudo 'taxiway' && printf '%s\\n' 'taxiway ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/taxiway-taxiway && chmod 0440 /etc/sudoers.d/taxiway-taxiway && mkdir -p /lab/work /lab/git /lab/recordings && chown -R 'taxiway:taxiway' /lab/work /lab/git /lab/recordings",
@@ -133,6 +134,48 @@ exit 0
 	require.NotContains(t, lines[1], "docker.sock")
 	require.NotContains(t, lines[1], ":/home/taxiway")
 	require.NotContains(t, lines[1], ":/lab/work")
+}
+
+func TestDockerRunArgsRunsAnInitAsPID1(t *testing.T) {
+	args := dockerRunArgs("taxiway-demo", "taxiway-demo-lab", CreateOptions{
+		Lab: "demo", Orch: "gascity", RepoDir: "/repo", GitDir: "/git", RecordingsDir: "/recordings",
+	}, "ubuntu:test")
+
+	// The init reaps orphaned guest processes; the image command stays the keep-alive.
+	require.Equal(t, []string{"run", "-d", "--init"}, args[:3])
+	require.Equal(t, []string{"ubuntu:test", "sleep", "infinity"}, args[len(args)-3:])
+}
+
+func TestDockerSystemctlStubRejectsUserManagerAndAcceptsSystemCalls(t *testing.T) {
+	stub := filepath.Join(t.TempDir(), "systemctl")
+	require.NoError(t, os.WriteFile(stub, []byte(dockerSystemctlStub), 0o755))
+	run := func(args ...string) (int, string, string) {
+		var stdout, stderr bytes.Buffer
+		cmd := exec.Command(stub, args...)
+		cmd.Stdout, cmd.Stderr = &stdout, &stderr
+		err := cmd.Run()
+		code := 0
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			code = exitErr.ExitCode()
+		} else {
+			require.NoError(t, err)
+		}
+		return code, stdout.String(), stderr.String()
+	}
+
+	// get.docker.com enables the daemon through the system manager.
+	code, stdout, stderr := run("enable", "--now", "docker")
+	require.Zero(t, code)
+	require.Empty(t, stdout)
+	require.Contains(t, stderr, "[docker-shim] systemctl enable --now docker")
+
+	// Probes for a per-user manager must not see a fake one.
+	for _, args := range [][]string{{"--user", "show-environment"}, {"is-active", "--user", "--quiet", "gascity-supervisor.service"}} {
+		code, stdout, stderr = run(args...)
+		require.Equal(t, 1, code, args)
+		require.Empty(t, stdout, args)
+		require.Contains(t, stderr, "[docker-shim] no systemd user manager in container", args)
+	}
 }
 
 func TestDockerRunArgsInjectsUtf8TerminalEnvironment(t *testing.T) {

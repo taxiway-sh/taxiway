@@ -11,6 +11,10 @@ E2E assertions follow the [E2E scenario rule](../../../AGENTS.md#e2e-scenarios).
 The recipe owns checks, evidence and phase-specific commands. Use the same
 source in Codex and Claude Code; no client-specific workflow engine is needed.
 
+Cut a release only when the CLI, installer, packaging or runtime changed since
+the last published tag (the recipe's `breaking-changes` base tag);
+documentation-only and agent-tooling changes wait for the next one.
+
 1. Reconcile the exact clean candidate, current agents/processes/resources and
    existing proof. Identify release scope, drivers/architectures and missing
    prerequisites. Fix through [`taxiway-issue`](../taxiway-issue/SKILL.md) and review with [`taxiway-review`](../taxiway-review/SKILL.md).
@@ -45,7 +49,9 @@ source in Codex and Claude Code; no client-specific workflow engine is needed.
    opened UI or empty response never proves that findings were reviewed.
 5. Have a different reviewer inspect findings, fixes and proof; rerun affected
    checks on the final candidate. Present release blockers, qualified combinations,
-   untested paths and the report, even under deadline pressure. Core CI does not
+   untested paths and the report, even under deadline pressure, and end with
+   one go/no-go line that names deferred items and untested combinations.
+   Core CI does not
    replace the lifecycle E2E scenarios of every orchestrator, and snapshot success
    does not replace published installation.
 6. Qualification-only requests perform no tag, push or publication. A request

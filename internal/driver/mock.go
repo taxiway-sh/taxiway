@@ -91,6 +91,9 @@ func NewMockDriver(stateDir string) *MockDriver {
 
 func (m *MockDriver) Name() string { return "mock" }
 
+// GuestKind reports a container guest, like the Docker driver it stands in for.
+func (m *MockDriver) GuestKind() string { return GuestKindContainer }
+
 func (m *MockDriver) idDir(id string) string {
 	return filepath.Join(m.stateDir, config.LabDirOf(id))
 }

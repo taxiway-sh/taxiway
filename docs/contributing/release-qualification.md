@@ -17,7 +17,10 @@ are `NOT_EXECUTED`, never a pass. Use the supported tool versions documented by
 the repository. Do not update provider clients or the catalog during a recipe.
 
 Reconcile existing test processes, context IDs, reference labs and prior proof
-before starting. Coordinate one heavy Docker/Lima run at a time. Fast local
+before starting.
+Qualify with fresh labs in a new context; reference labs belong to feature
+work and are not reused as qualification evidence.
+Coordinate one heavy Docker/Lima run at a time. Fast local
 checks generally take minutes; all orchestrator E2Es, snapshots and installation
 matrices can take tens of minutes each. Live calls consume account usage and
 need explicit scope, bounded requests and usable authentication. Timeouts are
@@ -88,17 +91,19 @@ promise. Do not turn untested supported paths into PASS or hide them.
 | `core` | `make lint build test-unit`; helper tests: `make test-release-tools` | Build/lint/unit results, counts, actual candidate; no unexpected skips. |
 | `scripts` | `make test-scripts` | Installer, settings, versions, previews, confirmations and runtime contracts pass. No dry-run mutation. |
 | `site` | In `site/`: `npm ci`, `npm test`, `npm run build` | Routes/navigation/build pass; manually inspect changed pages, links and examples. |
-| `gateway` | Gateway-routed assertions in the existing orchestrator lifecycle targets (`make test-e2e-claude-code`, `make test-e2e-codex`, `make test-e2e-gastown`) | Actual lab gateway routing, streaming, tool replay and provider errors survive configured/start/restart lifecycle stages using controlled providers; no real-account claim or separate protocol runner. |
+| `gateway` | Gateway-routed assertions in the existing orchestrator lifecycle targets (`make test-e2e-claude-code`, `make test-e2e-codex`, `make test-e2e-gastown`, `make test-e2e-gascity`) | Actual lab gateway routing, streaming, tool replay and provider errors survive configured/start/restart lifecycle stages using controlled providers; no real-account claim or separate protocol runner. |
 | `e2e-codex` | `make test-e2e-codex` | Up, prepare/run and phase-by-phase all pass, including models, autonomous permissions, exact versions and restart. |
 | `e2e-claude-code` | `make test-e2e-claude-code` | All three scenarios pass, model/config propagation, trust/onboarding and restart checked. |
 | `e2e-gastown` | `make test-e2e-gastown` | All three scenarios pass, deacon/startup sessions and doctor health, renewal/handoff configuration checked. |
+| `e2e-gascity` | `make test-e2e-gascity` | All three scenarios pass, city/rig sessions, gateway fragment and trust, fresh sessions and session reset configuration checked. |
 | `live-codex` | Task-specific bounded check with `taxiway_live.py`; see [model gateway validation](model-gateway-tests.md) | Real principal/child relationships, requested/observed models and gateway calls with output tokens. Verify relevant tool effects and actual interactive tmux completion. Keep scripts/results temporary. |
 | `live-claude` | Task-specific bounded check with a verified Claude reference; see [model gateway validation](model-gateway-tests.md) | Real principal/delegation and auth reuse/restart. Verify relevant tool effects and interactive completion without onboarding. Keep scripts/results temporary. |
 | `live-gastown` | Task-specific bounded Gas Town observations; see [model gateway validation](model-gateway-tests.md) | Actual Deacon patrol progress, relevant handoffs and principal/subagent requests. Attach to Mayor and verify bounded real work without auth/permission/onboarding loops; does not qualify a full refinery workload. |
+| `live-gascity` | Task-specific bounded Gas City observations; see [model gateway validation](model-gateway-tests.md) | Actual Mayor/Deacon/Witness progress, session resets and principal/subagent requests through the gateway with the selected model and effort. Attach to Mayor and verify bounded real work without auth/permission/onboarding loops; does not qualify a full rig workload. |
 | `lima` | Selected [Lima live recipes](live-tests.md#lima-driver-and-recording-recipes) using `taxiway_live.py` | Real guest readiness/retry, mounts, recording and stop/start observations; separately verify gateway/inference when in scope and state actual adapters. Current Docker E2Es do not qualify Lima. No separate native suite is endorsed. |
 | `recording` | Recording assertions in the existing Go orchestrator scenarios; scoped temporary Lima checks when qualifying Lima | Actual cast output, recorder stop preserves agent, containment and interrupted/stopped guest recovery. Verify actual Lima behavior separately; also manually verify browser replay/export offline. |
 | `docs-cli` | Compare docs/help to CLI, settings, manifests, installer and runtime scripts; execute representative documented examples | See checklist below; precise findings, corrections or documented limitations. Text matching alone is insufficient. |
-| `package` | `goreleaser check`; `goreleaser release --snapshot --clean`; inspect archives/checksums/installer and run extracted host binary | Correct four platform archives, executable, matching runtime, catalog, local player/scripts/styles, metadata and paths. Snapshot is not a published-release installation. |
+| `package` | `goreleaser check`; `goreleaser release --snapshot --clean`; inspect archives/checksums/installer and run extracted host binary | Correct four platform archives, executable, matching runtime, catalog, local player/scripts/styles, metadata and paths; each archive's top level holds only the binary, the default README/LICENSE, `infra/`, `agents/` and `orchestrators/`; every image named in shipped compose files and runtime code pulls anonymously (`DOCKER_CONFIG=$(mktemp -d) docker pull <image>`). Snapshot is not a published-release installation. |
 | `isolation-cleanup` | Scoped ownership inventory before/after; two contexts/labs; supported failure/retry cases | No collisions; intended mounts only; host agent config preserved; owned guests/gateways/networks/volumes removed; unrelated instances unchanged. |
 | `beta-compat` | Review code/tests for historical migration and compatibility branches | Beta policy respected; distinguish unnecessary cross-version shims/tests from required current idempotency, recovery and reset behavior. Propose focused issues for existing discoveries, not blanket removal. |
 | `breaking-changes` | Review behavior and diff since the last published release, not only commit labels | Release notes identify each breaking change with before/after, impact and user action (recreate lab, change setting, etc.). Breaking changes are allowed; no migration mechanism is implied. |
@@ -129,6 +134,10 @@ of an older SHA does not qualify the candidate unless the intervening changes
 have been explicitly assessed. Missing access, unavailable results, unknown
 coverage or an obsolete scan leave this security review incomplete; they never
 mean that no findings exist.
+
+Before accepting `review`, also run a secret scan over
+`<previous-tag>..<candidate>`, recording the tool and version in private
+evidence; an untriaged finding blocks publication.
 
 Triage each finding privately against the candidate, including severity,
 relevance, remediation and verification. An unresolved serious vulnerability
@@ -190,6 +199,8 @@ while preserving current-state idempotency/recovery tests.
 The current GoReleaser message grouping does not produce a dedicated breaking
 changes section or render every commit footer. Prepare an explicit reviewed
 section for the publication notes; `feat!` alone does not ensure adequate advice.
+Release notes keep the generated change list and add short before/after notes;
+they do not tell the story of how the release was prepared.
 
 ## After authorized publication
 

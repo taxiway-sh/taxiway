@@ -44,11 +44,11 @@ jobs:
 
   end-to-end:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
-        orchestrator: [codex, claude-code, gastown]
+        orchestrator: [codex, claude-code, gastown, gascity]
     steps:
       - uses: actions/checkout@v6
 

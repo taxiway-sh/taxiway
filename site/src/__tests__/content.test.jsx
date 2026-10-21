@@ -80,6 +80,7 @@ test('cta and footer show real taxiway content and curated links', () => {
   expect(text).toContain('Claude Code');
   expect(text).toContain('Codex');
   expect(text).toContain('Gas Town');
+  expect(text).toContain('Gas City');
   // Footer: Documentation
   expect(text).toContain('Overview');
   expect(text).toContain('Concepts');

@@ -42,8 +42,8 @@ body:
   - type: textarea
     id: direction
     attributes:
-      label: Proposed direction
-      description: Optional — if you have a fix idea, sketch it (kept open).
+      label: Possible directions
+      description: Optional — fix ideas, if any, kept open and unranked.
     validations:
       required: false
   - type: markdown

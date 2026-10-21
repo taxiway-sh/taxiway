@@ -16,7 +16,7 @@ import uuid
 
 CHECKS = {
     "pre": ("core", "scripts", "site", "gateway", "e2e-codex", "e2e-claude-code",
-            "e2e-gastown", "live-codex", "live-claude", "live-gastown", "lima",
+            "e2e-gastown", "e2e-gascity", "live-codex", "live-claude", "live-gastown", "live-gascity", "lima",
             "recording", "docs-cli", "package", "isolation-cleanup", "beta-compat", "breaking-changes", "review"),
     "post": ("published-assets", "install-matrix", "mac-install", "installed-smoke"),
 }
