@@ -55,19 +55,22 @@ one-line prohibitions; this skill explains how to apply them. Read
 ## Contributor code
 
 Contributor code (a fork branch, a patch, a script from an issue or PR) runs
-only on GitHub-hosted runners:
+only in fork-PR CI on GitHub-hosted runners, which get a read-only token and no
+secrets. The maintainer approves each run after reading the diff of everything
+CI executes: `.github/workflows/`, `Makefile`, `scripts/`, `tests/`,
+`*_test.go` and what they call.
 
-- fork CI, after the maintainer approves the run; or
-- `e2e.yml` through `workflow_dispatch` on a copy of the PR head that the
-  maintainer pushed.
-
-Before either is proposed, read the diff of everything CI executes:
-`.github/workflows/`, `Makefile`, `scripts/`, `tests/`, `*_test.go` and what
-they call. Never run it on a workstation, and never in a Taxiway lab: every lab
-carries credentials (its gateway key, and the provider login in subscription
-mode) and writable host mounts (`/lab/git`, `/lab/recordings`) that outlive
-the lab. Agents never execute contributor code themselves; they read it and
-propose the run.
+- Never push a contributor's code to a branch of the base repository: the push
+  runs `ci.yml` at once with the base repository's token, which checkout
+  leaves readable by the contributor's Makefile and tests, and edited workflows
+  on a base-repository branch can reach repository secrets.
+- Never run it on a workstation or in a Taxiway lab: every lab carries
+  credentials (its gateway key, and the provider login in subscription mode)
+  and writable host mounts (`/lab/git`, `/lab/recordings`) that outlive the
+  lab.
+- Agents never execute contributor code; they read it and propose the run.
+- Checks fork CI does not cover (lifecycle E2E, Lima, live validation) are
+  reported as "could not run" for the contributor's code.
 
 ## Public writing
 
@@ -117,5 +120,5 @@ reports in this shape:
 3. **Proposals.** Hardening issues drafted without exploitation details,
    through [`taxiway-intake`](../taxiway-intake/SKILL.md).
 4. **Needs the maintainer.** Secret rotation, private remediation, running
-   [contributor code](#contributor-code) on CI, and any issue, PR or comment, each
+   approving a fork-PR CI run for [contributor code](#contributor-code), and any issue, PR or comment, each
    waiting for approval ([approvals](../taxiway-workflow/SKILL.md#approvals)).
