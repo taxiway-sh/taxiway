@@ -90,16 +90,19 @@ Review adversarially: look for what is wrong, not for confirmation.
   the implementer disagrees with goes to the maintainer with both positions.
 - **Approving round.** It covers the whole PR, `<base>...<head>`, and goes to a
   fresh reviewer, started as [Running the reviewer](#running-the-reviewer)
-  says, that neither receives nor reads the reports of earlier rounds. It
-  approves when it finds nothing blocking or should-fix within the PR's scope;
-  its remaining nits are fixed without a new round. A finding the maintainer
-  already declined does not count.
+  says, that neither receives nor reads earlier rounds' reports in any form:
+  posted, drafted or linked from Validation. It approves when it finds nothing
+  blocking or should-fix within the PR's scope; its remaining nits are fixed
+  without a new round. A round that covers less, or saw those reports, cannot
+  approve. A finding the maintainer declined does not count against the
+  verdict; the report notes it as declined.
 - **Scope.** A finding that extends the PR beyond its starting scope, or a
   problem outside the change, becomes an issue proposal through
   [`taxiway-intake`](../taxiway-intake/SKILL.md), not a fix in this change.
-- **Tighter fixes.** A fix tightens or removes text rather than adding to it.
-- **Convergence.** After blocking or should-fix findings are fixed, a new
-  approving round follows. When two rounds after the first still find some,
+- **Tighter fixes.** A fix prefers tightening or removing text to adding it,
+  and adds only what the finding requires, such as a missing rule or test.
+- **Convergence.** After blocking or should-fix findings are fixed, or when
+  the scope of the change changes, a new approving round follows. When two rounds after the first still find some,
   stop and present the remaining findings to the maintainer.
 
 ## Review reports
