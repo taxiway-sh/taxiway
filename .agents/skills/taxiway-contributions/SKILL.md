@@ -108,9 +108,9 @@ issue is summarized for the maintainer; a new problem goes through
    [crediting](#credit) the contributor, and runs the scenarios before merging,
    or merges only changes that affect no lifecycle scenario. Say which path
    applies in the report.
-7. **Follow up.** After new commits, re-review the new range, and run the
-   last round, as [`taxiway-review`](../taxiway-review/SKILL.md#findings)
-   says, and answer the contributor's replies.
+7. **Follow up.** After new commits, re-review as
+   [`taxiway-review`](../taxiway-review/SKILL.md#findings) says, and answer
+   the contributor's replies.
 8. **On merge,** thank the contributor and record the [credit](#credit).
 
 ### Stale contributions
