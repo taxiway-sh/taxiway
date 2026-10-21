@@ -61,7 +61,7 @@ never rules:
   The history of `status/<id>.json` is the approval log and the friction log;
 - `deployed.json`: for each installed agent, its schedule, `model` and the
   `promptVersion` it was installed from. Session and scheduled task IDs stay
-  out of it: install and check look them up as [Install](#install) step 1
+  out of it: install and check look them up as [Install](#steps) step 1
   says;
 - `queue/machine/`, the [machine queue](#queue);
 - `improvement/`, trials and rejected proposals, defined by
@@ -196,7 +196,50 @@ declaration-only PR.
 
 ## Install
 
-For each cloud declaration, or the one `id` requested:
+[`/install-agents`](../install-agents/SKILL.md) runs this section. It applies
+to every cloud declaration, or to the one `id` requested, in one of three
+modes:
+
+- **install or update** (the default): create what is missing, rename, and
+  update what differs from the declarations. Running it again changes nothing
+  that already matches them.
+- **`reinstall`**: [replace](#replacing-an-agent) each agent's session and
+  scheduled task, even when they match.
+- **`remove`**: for an agent no longer declared on `main`, found in
+  `deployed.json` or as a scheduled task whose stored prompt contains
+  `taxiway/.agents/agents/<id>.prompt.md`: disable its scheduled task
+  (`update_trigger`), then delete it (`delete_trigger`); rename its session
+  `OLD session – <its current title>`, remove its `taxiway-agent:<id>` tag
+  (`set_session_tags`) and archive it (`archive_session`); remove its entry
+  from `deployed.json`. A declared agent is never removed: its declaration is
+  removed first, through a reviewed PR.
+
+### Bootstrapping
+
+When `taxiway-sh/agents` does not exist, stop and ask the maintainer to create
+it, public, with a `main` branch: cloud sessions cannot create repositories.
+When `deployed.json` or `status/` is missing from it, the plan creates them:
+`deployed.json` as an empty object and `status/` with an empty `.gitkeep`.
+
+### Plan
+
+Before any write, look up each agent as [step 1](#steps) says, then list per agent what
+will be created, renamed, updated, replaced or removed (session, scheduled
+task, `deployed.json` entry), the old sessions to archive, the test runs of
+[Verification](#verification), and the agents left unchanged. Undeclared
+agents found in the default mode are listed as removable with `remove`. Wait
+for one maintainer OK covering the whole plan, as the
+[approvals](../taxiway-workflow/SKILL.md#approvals) require; a step that
+departs from the approved plan needs a new OK. With nothing to change, report
+it and stop.
+
+The machine agent is never installed here. For the `machine` id, or a
+declaration with `"runs": "machine"` that has no `status/<id>.json`, the plan
+points to [Machine setup](#machine-setup) instead of doing nothing silently.
+
+### Steps
+
+For each agent in the approved plan:
 
 1. Look up the agent's session and scheduled task, in this order, stopping at
    the first match:
@@ -227,29 +270,56 @@ For each cloud declaration, or the one `id` requested:
 3. Create a scheduled task named with the declared `title`, bound to that
    session, with the declared schedule and the bootstrap prompt. Never use a
    new session per run: such a session has no repository access.
-4. When the schedule or the prompt changed, update the existing scheduled task.
-   When the model changed, a scheduled task cannot be rebound to another
-   session, so:
-   1. create a new session as in step 2, and wait until its setup is
-      verified, with the `add_repo` call approved;
-   2. only then create a new scheduled task bound to it as in step 3, with
-      the same `title`, schedule and bootstrap prompt;
-   3. delete the old scheduled task with `delete_trigger`;
-   4. rename the old session `OLD session – <title>` with
-      `set_session_title`, then archive it with `archive_session`, so title
-      lookups find only the new one.
-
-   The new scheduled task's run history starts empty.
+4. When the schedule or the prompt changed, update the existing scheduled
+   task. When the model changed, [replace](#replacing-an-agent) the agent.
 5. Record the schedule, `model` and `promptVersion` in `deployed.json`.
 
-Installation is idempotent: running it again changes nothing that already
-matches the declarations.
+An old session (`OLD session – <title>`, not archived) whose new session
+already has an `ok` heartbeat is archived in the default mode too.
+
+### Replacing an agent
+
+A scheduled task cannot be rebound to another session, so `reinstall` and a
+model change replace both:
+
+1. create a new session as in step 2, and wait until its setup is verified,
+   with the `add_repo` call approved;
+2. only then create a new scheduled task bound to it as in step 3, with the
+   same `title`, schedule and bootstrap prompt;
+3. delete the old scheduled task with `delete_trigger`;
+4. rename the old session `OLD session – <title>` with `set_session_title`
+   and remove its `taxiway-agent:<id>` tag, so lookups find only the new one;
+5. archive the old session with `archive_session` only after the new session's
+   first `ok` heartbeat: a `status/<id>.json` with `result` `ok`, dated after
+   the new session's creation. Until then it stays, and [Check](#check)
+   reports it.
+
+The new scheduled task's run history starts empty.
+
+### Verification
+
+After the steps, for each new or changed agent:
+
+1. a new session's setup is verified: both clones, the tools, and the
+   `add_repo` call approved by the maintainer in that session;
+2. one test run: send the [bootstrap prompt](#every-run) directly to the
+   agent's session (`send_message`). Do not fire its scheduled task for this:
+   a fired scheduled task may not reach a standing session. The test run is a
+   real run, at the agent's declared autonomy;
+3. its heartbeat: a new `status/<id>.json`, valid and dated after the test
+   run started; an `ok` one archives the old session of a
+   [replacement](#replacing-an-agent).
+
+End with one table, one row per agent: the mode and what was done, the
+session, the scheduled task, the test heartbeat's result, and what remains
+for the maintainer (setup approval, old session to archive, machine setup).
 
 ## Check
 
-For each cloud declaration, find the agent's session and scheduled task as
-in [Install](#install) step 1, which stops for that agent and reports it when
-it has more than one session or scheduled task, then report:
+[`/check-agents`](../check-agents/SKILL.md) runs this section. For each cloud
+declaration, or the one `id` requested, find the agent's session and scheduled
+task as in [Install](#steps) step 1, which stops for that agent and reports it
+when it has more than one session or scheduled task, then report:
 
 - the last heartbeat's date and result against the declared `schedule`: a
   heartbeat older than the latest time that cron expression fired, whether
@@ -263,7 +333,10 @@ it has more than one session or scheduled task, then report:
 - the session: present and not failed;
 - a session or scheduled task whose name is not the declared `title`;
 - a `promptVersion` behind `main`, which shows the run read older
-  instructions.
+  instructions;
+- an old session still waiting for archive (`OLD session – <title>`, not
+  archived), and whether its new session has had its first `ok` heartbeat,
+  after which Install archives it.
 
 A check writes nothing. Repairs go through [Install](#install).
 
@@ -289,8 +362,9 @@ A declaration with `"runs": "machine"` runs on that machine; without `runs`
   writes no issue, PR or comment. Its queue and heartbeat writes are its
   [run contract](#every-run);
 - is not installed or checked through cloud sessions and scheduled tasks:
-  [Install](#install) and [Check](#check) do not apply. The maintainer sets it
-  up as [Machine setup](#machine-setup) says, and its heartbeat is its check.
+  [Install](#install) points to [Machine setup](#machine-setup), which the
+  maintainer follows, and [Check](#check) does not apply: its heartbeat is its
+  check.
 
 `make lint` enforces these rules.
 
