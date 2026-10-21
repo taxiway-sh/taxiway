@@ -139,7 +139,7 @@ changes the agentic system or is reserved to the maintainer by
 | `close-pr` | Closing or reopening a PR | `auto` |
 | `rerun-workflow` | Rerunning a GitHub Actions run | `auto` |
 | `write-state` | Writing its own files in `taxiway-sh/agents` other than its heartbeat, which every run writes | `auto` |
-| `change-agent-system` | A draft PR changing skills, agent declarations or prompts, `AGENTS.md` or the agent docs checker | `ask` |
+| `change-agent-system` | A draft PR changing skills, agent declarations or prompts, `AGENTS.md`, contributor docs or the agent docs checker | `ask` |
 
 ### Never
 
@@ -175,8 +175,9 @@ but the agent's declaration, reviewed and merged by the maintainer:
   [watchdog](../../agents/watchdog.prompt.md) reports the incident at its next
   run.
 
-The weekly improvement agent proposes these PRs once it is declared; until
-then, an interactive session proposes them when the maintainer asks. Raising a
+The weekly [improvement agent](../../agents/improvement.prompt.md) proposes
+these PRs. Its own level changes, and any change needed before its next run,
+are proposed by an interactive session when the maintainer asks. Raising a
 class from `propose` to `ask` is the maintainer's call, through the same
 declaration-only PR.
 
