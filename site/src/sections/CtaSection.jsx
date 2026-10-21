@@ -69,6 +69,10 @@ function Footer() {
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--tw-muted)', maxWidth: 240 }}>
               Isolated labs for running and comparing agent orchestrators.
             </p>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--tw-muted)', maxWidth: 240, marginTop: 10 }}>
+              Taxiway is maintained by its own agents —{' '}
+              <Link to="/docs/contributing/agentic-system" style={{ color: 'var(--tw-text)' }}>see how</Link>.
+            </p>
           </div>
           {cols.map(c => (
             <div key={c.h}>

@@ -88,4 +88,8 @@ test('cta and footer show real taxiway content and curated links', () => {
   // Footer: Project
   expect(text).toContain('GitHub');
   expect(text).toContain('License');
+  // Footer: how the project is maintained
+  expect(text).toContain('Taxiway is maintained by its own agents');
+  expect(screen.getByRole('link', { name: 'see how' }).getAttribute('href'))
+    .toBe('/docs/contributing/agentic-system');
 });
