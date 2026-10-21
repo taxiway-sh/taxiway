@@ -46,6 +46,19 @@ type e2eOrchestratorExpectations struct {
 	workspaceTrustedBeforeStart bool
 	assertSessions              func(*testing.T, *RootState, string)
 	checkHandoff                func(*testing.T, *RootState, string)
+	// readinessActions replaces the single-session readiness probe for
+	// orchestrators that run several native agent sessions.
+	readinessActions func(*testing.T, *RootState, string, string)
+	// upSettings are explicit, non-default selections proven by the up scenario.
+	upSettings []string
+	// settingsFile means Claude reads its bypass-warning setting from a
+	// --settings file written by the orchestrator instead of inline JSON.
+	settingsFile bool
+	// resetStopLabel is the step the adapter's stop.sh hook plans before reset
+	// clears the workspace; empty when the adapter has no stop hook.
+	resetStopLabel string
+	// assertServicesStopped observes that reset stopped the adapter's services.
+	assertServicesStopped func(*testing.T, *RootState, string)
 }
 
 type e2eFixtureWorkspace struct {
@@ -76,7 +89,19 @@ func e2eExpectations(t *testing.T, orch string) e2eOrchestratorExpectations {
 			workspaceAssertion: "assert:workspace-provisioned", workspace: e2eGastownFixtureWorkspace,
 			// Gastown approves each working directory when its agent launches.
 			workspaceTrustedBeforeStart: false, assertSessions: assertE2EGastownSessions,
-			checkHandoff: runE2EGastownHandoff,
+			checkHandoff: runE2EGastownHandoff, readinessActions: runE2EGastownReadinessActions,
+			resetStopLabel: "Stopping Gas Town services when present",
+		}
+	case "gascity":
+		return e2eOrchestratorExpectations{
+			model: e2ePrincipalModel(t, orch), recordInput: "gc status",
+			workspaceAssertion: "assert:workspace-provisioned", workspace: e2eGascityFixtureWorkspace,
+			// The workspace clone is trusted before start; start trusts the city.
+			workspaceTrustedBeforeStart: true, assertSessions: assertE2EGascitySessions,
+			checkHandoff: runE2EGascityHandoff, readinessActions: runE2EGascityReadinessActions,
+			upSettings: []string{"effort=high"}, settingsFile: true,
+			resetStopLabel:        "Stopping the Gas City city, supervisor and nudge pollers when present",
+			assertServicesStopped: assertE2EGascityStopped,
 		}
 	default:
 		t.Fatalf("unsupported E2E orchestrator %q", orch)
@@ -96,6 +121,10 @@ func TestE2E_OrchestratorGastown_Up(t *testing.T) {
 	testE2EOrchestratorUp(t, "gastown")
 }
 
+func TestE2E_OrchestratorGascity_Up(t *testing.T) {
+	testE2EOrchestratorUp(t, "gascity")
+}
+
 func TestE2E_OrchestratorCodex_PrepareRun(t *testing.T) {
 	testE2EOrchestratorPrepareRun(t, "codex")
 }
@@ -108,6 +137,10 @@ func TestE2E_OrchestratorGastown_PrepareRun(t *testing.T) {
 	testE2EOrchestratorPrepareRun(t, "gastown")
 }
 
+func TestE2E_OrchestratorGascity_PrepareRun(t *testing.T) {
+	testE2EOrchestratorPrepareRun(t, "gascity")
+}
+
 func TestE2E_OrchestratorCodex_PhaseByPhase(t *testing.T) {
 	testE2EOrchestratorPhaseByPhase(t, "codex")
 }
@@ -118,6 +151,10 @@ func TestE2E_OrchestratorClaudeCode_PhaseByPhase(t *testing.T) {
 
 func TestE2E_OrchestratorGastown_PhaseByPhase(t *testing.T) {
 	testE2EOrchestratorPhaseByPhase(t, "gastown")
+}
+
+func TestE2E_OrchestratorGascity_PhaseByPhase(t *testing.T) {
+	testE2EOrchestratorPhaseByPhase(t, "gascity")
 }
 
 func testE2EOrchestratorPrepareRun(t *testing.T, orch string) {
@@ -199,8 +236,8 @@ func testE2EOrchestratorPrepareRun(t *testing.T, orch string) {
 
 	})
 
-	if orch == "gastown" {
-		runE2EGastownReadinessActions(t, state, id, "after-start")
+	if expectations.readinessActions != nil {
+		expectations.readinessActions(t, state, id, "after-start")
 	} else {
 		runE2EStep(t, "agent:send[controlled-readiness-probe]", func(t *testing.T) {
 			observation := runE2EInteractiveProbe(t, state, id, "", orch)
@@ -241,7 +278,7 @@ type e2eDryRunLabels struct {
 }
 
 func e2eSemanticDryRunLabels(orch string) e2eDryRunLabels {
-	labels := e2eDryRunLabels{Bootstrap: []string{"Updating apt cache", "Enabling Corepack"}}
+	labels := e2eDryRunLabels{Bootstrap: []string{"Guest environment: container", "Updating apt cache", "Enabling Corepack"}}
 	switch orch {
 	case "codex":
 		labels.Install = []string{"Installing @openai/codex@"}
@@ -261,6 +298,12 @@ func e2eSemanticDryRunLabels(orch string) e2eDryRunLabels {
 		labels.Workspace = []string{"Adding rig", "Adding crew workspace"}
 		labels.Auth = []string{"Checking Claude Code authentication"}
 		labels.Start = []string{"Checking Gas Town runtime health", "Starting crew workspace", "Starting tmux session 'gastown'"}
+	case "gascity":
+		labels.Install = []string{"Installing Gas City", "Installing @anthropic-ai/claude-code@"}
+		labels.Verify = []string{"Verifying tool versions", "Verifying claude version, help, and auth status"}
+		labels.Workspace = []string{"Cloning workspace repository", "Adding rig 'agreement-hub'"}
+		labels.Auth = []string{"Checking Claude Code authentication"}
+		labels.Start = []string{"Configuring Gas City for the Taxiway LiteLLM gateway", "Waiting for Gas City agent sessions", "Starting tmux session 'gascity'"}
 	}
 	return labels
 }
@@ -314,6 +357,9 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		})
 		runE2EAssert(t, "assert:lab-listed", func(t *testing.T) {
 			assertE2EList(t, root, tb, lab, orch, "degraded", "created")
+		})
+		runE2EAssert(t, "assert:container-guest-contract", func(t *testing.T) {
+			assertE2EContainerGuest(t, state, id)
 		})
 		runE2EAssert(t, "assert:driver-inspection-errors-preserved", func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
@@ -477,8 +523,8 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		})
 	})
 
-	if orch == "gastown" {
-		runE2EGastownReadinessActions(t, state, id, "after-start")
+	if expectations.readinessActions != nil {
+		expectations.readinessActions(t, state, id, "after-start")
 	} else {
 		runE2EStep(t, "agent:send[controlled-readiness-probe]@after-start", func(t *testing.T) {
 			observation := runE2EInteractiveProbe(t, state, id, "", orch)
@@ -510,7 +556,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 
 	var downFrozen bool
 	var downResume func(*testing.T)
-	if orch != "gastown" {
+	if expectations.readinessActions == nil {
 		runE2EStep(t, "fixture:quiesce-owned-agent-before-down-preview", func(fixtureT *testing.T) {
 			downFrozen, downResume = quiesceE2EDryRunAgent(t, fixtureT, state, id, orch)
 		})
@@ -586,8 +632,8 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 
 	})
 
-	if orch == "gastown" {
-		runE2EGastownReadinessActions(t, state, id, "after-up")
+	if expectations.readinessActions != nil {
+		expectations.readinessActions(t, state, id, "after-up")
 	} else {
 		runE2EStep(t, "agent:send[controlled-readiness-probe]@after-up", func(t *testing.T) {
 			observation := runE2EInteractiveProbe(t, state, id, "", orch)
@@ -598,7 +644,9 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 	}
 	if expectations.checkHandoff != nil {
 		expectations.checkHandoff(t, state, id)
-		runE2EGastownReadinessActions(t, state, id, "after-handoff")
+		if expectations.readinessActions != nil {
+			expectations.readinessActions(t, state, id, "after-handoff")
+		}
 	}
 
 	runE2EStep(t, e2eCommandStepAt("after-up", "doctor"), func(t *testing.T) {
@@ -631,7 +679,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 
 	var resetFrozen bool
 	var resetResume func(*testing.T)
-	if orch != "gastown" {
+	if expectations.readinessActions == nil {
 		runE2EStep(t, "fixture:quiesce-owned-agent-before-reset-preview", func(fixtureT *testing.T) {
 			resetFrozen, resetResume = quiesceE2EDryRunAgent(t, fixtureT, state, id, orch)
 		})
@@ -640,7 +688,12 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 
 		phaseStateBefore := captureE2EPhaseState(stateDir, id)
 		output := runE2EDryRunCommand(t, root, tb, state, resetFrozen, "reset", "--yes", lab)
-		require.Contains(t, output, "Stopping workspace services")
+		if expectations.resetStopLabel != "" {
+			require.Contains(t, output, expectations.resetStopLabel)
+			require.Less(t, strings.Index(output, expectations.resetStopLabel), strings.Index(output, "Clearing /lab/work contents"),
+				"the adapter stops its services before reset clears the workspace")
+		}
+		require.Contains(t, output, "Clearing /lab/work contents")
 		require.Contains(t, output, "Clearing lifecycle phase markers")
 		require.Equal(t, 1, strings.Count(output, "No changes were made."))
 		runE2EAssert(t, "assert:phase-markers-preserved", func(t *testing.T) { require.Equal(t, phaseStateBefore, captureE2EPhaseState(stateDir, id)) })
@@ -652,6 +705,11 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		runE2ECommand(t, root, tb, "reset", "--yes", lab)
 		_, err := os.Stat(phases.Dir(stateDir, id))
 		require.True(t, os.IsNotExist(err), "successful reset clears lifecycle markers")
+		if expectations.assertServicesStopped != nil {
+			runE2EAssert(t, "assert:orchestrator-services-stopped", func(t *testing.T) {
+				expectations.assertServicesStopped(t, state, id)
+			})
+		}
 		runE2EAssert(t, "assert:lab-listed", func(t *testing.T) {
 			assertE2EList(t, root, tb, lab, orch, "degraded", "-")
 		})
@@ -659,7 +717,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 
 	var rmFrozen bool
 	var rmResume func(*testing.T)
-	if orch != "gastown" {
+	if expectations.readinessActions == nil {
 		runE2EStep(t, "fixture:quiesce-owned-agent-before-rm-preview", func(fixtureT *testing.T) {
 			rmFrozen, rmResume = quiesceE2EDryRunAgent(t, fixtureT, state, id, orch)
 		})
@@ -728,7 +786,11 @@ func testE2EOrchestratorUp(t *testing.T, orch string) {
 	})
 
 	runE2EStep(t, fmt.Sprintf("taxiway:up[--type=%s,--repo=<fixture>,--skip-auth-check]", orch), func(t *testing.T) {
-		runE2ECommand(t, root, tb, "up", lab, "--type", orch, "--repo", e2eFixtureRepoURL, "--skip-auth-check", "--set", "auth_mode=api-key", "--set", "model="+expectations.model, "--set", e2eHarnessPin(orch))
+		args := []string{"up", lab, "--type", orch, "--repo", e2eFixtureRepoURL, "--skip-auth-check", "--set", "auth_mode=api-key", "--set", "model=" + expectations.model, "--set", e2eHarnessPin(orch)}
+		for _, setting := range expectations.upSettings {
+			args = append(args, "--set", setting)
+		}
+		runE2ECommand(t, root, tb, args...)
 		runE2EAssert(t, "assert:phase-started", func(t *testing.T) {
 			assertE2EPhase(t, stateDir, id, phases.PhaseStart)
 		})
@@ -785,10 +847,21 @@ func testE2EOrchestratorUp(t *testing.T, orch string) {
 				// owned guest processes, avoiding keystrokes into first-run dialogs.
 				script = "cd /lab/work/gt && gt down --quiet --force"
 			}
+			if orch == "gascity" {
+				// Native stop keeps the city and its durable sessions.
+				// gc stop can time out on its bead store's proxy lock while a
+				// patrol holds it; one bounded retry keeps the first error on stderr.
+				script = `export PATH="$HOME/.local/bin:$PATH"; cd /lab/work/gc &&
+{ timeout 180 gc stop --force /lab/work/gc || { echo "retrying gc stop once" >&2; sleep 5; timeout 180 gc stop --force /lab/work/gc; }; } &&
+timeout 120 gc supervisor stop --wait`
+			}
 			var stderr bytes.Buffer
 			res, err := state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: []string{"bash", "-lc", script}, Stderr: &stderr})
 			require.NoError(t, err)
 			require.Zero(t, res.ExitCode, redactE2EDiagnosticSecrets(stderr.String()))
+			if strings.Contains(stderr.String(), "retrying gc stop once") {
+				t.Logf("gc stop needed its retry; first attempt: %s", redactE2EDiagnosticSecrets(stderr.String()))
+			}
 		})
 		runE2EStep(t, "fixture:complete-native-onboarding", func(t *testing.T) {
 			configureE2ECompletedClaudeOnboarding(t, state, id, orch)
@@ -800,8 +873,8 @@ func testE2EOrchestratorUp(t *testing.T, orch string) {
 		})
 	}
 
-	if orch == "gastown" {
-		runE2EGastownReadinessActions(t, state, id, "after-start")
+	if expectations.readinessActions != nil {
+		expectations.readinessActions(t, state, id, "after-start")
 	} else {
 		runE2EStep(t, "agent:send[controlled-readiness-probe]", func(t *testing.T) {
 			observation := runE2EInteractiveProbe(t, state, id, "", orch)
@@ -1122,19 +1195,28 @@ func captureE2EDryRunRuntime(t *testing.T, state *RootState, frozenTmux bool) ma
 			Argv: []string{"bash", "-c", `set -euo pipefail
 operation=initialization
 trap 'printf "snapshot operation=%s exit=%s\n" "$operation" "$?" >&2' ERR
+# GasTown's running database and daemon logs change independently of previews.
+runtime=(-path /lab/work/gt/.dolt-data -o -path /lab/work/gt/daemon)
+if [[ "$2" == gascity ]]; then
+  # Gas City's controller, bead stores and its agents' Claude transcripts also
+  # change on their own schedules (patrols, orders, dogs).
+  runtime+=(-o -path /lab/work/gc/.gc -o -path '/lab/work/*/.beads'
+    -o -path "$HOME/.claude/projects" -o -path "$HOME/.claude/sessions" -o -path "$HOME/.claude/todos"
+    -o -path "$HOME/.claude/shell-snapshots" -o -path "$HOME/.claude/file-history" -o -path "$HOME/.claude/statsig"
+    -o -path "$HOME/.claude/history.jsonl")
+fi
 for path in "$HOME/.config/taxiway" "$HOME/.codex" "$HOME/.claude" /lab/work; do
   if [ -d "$path" ]; then
-    # GasTown's running database and daemon logs change independently of previews.
-    # Keep their directory presence while hashing persistent configuration and workspace files.
+    # Keep runtime directory presence while hashing persistent configuration and workspace files.
     operation=directory-modes
-    find "$path" \( -path /lab/work/gt/.dolt-data -o -path /lab/work/gt/daemon \) -printf 'mode|%m|%p\n' -prune -o -printf 'mode|%m|%p\n'
+    find "$path" \( "${runtime[@]}" \) -printf 'mode|%m|%p\n' -prune -o -printf 'mode|%m|%p\n'
     operation=file-digests
-    find "$path" \( -path /lab/work/gt/.dolt-data -o -path /lab/work/gt/daemon \) -prune -o -type f ! -path /lab/work/gt/.runtime/doctor-fix.log -exec sha256sum {} +
+    find "$path" \( "${runtime[@]}" \) -prune -o -type f ! -path /lab/work/gt/.runtime/doctor-fix.log -exec sha256sum {} +
   fi
 done
 if [[ "$1" != frozen ]] && command -v tmux >/dev/null 2>&1; then
   tmux list-sessions -F 'session|#{session_name}|#{session_id}' 2>/dev/null || true
-fi`, "capture-preview", map[bool]string{true: "frozen", false: "active"}[frozenTmux]},
+fi`, "capture-preview", map[bool]string{true: "frozen", false: "active"}[frozenTmux], ref.Orch},
 			Stdout: &output,
 			Stderr: &diagnostic,
 		})
@@ -1394,6 +1476,11 @@ func assertE2EStartedAgents(t *testing.T, state *RootState, id, orch string) {
 			require.Zero(t, res.ExitCode, "Codex autonomous contract: %s", stderr.String())
 		})
 	}
+	if orch == "gascity" {
+		runE2EAssert(t, "assert:gascity-container-supervisor", func(t *testing.T) {
+			assertE2EGascityContainerSupervisor(t, state, id)
+		})
+	}
 	runE2EAssert(t, "assert:lab-work-trusted", func(t *testing.T) {
 		assertE2EAgentsWorkspaceTrusted(t, state, id, orch, LabWorkRoot)
 	})
@@ -1459,7 +1546,9 @@ _write_claude_onboarding(sys.argv[2], state)
 
 // The expected digest is absent from the prompt, so terminal echo cannot pass.
 // Only the controlled upstream computes it after receiving the real CLI request.
-func runE2EInteractiveProbe(t *testing.T, state *RootState, id, socket, session string) e2eInteractiveObservation {
+// native, when set, is the orchestrator's messaging command: a working
+// directory followed by the argv that receives the message as last argument.
+func runE2EInteractiveProbe(t *testing.T, state *RootState, id, socket, session string, native ...string) e2eInteractiveObservation {
 	t.Helper()
 	nonce := fmt.Sprintf("taxiway-readiness-%x", time.Now().UnixNano())
 	expected := fmt.Sprintf("%x", sha256.Sum256([]byte(nonce)))
@@ -1467,9 +1556,10 @@ func runE2EInteractiveProbe(t *testing.T, state *RootState, id, socket, session 
 	defer cancel()
 	var stdout, stderr bytes.Buffer
 	res, err := state.Driver.Exec(ctx, id, driver.ExecRequest{
-		Argv: []string{"python3", "-c", `import hashlib, pathlib, subprocess, sys, time, urllib.request
+		Argv: append([]string{"python3", "-c", `import hashlib, os, pathlib, subprocess, sys, time, urllib.request
 tmux = ['tmux'] + (['-L', sys.argv[1]] if sys.argv[1] else [])
-session, nonce, expected = sys.argv[2:]
+session, nonce, expected = sys.argv[2:5]
+native = sys.argv[5:]
 deadline = time.monotonic() + 80
 def run(*args):
     return subprocess.check_output(tmux + list(args), text=True, timeout=5).strip()
@@ -1499,13 +1589,12 @@ def native_agent_running():
             pass
     return None
 def submit(request_nonce):
-    if sys.argv[1]:
-        # Gastown v1.2.1 documents gt nudge as its native messaging API.
-        # Idle was verified above. Custom agent presets have no wait-idle
-        # prompt detector, so use documented direct delivery instead of queueing.
-        subprocess.check_output([str(pathlib.Path.home() / '.local/bin/gt'), 'nudge', session,
-                                 '--mode=immediate', '--message', 'Reply only with the SHA256 hex digest of this nonce: ' + request_nonce],
-                                cwd='/lab/work/gt', text=True, timeout=35)
+    if native:
+        # Use the orchestrator's documented messaging API (gt nudge, gc session
+        # submit). Idle was verified above, so delivery is immediate.
+        env = dict(os.environ, PATH=str(pathlib.Path.home() / '.local/bin') + ':' + os.environ['PATH'])
+        subprocess.check_output(native[1:] + ['Reply only with the SHA256 hex digest of this nonce: ' + request_nonce],
+                                cwd=native[0], env=env, text=True, timeout=35)
         return
     if session != 'codex':
         # Match Gastown v1.2.1's native SendKeys protocol: literal input and
@@ -1586,7 +1675,7 @@ if session == 'codex':
     else:
         print(capture[-2400:], file=sys.stderr)
         raise RuntimeError('native agent did not complete the subsequent normal request')
-`, socket, session, nonce, expected}, Stdout: &stdout, Stderr: &stderr,
+`, socket, session, nonce, expected}, native...), Stdout: &stdout, Stderr: &stderr,
 	})
 	return e2eInteractiveObservation{session: session, result: res, err: err, stdout: stdout.String(), stderr: stderr.String()}
 }
@@ -1627,7 +1716,7 @@ func assertE2EClaudeCodeSession(t *testing.T, state *RootState, id string) {
 }
 
 // Inspect the actual Claude process, not the tmux server or its launching shell.
-// Shared by standalone sessions, Gastown roles, and Gastown handoffs.
+// Shared by standalone sessions, Gastown/Gas City roles, and their handoffs.
 func assertE2EClaudeEnvironment(t *testing.T, state *RootState, id, socket, session string) {
 	t.Helper()
 	ref, ok, err := state.Driver.ReadLabRef(context.Background(), id)
@@ -1657,7 +1746,13 @@ while True:
     time.sleep(0.2)
 args = (pathlib.Path('/proc') / pane[0] / 'cmdline').read_bytes().split(b'\0')
 assert b'--dangerously-skip-permissions' in args, 'Claude lost autonomous permission contract'
-assert b'{"skipDangerousModePermissionPrompt":true}' in args, 'Claude must skip the bypass startup warning'
+if sys.argv[4] == 'file':
+    # Gas City writes the setting to a --settings file it owns.
+    settings = [args[i + 1] for i, arg in enumerate(args[:-1]) if arg == b'--settings']
+    assert any(json.loads(pathlib.Path(value.decode()).read_text()).get('skipDangerousModePermissionPrompt') is True
+               for value in settings), 'Claude must skip the bypass startup warning'
+else:
+    assert b'{"skipDangerousModePermissionPrompt":true}' in args, 'Claude must skip the bypass startup warning'
 env = dict(entry.split(b'=', 1) for entry in (pathlib.Path('/proc') / pane[0] / 'environ').read_bytes().split(b'\0') if b'=' in entry)
 assert env.get(b'ENABLE_TOOL_SEARCH') == b'true', 'Claude lost tool search default'
 assert env.get(b'ENABLE_CLAUDEAI_MCP_SERVERS') == b'false', 'Claude must disable connector import by default'
@@ -1676,7 +1771,7 @@ policy = json.loads(pathlib.Path('/etc/claude-code/managed-settings.json').read_
 assert sorted(policy['availableModels']) == sorted(expected['models']), 'Claude managed model catalog differs from gateway'
 assert policy['enforceAvailableModels'] is True, 'Claude model policy is not enforced'
 assert policy['availableModelsMatch'] == 'exact', 'Claude model policy must match exact IDs'
-`, socket, session, string(expected)},
+`, socket, session, string(expected), map[bool]string{true: "file", false: "inline"}[e2eExpectations(t, ref.Orch).settingsFile]},
 		Stderr: &stderr,
 	})
 	require.NoError(t, err, "Claude model/MCP environment in %s: %s", session, stderr.String())
@@ -1952,7 +2047,10 @@ func runE2EGastownReadinessActions(t *testing.T, state *RootState, id, stage str
 			continue
 		}
 		runE2EStep(t, "agent:send[controlled-readiness-probe,"+agent.Session+"]@"+stage, func(t *testing.T) {
-			observation := runE2EInteractiveProbe(t, state, id, status.Tmux.Socket, agent.Session)
+			// Gastown v1.2.1 documents gt nudge as its native messaging API.
+			// Custom agent presets have no wait-idle prompt detector, so use
+			// documented direct delivery instead of queueing.
+			observation := runE2EInteractiveProbe(t, state, id, status.Tmux.Socket, agent.Session, e2eGastownNudge(agent.Session)...)
 			runE2EAssert(t, "assert:interactive-response-completed", func(t *testing.T) {
 				assertE2EInteractiveObservation(t, observation, false)
 			})
@@ -1981,11 +2079,15 @@ func runE2EGastownReadinessActions(t *testing.T, state *RootState, id, stage str
 		})
 	})
 	runE2EStep(t, "agent:send[fresh-crew-readiness-probe]@"+stage, func(t *testing.T) {
-		observation := runE2EInteractiveProbe(t, state, id, status.Tmux.Socket, newSession)
+		observation := runE2EInteractiveProbe(t, state, id, status.Tmux.Socket, newSession, e2eGastownNudge(newSession)...)
 		runE2EAssert(t, "assert:interactive-response-completed", func(t *testing.T) {
 			assertE2EInteractiveObservation(t, observation, false)
 		})
 	})
+}
+
+func e2eGastownNudge(session string) []string {
+	return []string{"/lab/work/gt", "gt", "nudge", session, "--mode=immediate", "--message"}
 }
 
 // Exercise Gastown's real respawn path, not a Lab down/up. The command is
@@ -2072,6 +2174,332 @@ assert args[args.index(b'--model') + 1] == sys.argv[2].encode(), 'handoff change
 				}
 			})
 		})
+	}
+}
+
+// Docker labs are container guests: an init reaps orphans as PID 1 and no
+// systemd user manager is faked. The guest kind phase scripts receive is
+// observed through the bootstrap preview (`Guest environment: container`).
+func assertE2EContainerGuest(t *testing.T, state *RootState, id string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	var stdout, stderr bytes.Buffer
+	res, err := state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: []string{"bash", "-c", `set -u
+test "$(cat /proc/1/comm)" = docker-init || { echo "PID 1 is $(cat /proc/1/comm)" >&2; exit 1; }
+if out=$(systemctl --user show-environment 2>/dev/null); then echo "systemctl --user pretends a user manager exists" >&2; exit 1; fi
+test -z "$out" || { echo "systemctl --user wrote to stdout" >&2; exit 1; }`}, Stdout: &stdout, Stderr: &stderr})
+	require.NoError(t, err)
+	require.Zero(t, res.ExitCode, "container guest contract: %s", stderr.String())
+}
+
+// In a container guest, Gas City's supervisor is the detached canonical loop
+// reparented to the init, no systemd unit is installed, and no orphan (a
+// process reparented to the init) is left as a zombie after the city's
+// stop/start cycles. Zombies of live parents are their parents' to reap.
+func assertE2EGascityContainerSupervisor(t *testing.T, state *RootState, id string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	runE2EGascity(t, ctx, state, id, "python3", "-c", `import pathlib, time
+def processes():
+    rows = []
+    for stat in pathlib.Path('/proc').glob('[0-9]*/stat'):
+        try:
+            fields = stat.read_text().rsplit(')', 1)[1].split()
+            args = (stat.parent / 'cmdline').read_bytes().split(b'\0')
+        except OSError:
+            continue
+        rows.append((int(stat.parent.name), int(fields[1]), fields[0], [a.decode(errors='replace') for a in args if a]))
+    return rows
+supervisors = [(pid, ppid) for pid, ppid, state, args in processes()
+               if args[1:3] == ['supervisor', 'run'] and args[0].endswith('/gc')]
+assert len(supervisors) == 1, 'expected one gc supervisor run process, got %s' % supervisors
+assert supervisors[0][1] == 1, 'supervisor must be detached under the init, parent %d' % supervisors[0][1]
+for unit_dir in ('.local/share/systemd/user', '.config/systemd/user'):
+    units = list((pathlib.Path.home() / unit_dir).glob('gascity*'))
+    assert not units, 'container guest must not install a Gas City unit: %s' % units
+deadline = time.monotonic() + 5
+while True:
+    orphans = [pid for pid, ppid, state, args in processes() if state == 'Z' and ppid == 1]
+    if not orphans:
+        break
+    assert time.monotonic() < deadline, 'the init left orphan zombies: %s' % orphans
+    time.sleep(0.5)
+`)
+}
+
+// After reset, the stop hook left no Gas City supervisor or deferred-nudge
+// poller running in the guest.
+func assertE2EGascityStopped(t *testing.T, state *RootState, id string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	var stdout, stderr bytes.Buffer
+	res, err := state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: []string{"bash", "-c",
+		`pgrep -f '^[^ ]*gc (supervisor run|nudge poll)' && exit 1 || exit 0`}, Stdout: &stdout, Stderr: &stderr})
+	require.NoError(t, err)
+	require.Zero(t, res.ExitCode, "Gas City processes still running after reset: %s", stdout.String())
+}
+
+// Gas City names its tmux socket after the city directory (/lab/work/gc).
+const (
+	e2eGascityCityDir = "/lab/work/gc"
+	e2eGascitySocket  = "gc"
+	e2eGascityRepo    = "/lab/work/agreement-hub"
+)
+
+type e2eGascitySession struct {
+	ID          string `json:"id"`
+	Template    string `json:"template"`
+	State       string `json:"state"`
+	SessionName string `json:"session_name"`
+	WorkDir     string `json:"work_dir"`
+}
+
+func runE2EGascity(t *testing.T, ctx context.Context, state *RootState, id string, argv ...string) string {
+	t.Helper()
+	var stdout, stderr bytes.Buffer
+	// Docker Exec does not load a shell profile: match the adapter's PATH.
+	command := append([]string{"bash", "-c", `export PATH="$HOME/.local/bin:$PATH"; exec "$@"`, "gascity-e2e"}, argv...)
+	res, err := state.Driver.Exec(ctx, id, driver.ExecRequest{Workdir: e2eGascityCityDir, Argv: command, Stdout: &stdout, Stderr: &stderr})
+	require.NoError(t, err, "%v", argv)
+	require.Zero(t, res.ExitCode, "%v: %s", argv, redactE2EDiagnosticSecrets(stderr.String()))
+	return stdout.String()
+}
+
+// Active agent sessions with a live pane. Boot and dogs finish normally, so
+// only persistent roles and explicitly created sessions are returned.
+func e2eGascityAgentSessions(t *testing.T, ctx context.Context, state *RootState, id string) []e2eGascitySession {
+	t.Helper()
+	var list struct {
+		Sessions []e2eGascitySession `json:"sessions"`
+	}
+	output := runE2EGascity(t, ctx, state, id, "gc", "session", "list", "--json")
+	require.NoError(t, json.Unmarshal([]byte(output), &list), "gc session list: %s", output)
+	present := map[string]bool{}
+	for _, name := range strings.Fields(runE2EGascity(t, ctx, state, id, "tmux", "-L", e2eGascitySocket, "list-sessions", "-F", "#{session_name}")) {
+		present[name] = true
+	}
+	var sessions []e2eGascitySession
+	for _, session := range list.Sessions {
+		if session.State != "active" || !present[session.SessionName] ||
+			strings.HasSuffix(session.Template, ".boot") || strings.HasSuffix(session.Template, ".dog") {
+			continue
+		}
+		sessions = append(sessions, session)
+	}
+	return sessions
+}
+
+// The Taxiway-managed configuration routes every session through the lab
+// gateway with the selected effort: compare the Claude process with the
+// managed Lab configuration in the guest, without printing credentials.
+func assertE2EGascityLaunch(t *testing.T, state *RootState, id, session string) {
+	t.Helper()
+	ref, ok, err := state.Driver.ReadLabRef(context.Background(), id)
+	require.NoError(t, err)
+	require.True(t, ok)
+	effort := ref.Settings["effort"]
+	if effort == "" {
+		effort = "max" // Manifest default, Gas City's own default.
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	runE2EGascity(t, ctx, state, id, "python3", "-c", `import pathlib, shlex, subprocess, sys, tomllib
+pid = subprocess.check_output(['tmux', '-L', sys.argv[1], 'display-message', '-p', '-t', sys.argv[2], '#{pane_pid}'], text=True).strip()
+env = dict(e.split(b'=', 1) for e in (pathlib.Path('/proc') / pid / 'environ').read_bytes().split(b'\0') if b'=' in e)
+lab = {}
+for line in (pathlib.Path.home() / '.config/taxiway/env').read_text().splitlines():
+    if '=' in line and not line.lstrip().startswith('#'):
+        key, value = line.split('=', 1)
+        lab[key.strip()] = ''.join(shlex.split(value))
+key = lab['TAXIWAY_LITELLM_API_KEY']
+assert env.get(b'ANTHROPIC_BASE_URL', b'').decode() == lab['TAXIWAY_LITELLM_BASE_URL'].rstrip('/'), 'session bypasses the lab gateway'
+assert env.get(b'ANTHROPIC_CUSTOM_HEADERS', b'').decode() == 'x-litellm-api-key: Bearer ' + key, 'session lost the gateway key header'
+assert env.get(b'ANTHROPIC_AUTH_TOKEN', b'').decode() == key, 'api-key mode must authenticate Claude with the gateway key'
+city = tomllib.loads(pathlib.Path(sys.argv[3], 'city.toml').read_text())
+assert city.get('include', []).count('taxiway.toml') == 1, 'city.toml must include the managed fragment once'
+fragment = pathlib.Path(sys.argv[3], 'taxiway.toml')
+assert fragment.stat().st_mode & 0o077 == 0, 'managed fragment must be private'
+assert key not in fragment.read_text(), 'managed fragment must reference, not inline, the gateway key'
+args = (pathlib.Path('/proc') / pid / 'cmdline').read_bytes().split(b'\0')
+efforts = [args[i + 1].decode() for i, arg in enumerate(args[:-1]) if arg == b'--effort']
+assert efforts == [sys.argv[4]], 'session must run with the selected effort, got %s' % efforts
+`, e2eGascitySocket, session, e2eGascityCityDir, effort)
+}
+
+func assertE2EGascitySessions(t *testing.T, state *RootState, id string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	// Persistent roles restart fresh after each drain, so one can be briefly
+	// relaunching: require each to be active within a bounded wait.
+	roles := []string{"gastown.mayor", "gastown.deacon", "agreement-hub/gastown.witness"}
+	var sessions []e2eGascitySession
+	var missing []string
+	for deadline := time.Now().Add(2 * time.Minute); ; time.Sleep(3 * time.Second) {
+		sessions = e2eGascityAgentSessions(t, ctx, state, id)
+		templates := map[string]bool{}
+		for _, session := range sessions {
+			templates[session.Template] = true
+		}
+		missing = nil
+		for _, role := range roles {
+			if !templates[role] {
+				missing = append(missing, role)
+			}
+		}
+		if len(missing) == 0 || time.Now().After(deadline) {
+			break
+		}
+	}
+	require.Empty(t, missing, "persistent sessions must be active: %s",
+		runE2EGascity(t, ctx, state, id, "gc", "session", "list"))
+	for _, session := range sessions {
+		assertE2EClaudeEnvironment(t, state, id, e2eGascitySocket, session.SessionName)
+		assertE2EGascityLaunch(t, state, id, session.SessionName)
+		// Agents run under the trusted city (.gc/agents/*) or the trusted rig.
+		require.True(t, strings.HasPrefix(session.WorkDir, e2eGascityCityDir+"/") || session.WorkDir == e2eGascityRepo,
+			"session %s works outside the trusted roots: %s", session.SessionName, session.WorkDir)
+	}
+	assertE2EAgentWorkspaceTrusted(t, state, id, "claude-code", e2eGascityCityDir)
+	assertE2EAgentWorkspaceTrusted(t, state, id, "claude-code", e2eGascityRepo)
+}
+
+// waitE2EGascityActive waits until Gas City reports the session active again;
+// a relaunched pane can run Claude before the controller records it.
+func waitE2EGascityActive(t *testing.T, ctx context.Context, state *RootState, id, sessionID string) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Minute)
+	var current string
+	for time.Now().Before(deadline) {
+		var list struct {
+			Sessions []e2eGascitySession `json:"sessions"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(runE2EGascity(t, ctx, state, id, "gc", "session", "list", "--json")), &list))
+		for _, session := range list.Sessions {
+			if session.ID == sessionID {
+				current = session.State
+			}
+		}
+		if current == "active" {
+			return
+		}
+		time.Sleep(2 * time.Second)
+	}
+	require.FailNowf(t, "session did not become active", "%s: %s", sessionID, current)
+}
+
+// waitE2EGascityClaude waits for a session pane to run a replacement Claude.
+func waitE2EGascityClaude(t *testing.T, ctx context.Context, state *RootState, id, session, previousPID string) string {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Minute)
+	var pane string
+	for time.Now().Before(deadline) {
+		var stdout bytes.Buffer
+		res, err := state.Driver.Exec(ctx, id, driver.ExecRequest{Argv: []string{"tmux", "-L", e2eGascitySocket,
+			"display-message", "-p", "-t", session, "#{pane_pid}|#{pane_dead}|#{pane_current_command}"}, Stdout: &stdout})
+		require.NoError(t, err)
+		pane = strings.TrimSpace(stdout.String())
+		parts := strings.Split(pane, "|")
+		if res.ExitCode == 0 && len(parts) == 3 && parts[0] != previousPID && parts[1] == "0" && (parts[2] == "claude" || parts[2] == "node") {
+			return parts[0]
+		}
+		time.Sleep(2 * time.Second)
+	}
+	require.FailNowf(t, "session did not run Claude", "%s: %s", session, pane)
+	return ""
+}
+
+func runE2EGascityReadinessActions(t *testing.T, state *RootState, id, stage string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	defer cancel()
+	for _, session := range e2eGascityAgentSessions(t, ctx, state, id) {
+		runE2EStep(t, "agent:send[controlled-readiness-probe,"+session.SessionName+"]@"+stage, func(t *testing.T) {
+			// gc session submit is Gas City's native messaging API.
+			observation := runE2EInteractiveProbe(t, state, id, e2eGascitySocket, session.SessionName,
+				e2eGascityCityDir, "gc", "session", "submit", session.ID)
+			runE2EAssert(t, "assert:interactive-response-completed", func(t *testing.T) {
+				assertE2EInteractiveObservation(t, observation, false)
+			})
+		})
+	}
+
+	var fresh struct {
+		SessionID   string `json:"session_id"`
+		SessionName string `json:"session_name"`
+		WorkDir     string `json:"work_dir"`
+	}
+	runE2EStep(t, "gc:session[new,fresh-workspace]@"+stage, func(t *testing.T) {
+		// A session created after startup proves that configuration and trust
+		// apply to every launch, not only to the sessions start observed.
+		alias := fmt.Sprintf("readiness%x", time.Now().UnixNano())
+		output := runE2EGascity(t, ctx, state, id, "gc", "session", "new", "agreement-hub/claude", "--alias", alias, "--no-attach", "--json")
+		require.NoError(t, json.Unmarshal([]byte(output), &fresh), "gc session new: %s", output)
+		waitE2EGascityClaude(t, ctx, state, id, fresh.SessionName, "")
+		waitE2EGascityActive(t, ctx, state, id, fresh.SessionID)
+		runE2EAssert(t, "assert:fresh-session-configured-and-trusted", func(t *testing.T) {
+			require.Equal(t, e2eGascityRepo, fresh.WorkDir)
+			assertE2EClaudeEnvironment(t, state, id, e2eGascitySocket, fresh.SessionName)
+			assertE2EGascityLaunch(t, state, id, fresh.SessionName)
+			assertE2EAgentWorkspaceTrusted(t, state, id, "claude-code", fresh.WorkDir)
+		})
+	})
+	runE2EStep(t, "agent:send[fresh-session-readiness-probe]@"+stage, func(t *testing.T) {
+		observation := runE2EInteractiveProbe(t, state, id, e2eGascitySocket, fresh.SessionName,
+			e2eGascityCityDir, "gc", "session", "submit", fresh.SessionID)
+		runE2EAssert(t, "assert:interactive-response-completed", func(t *testing.T) {
+			assertE2EInteractiveObservation(t, observation, false)
+		})
+	})
+	runE2EStep(t, "gc:session[close,fresh-workspace]@"+stage, func(t *testing.T) {
+		runE2EGascity(t, ctx, state, id, "gc", "session", "close", fresh.SessionID)
+	})
+}
+
+// Exercise Gas City's native fresh restart of persistent roles, not a Lab
+// down/up: the controller relaunches them from the same configuration.
+func runE2EGascityHandoff(t *testing.T, state *RootState, id string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	for _, role := range []string{"agreement-hub/gastown.witness", "gastown.mayor"} {
+		runE2EStep(t, fmt.Sprintf("gc:session[reset,%s]", role), func(t *testing.T) {
+			var target e2eGascitySession
+			for _, session := range e2eGascityAgentSessions(t, ctx, state, id) {
+				if session.Template == role {
+					target = session
+				}
+			}
+			require.NotEmpty(t, target.SessionName, "%s must be active before reset", role)
+			before := strings.TrimSpace(runE2EGascity(t, ctx, state, id, "tmux", "-L", e2eGascitySocket,
+				"display-message", "-p", "-t", target.SessionName, "#{pane_pid}"))
+			runE2EGascity(t, ctx, state, id, "gc", "session", "reset", target.ID)
+			waitE2EGascityClaude(t, ctx, state, id, target.SessionName, before)
+			waitE2EGascityActive(t, ctx, state, id, target.ID)
+			runE2EAssert(t, "assert:replacement-process-model-and-gateway-preserved", func(t *testing.T) {
+				assertE2EClaudeEnvironment(t, state, id, e2eGascitySocket, target.SessionName)
+				assertE2EGascityLaunch(t, state, id, target.SessionName)
+				if role == "gastown.mayor" {
+					assertE2EGascitySessions(t, state, id)
+				}
+			})
+		})
+	}
+}
+
+func e2eGascityFixtureWorkspace(t *testing.T) e2eFixtureWorkspace {
+	t.Helper()
+	return e2eFixtureWorkspace{
+		checkCommand: strings.Join([]string{
+			"test -f '" + e2eGascityCityDir + "/city.toml'",
+			"git -C '" + e2eGascityRepo + "' rev-parse --is-inside-work-tree >/dev/null",
+			`cd '` + e2eGascityCityDir + `' && PATH="$HOME/.local/bin:$PATH" gc rig list --json 2>/dev/null | jq -e '.rigs[] | select(.name == "agreement-hub" and .path == "` + e2eGascityRepo + `")' >/dev/null`,
+		}, " && "),
+		description: e2eGascityCityDir + "/city.toml, git workspace " + e2eGascityRepo + " and its agreement-hub rig",
+		repository:  e2eGascityRepo,
 	}
 }
 
@@ -2736,6 +3164,7 @@ func configureE2ELiteLLMModelCatalog(t *testing.T, state *RootState, fakeUpstrea
 		e2ePrincipalModel(t, "codex"):       true,
 		e2ePrincipalModel(t, "claude-code"): true,
 		e2ePrincipalModel(t, "gastown"):     true,
+		e2ePrincipalModel(t, "gascity"):     true,
 	}
 	// Keep public IDs/providers but send every inference request to the fixture.
 	// Freeze lifecycle statuses in this snapshot instead of waiting on public dates.

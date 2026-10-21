@@ -45,6 +45,7 @@ function Footer() {
       { label: 'Claude Code', to: '/docs/orchestrators/claude-code' },
       { label: 'Codex', to: '/docs/orchestrators/codex' },
       { label: 'Gas Town', to: '/docs/orchestrators/gastown' },
+      { label: 'Gas City', to: '/docs/orchestrators/gascity' },
     ]},
     { h: 'Documentation', links: [
       { label: 'Overview', to: '/docs' },

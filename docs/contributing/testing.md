@@ -78,7 +78,7 @@ Start Docker, then choose the scope you need:
 | `make test-e2e-phase-by-phase` | Individual lifecycle phases across orchestrators |
 
 To focus on one orchestrator, use `make test-e2e-<orchestrator>`, with
-`claude-code`, `codex`, or `gastown`. Append `-up`, `-prepare-run`, or
+`claude-code`, `codex`, `gastown`, or `gascity`. Append `-up`, `-prepare-run`, or
 `-phase-by-phase` to narrow it further:
 
 ```bash
@@ -92,6 +92,15 @@ downloads or first-run setup:
 ```bash
 E2E_TIMEOUT=1800s make test-e2e-gastown-up
 ```
+
+Single-orchestrator targets use `E2E_TIMEOUT` (default `1200s`). Gas City
+targets use `E2E_GASCITY_TIMEOUT` (default `3600s`) because each scenario
+restarts a full city several times; its phase-by-phase scenario takes about 30
+minutes. Aggregate targets (`test-e2e`, `test-e2e-only`, `test-e2e-up`,
+`test-e2e-prepare-run`, `test-e2e-phase-by-phase`) run several orchestrators in
+sequence and use `E2E_SUITE_TIMEOUT` (default `4h`); all twelve scenarios take
+about 2.5 hours. The scheduled E2E workflow runs one orchestrator per job with
+a 90-minute limit; the three Gas City scenarios take about 55 minutes.
 
 Docker-backed end-to-end tests skip when Docker is unavailable. To exercise
 the skip path explicitly:
@@ -165,10 +174,10 @@ orchestrators. Orchestrator expectations select the workspace paths and when
 they should be trusted. Standalone agents use `/lab/work/agreement-hub`; Gas
 Town uses its rig's crew workspace, trusted when the agent is launched.
 `/lab/work` is checked after installation for every declared agent supported
-by these scenarios. Gas Town session diagnostics remain separate from the
-shared `shell --check` assertion.
+by these scenarios. Gas Town and Gas City session diagnostics remain separate
+from the shared `shell --check` assertion.
 
-The end-to-end suite exercises `claude-code`, `codex`, and `gastown` through
+The end-to-end suite exercises `claude-code`, `codex`, `gastown`, and `gascity` through
 the Docker driver, using their real orchestrator and agent assets.
 
 The scenarios cover installation and verification inside the lab, gateway

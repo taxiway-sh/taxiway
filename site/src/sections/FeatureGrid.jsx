@@ -13,7 +13,7 @@ const features = [
   { icon: 'rotate', title: 'Disposable Labs', to: '/docs/reference/concepts',
     body: <>Create repeatable labs that can be stopped, reset, or removed without hand-cleaning state. Failed runs can start again from a clean baseline.</> },
   { icon: 'network', title: 'Multi Orchestrators', to: '/docs#orchestrators',
-    body: <>Use the same lab contract across Claude Code, Codex, and Gas Town. Setup, authentication, startup, and verification stay consistent.</> },
+    body: <>Use the same lab contract across Claude Code, Codex, Gas Town, and Gas City. Setup, authentication, startup, and verification stay consistent.</> },
   { icon: 'route', title: 'Gateway', to: '/docs/how-to/gateway',
     body: <>A shared Caddy proxy and per-lab LiteLLM sidecars route model traffic. Lab commands start it automatically.</> },
   { icon: 'activity', title: 'Observability', to: '/docs/how-to/observability',

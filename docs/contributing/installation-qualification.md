@@ -41,7 +41,7 @@ the same five steps:
 |---|---|
 | Install prerequisites | Docker and Compose for both drivers; Lima and its VM dependencies for Lima labs |
 | Install Taxiway | Published installer, binary version, runtime assets, and `taxiway init` |
-| Verify installation | Shared services ready; create a Codex lab; check Taxiway state and the actual container or VM |
+| Verify installation | Shared services ready; create a Codex lab; check Taxiway state, the actual container or VM, and the guest runtime contract |
 | Collect failure diagnostics | Print runtime and platform diagnostics if a preceding step fails |
 | Clean up | Remove the lab and verify its state and driver resource are gone; clean up shared services |
 
@@ -49,6 +49,23 @@ The readiness check uses `taxiway status` to verify Docker availability and
 the proxy and Langfuse stack. After `create`, the expected lab health is
 `degraded`, its phase is `created`, and its driver matches the job. The
 underlying Docker container must be `running`, or the Lima instance `Running`.
+
+The step then checks the guest runtime contract that adapters rely on (see
+[Adapter Boundary](../reference/architecture.md#adapter-boundary)):
+
+- `taxiway bootstrap <lab> --dry-run` reports `Guest environment: container`
+  for Docker and `Guest environment: vm` for Lima, the `TAXIWAY_GUEST_KIND`
+  value phase scripts receive;
+- Docker: PID 1 in the lab is `docker-init`, an orphaned child
+  (`sh -c '(sleep 1 &)'`) is reaped and leaves no `Z` process, and
+  `systemctl --user show-environment` fails with
+  `[docker-shim] no systemd user manager in container`;
+- Lima: `limactl shell taxiway-<lab> -- systemctl --user show-environment`
+  succeeds (a real user manager).
+
+The workflow installs a published release. Releases before `0.5.0` predate this
+contract, so the job logs `skipped: release <version> predates the guest
+runtime contract` for them; `0.5.0` and later releases must pass these checks.
 
 This validates installation and lab creation before orchestrator provisioning.
 It does not run authenticated agents or measure Gas Town performance.

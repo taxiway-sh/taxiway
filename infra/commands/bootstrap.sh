@@ -12,6 +12,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/steps.sh"
 
 export DEBIAN_FRONTEND=noninteractive
 
+# The driver tells phase scripts which environment type the lab provides.
+log "Guest environment: ${TAXIWAY_GUEST_KIND:-unknown}"
+
 # Tolerate transient failures from third-party PPAs that may live on the host
 # — apt-get still refreshes the sources it can reach. If the subsequent
 # install step needs a stale index it will fail with a clear message.

@@ -9,7 +9,7 @@ sessions an orchestrator needs before it starts working.
 A lab has:
 
 - a name, such as `mylab`;
-- an orchestrator type, such as `claude-code`, `codex`, or `gastown`;
+- an orchestrator type, such as `claude-code`, `codex`, `gastown`, or `gascity`;
 - a driver, currently `lima` or `docker`;
 - host-side state under the Taxiway state directory;
 - runtime sessions inside the lab environment.
@@ -41,7 +41,7 @@ Each subdirectory of `orchestrators/` is a self-contained adapter. An adapter
 declares how to install, verify, configure, and start one orchestrator.
 
 See [Orchestrators](../README.md#orchestrators) for adapter-specific setup for
-`claude-code`, `codex`, and `gastown`.
+`claude-code`, `codex`, `gastown`, and `gascity`.
 
 Use this command to inspect any adapter:
 

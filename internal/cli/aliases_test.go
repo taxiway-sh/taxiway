@@ -39,6 +39,11 @@ func buildAliasTestRoot(t *testing.T) (*cobra.Command, *RootState, *driver.MockD
 		filepath.Join(tmp, "orchestrators", "gastown", "workspace.sh"),
 		[]byte("#!/bin/bash\nif [[ \"$TAXIWAY_EXECUTION_MODE\" == plan ]]; then echo '[gastown-workspace] Cloning workspace repository'; exit 0; fi\necho workspace\n"), 0755,
 	))
+	// Only gastown has a stop hook in this fixture.
+	require.NoError(t, os.WriteFile(
+		filepath.Join(tmp, "orchestrators", "gastown", "stop.sh"),
+		[]byte("#!/bin/bash\nif [[ \"$TAXIWAY_EXECUTION_MODE\" == plan ]]; then echo '[gastown-stop] Stopping Gas Town services when present'; exit 0; fi\necho stop\n"), 0755,
+	))
 	for _, p := range []string{"infra/commands"} {
 		require.NoError(t, os.MkdirAll(filepath.Join(tmp, p), 0755))
 	}
@@ -47,7 +52,7 @@ func buildAliasTestRoot(t *testing.T) (*cobra.Command, *RootState, *driver.MockD
 	}
 	require.NoError(t, os.WriteFile(
 		filepath.Join(tmp, "infra/commands/reset.sh"),
-		[]byte("#!/bin/bash\nif [[ \"$TAXIWAY_EXECUTION_MODE\" == plan ]]; then echo '[reset] Stopping workspace services'; echo '[reset] Clearing /lab/work contents'; exit 0; fi\necho ok\n"), 0755,
+		[]byte("#!/bin/bash\nif [[ \"$TAXIWAY_EXECUTION_MODE\" == plan ]]; then echo '[reset] Clearing /lab/work contents'; exit 0; fi\necho ok\n"), 0755,
 	))
 
 	stateDir := filepath.Join(tmp, ".lab-state")
@@ -487,7 +492,7 @@ func TestFlatVerbs_DryRunPlansGoLifecycleOperations(t *testing.T) {
 		{command: "create", args: []string{"create", "demo", "--type", "gastown", "--dry-run"}, labels: []string{"Creating Mock lab runtime", "Preparing Taxiway lab state"}},
 		{command: "gateway", args: []string{"gateway", "gastown", "--dry-run"}, labels: []string{"Configuring lab gateway environment", "Reconciling LiteLLM sidecar"}, create: true},
 		{command: "down", args: []string{"down", "gastown", "--dry-run"}, labels: []string{"Stopping lab runtime", "Stopping LiteLLM sidecar"}, create: true},
-		{command: "reset", args: []string{"reset", "gastown", "--dry-run"}, labels: []string{"Stopping workspace services", "Clearing /lab/work contents", "Clearing lifecycle phase markers"}, create: true},
+		{command: "reset", args: []string{"reset", "gastown", "--dry-run"}, labels: []string{"Stopping Gas Town services when present", "Clearing /lab/work contents", "Clearing lifecycle phase markers"}, create: true},
 		{command: "rm", args: []string{"rm", "gastown", "--dry-run"}, labels: []string{"Deleting lab runtime and storage", "Clearing lifecycle phase markers"}, create: true},
 	}
 
@@ -545,6 +550,7 @@ func TestBootstrapDryRunPrintsSemanticSteps(t *testing.T) {
 		}
 	}
 	require.Equal(t, []string{
+		"Guest environment: container",
 		"Updating apt cache",
 		"Installing base packages",
 		"Installing Docker",
@@ -603,8 +609,38 @@ func TestFlatVerbs_ResetDryRunKeepsMarkersAndShowsPlan(t *testing.T) {
 	out, _, err := execAlias(t, root, stdout, stderr, "reset", "gastown", "--yes", "--dry-run")
 	require.NoError(t, err)
 	require.True(t, phases.Done(stateDir, id, phases.PhaseBootstrap))
-	require.Contains(t, out, "Stopping workspace services")
+	require.Less(t, strings.Index(out, "[gastown-stop] Stopping Gas Town services"), strings.Index(out, "[reset] Clearing /lab/work contents"))
 	require.Contains(t, out, "Clearing lifecycle phase markers")
+}
+
+func TestFlatVerbs_ResetStopsAdapterServicesBeforeClearing(t *testing.T) {
+	root, state, mock, stdout, stderr := buildAliasTestRoot(t)
+	createAliasLab(t, state, "gastown")
+
+	_, _, err := execAlias(t, root, stdout, stderr, "reset", "--yes", "gastown")
+	require.NoError(t, err)
+	require.Equal(t, []string{"stop.sh", "reset.sh"}, mock.ExecLog)
+}
+
+func TestFlatVerbs_ResetWithoutStopHookOnlyClears(t *testing.T) {
+	root, state, mock, stdout, stderr := buildAliasTestRoot(t)
+	createAliasLab(t, state, "codex")
+
+	_, _, err := execAlias(t, root, stdout, stderr, "reset", "--yes", "codex")
+	require.NoError(t, err)
+	require.Equal(t, []string{"reset.sh"}, mock.ExecLog)
+}
+
+func TestFlatVerbs_ResetStopFailureKeepsWorkspaceAndPhases(t *testing.T) {
+	root, state, mock, stdout, stderr := buildAliasTestRoot(t)
+	id := createAliasLab(t, state, "gastown")
+	require.NoError(t, phases.Mark(state.Flags.StateDir, id, phases.PhaseBootstrap))
+	mock.FailExec["stop.sh"] = fmt.Errorf("supervisor did not stop")
+
+	_, _, err := execAlias(t, root, stdout, stderr, "reset", "--yes", "gastown")
+	require.ErrorContains(t, err, "supervisor did not stop")
+	require.NotContains(t, mock.ExecLog, "reset.sh")
+	require.True(t, phases.Done(state.Flags.StateDir, id, phases.PhaseBootstrap))
 }
 
 func TestFlatVerbs_RmDryRunKeepsLabAndMarkers(t *testing.T) {

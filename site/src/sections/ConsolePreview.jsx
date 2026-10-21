@@ -7,7 +7,7 @@ const rows = [
   ['taxiway-codex', 'codex', 'docker', 'Running', 'go'],
   ['taxiway-gastown', 'gastown', 'lima', 'Stopped', 'off'],
   ['taxiway-bench', 'claude-code', 'docker', 'Auth', 'hold'],
-  ['taxiway-demo', 'codex', 'lima', 'Running', 'go'],
+  ['taxiway-city', 'gascity', 'docker', 'Running', 'go'],
 ];
 const pc = { go: 'var(--tw-accent-2)', hold: 'var(--tw-accent-ink)', off: 'var(--tw-faint)' };
 const phase = { off: '—', hold: 'auth' };

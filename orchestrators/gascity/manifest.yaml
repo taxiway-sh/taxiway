@@ -1,0 +1,78 @@
+name: gascity
+description: Gas City city, rig and workspace shell
+docs_url: https://github.com/gastownhall/gascity
+agents:
+  - claude-code
+settings:
+  - name: version
+    description: Gas City release installed in the Lab; an exact release, verified against its published checksums
+    default: "1.5.0"
+    examples:
+      - "1.5.0"
+    phases:
+      - install
+  - name: beads-version
+    description: Beads (bd) release override; omitted uses the Gas City compatibility matrix
+    examples:
+      - "1.3.1"
+    phases:
+      - install
+  - name: dolt-version
+    description: Dolt release override; omitted uses the Gas City compatibility matrix
+    examples:
+      - "2.2.0"
+    phases:
+      - install
+  - name: template
+    description: Gas City template used when the city is first created (gc init --template); gastown or minimal
+    default: gastown
+    examples:
+      - gastown
+      - minimal
+    phases:
+      - workspace
+      - start
+  - name: claude-code-version
+    description: Claude Code CLI release installed in the Lab; latest keeps the installed release, an exact release is installed and protected from self-updates.
+    default: latest
+    examples:
+      - "2.1.288"
+      - latest
+    phases:
+      - install
+      - start
+  - name: model
+    description: Full Claude Code model name passed with --model to every Gas City agent and resolved by LiteLLM.
+    default: claude-opus-5-5
+    examples:
+      - claude-fable-5-1
+      - claude-opus-5-5
+      - claude-sonnet-5-5
+    phases:
+      - start
+  - name: effort
+    description: Claude Code effort passed with --effort to every Gas City agent; low, medium, high, xhigh or max (Gas City's default).
+    default: max
+    examples:
+      - max
+      - high
+      - medium
+    phases:
+      - start
+  - name: tool-search
+    description: Load MCP tool definitions on demand. Use false to disable tool search or auto:N for a context percentage threshold.
+    default: "true"
+    examples:
+      - "true"
+      - "false"
+      - "auto:5"
+    phases:
+      - start
+  - name: claudeai-mcp-servers
+    description: Import connected Claude.ai MCP servers. Disabled by default; set true to opt in.
+    default: "false"
+    examples:
+      - "false"
+      - "true"
+    phases:
+      - start
