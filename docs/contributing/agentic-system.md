@@ -175,7 +175,7 @@ scheduled.
 |---|---|---|
 | Coordinator | The maintainer's entry point: starts or resumes a session, routes needs, delegates work to subagents or dedicated sessions, tracks approvals and status from GitHub and the state repository | [`taxiway-workflow`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-workflow/SKILL.md) |
 | Implementer | Works one selected issue in its own worktree and branch | [`taxiway-issue`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-issue/SKILL.md) |
-| Reviewer | Reviews a change it did not write, read-only: a subagent by default, or a child session in auto mode with a stall check when a subagent cannot do it | [`taxiway-review`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-review/SKILL.md) |
+| Reviewer | Reviews a change it did not write, read-only: a subagent by default, or a child session in auto mode with a stall check when a subagent cannot do it; the agent that ran it posts each round's report on the PR | [`taxiway-review`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-review/SKILL.md) |
 | PR steward | Follows an open PR until it is merged or closed | [`steward`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/steward/SKILL.md) |
 | Release | Qualifies a candidate and prepares the release | [`taxiway-release`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-release/SKILL.md) |
 

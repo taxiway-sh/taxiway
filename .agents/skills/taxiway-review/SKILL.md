@@ -92,5 +92,25 @@ Review adversarially: look for what is wrong, not for confirmation.
 - Problems that are global or outside the change become issue proposals
   through [`taxiway-intake`](../taxiway-intake/SKILL.md), not fixes in this
   change.
-- The PR's Validation section states the review rounds, as the line
-  `Independent review: N rounds`, and that findings were addressed.
+
+## Review reports
+
+The agent that started the reviewer publishes the report of each round as a
+comment on the PR; the reviewer itself stays read-only, as
+[Reviewer](#reviewer) says. Each comment gives:
+
+- the round number;
+- the range reviewed, as `<base>...<head>` with both full SHAs;
+- the verdict: no findings, or findings to fix;
+- the findings by severity, as [Findings](#findings) lists them;
+- for each finding, the commit that fixes it, added by editing the comment
+  once that commit is pushed, or why it is not fixed.
+
+Rounds run before the PR is opened are posted as soon as it is. An
+implementer that handed its range back leaves the comments to the agent that
+ran the review. The comments are public and follow
+[public writing](../taxiway-security/SKILL.md#public-writing).
+
+The PR's Validation section states the review rounds as the line
+`Independent review: N rounds`, followed by links to those comments, and that
+findings were addressed.

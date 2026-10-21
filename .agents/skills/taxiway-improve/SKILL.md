@@ -66,7 +66,7 @@ before the period starts, never `--paginate`.
 | Approval rate | `ok` answers over all answers, overall and per agent and action class | `approvals` in heartbeats |
 | Time with red CI | Hours during which the latest completed `ci.yml` run on `main` did not succeed; nightly `e2e.yml` and `install.yml` runs that failed | `actions/workflows/<file>/runs?branch=main` |
 | Time to merge | Median and longest time from opening to merge of PRs merged in the period; bot PRs (`automation/*`) apart | merged PRs, `created_at` and `merged_at` |
-| Review rounds per PR | Median of N in the `Independent review: N rounds` line of each merged PR's Validation section ([Findings](../taxiway-review/SKILL.md#findings)); a PR without it counts as unknown | PR bodies |
+| Review rounds per PR | Median of N in the `Independent review: N rounds` line of each merged PR's Validation section ([Review reports](../taxiway-review/SKILL.md#review-reports)); a PR without it counts as unknown | PR bodies |
 
 Questions and corrections in interactive sessions are not in these sources:
 they are left out and the report says so.

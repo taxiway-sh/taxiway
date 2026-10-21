@@ -51,7 +51,7 @@ local handoff, as [Resume](#pause-resume-and-finish) says.
 | Merging a PR | [Post-merge cleanup](../taxiway-issue/SKILL.md#post-merge-cleanup) after an authorized merge |
 | Force-pushing | Cleaning resources owned by a scenario with existing helpers |
 | Applying, removing or creating labels; comments, assignments, closures, reopenings and reviews on issues and PRs, unless already authorized | Recording in the issue a decision the maintainer has just given |
-| Releases: follow [`taxiway-release`](../taxiway-release/SKILL.md) | |
+| Releases: follow [`taxiway-release`](../taxiway-release/SKILL.md) | Posting the [review reports](../taxiway-review/SKILL.md#review-reports) on a PR whose review you ran |
 | Upstream issues, PRs, comments, pushes or forks ([`taxiway-upstream`](../taxiway-upstream/SKILL.md#approvals)) | |
 | Real-provider (paid) live checks | |
 | Installing, changing or removing a [scheduled agent](../taxiway-agents/SKILL.md) | |
