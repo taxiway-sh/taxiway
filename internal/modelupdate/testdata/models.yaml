@@ -1,0 +1,62 @@
+# Fixture catalog for Prepare: fixtureSources() lists every candidate below, so
+# only lifecycle changes alter it. Keep comments, blank lines and quoting varied.
+defaults:
+  anthropic:
+    opus: claude-opus-5-5
+    sonnet: claude-sonnet-5-5
+models:
+  - name: gpt-6.1-sol
+    provider: chatgpt
+    upstream: gpt-6.1-sol
+    api: responses
+    status: active
+    source: https://learn.chatgpt.com/docs/models
+
+  - name: gpt-6-sol
+    provider: chatgpt
+    upstream: gpt-6-sol
+    api: responses  # subscription route
+    status: active
+    source: https://learn.chatgpt.com/docs/models
+
+  # Announced for retirement; the subscription notice drives its status.
+  - name: gpt-5.5
+    provider: chatgpt
+    upstream: gpt-5.5
+    api: responses
+    status: deprecated
+    retirement_date: '2026-10-14'
+    replacement: gpt-6.1-sol
+    source: https://learn.chatgpt.com/docs/models
+
+  - name: gpt-5.4
+    provider: chatgpt
+    upstream: gpt-5.4
+    api: responses
+    status: retired
+    retirement_date: '2026-08-31'
+    replacement: gpt-6-sol
+    source: https://learn.chatgpt.com/docs/models
+
+  - name: claude-opus-5-5
+    provider: anthropic
+    upstream: claude-opus-5-5
+    forward_client_headers: true
+    status: active
+    source: https://platform.claude.com/docs/en/about-claude/model-deprecations
+
+  - name: claude-sonnet-5-5
+    provider: anthropic
+    upstream: claude-sonnet-5-5
+    forward_client_headers: true
+    status: active
+    source: https://platform.claude.com/docs/en/about-claude/model-deprecations
+
+  - name: claude-sonnet-4-5-20250929
+    provider: anthropic
+    upstream: claude-sonnet-4-5-20250929
+    forward_client_headers: true
+    status: deprecated
+    retirement_date: '2026-11-30'
+    replacement: claude-sonnet-5-5
+    source: https://platform.claude.com/docs/en/about-claude/model-deprecations
