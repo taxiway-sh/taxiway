@@ -117,10 +117,10 @@ Each run then:
    `agents` clone's git configuration or hooks. The script owns `date`, which
    it sets to the current time; it validates the state, commits only that
    file and pushes it to `main` of `taxiway-sh/agents`, without force, and
-   prints the commit SHA. When it fails, it undoes its own commit; when it
-   fails or the session's permission check refuses it, the run reports the
-   heartbeat as not pushed, with the reason, and does not commit or push it
-   another way. A machine
+   prints the commit SHA. When it fails after committing, it undoes its own
+   commit; when it fails or the session's permission check refuses it, the
+   run reports the heartbeat as not pushed, with the reason, and does not
+   commit or push it another way. A machine
    agent also writes the status changes and reports of its [queue](#queue)
    items, which belong to its run contract like its heartbeat and need no
    action class, and commits and pushes them before running the script,

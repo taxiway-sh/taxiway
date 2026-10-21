@@ -37,7 +37,7 @@ clone_arg="${2:-$repo_dir/../agents}"
 [[ -d "$clone_arg" ]] || fail "agents clone not found: $clone_arg"
 clone="$(cd "$clone_arg" && pwd -P)"
 # Every git command on the clone goes through g: the clone's hooks and file
-# system monitor would otherwise run under this script's permission rule.
+# system monitor would otherwise run with whatever approval this script got.
 g() { git -C "$clone" -c core.hooksPath=/dev/null -c core.fsmonitor=false "$@"; }
 top="$(g rev-parse --show-toplevel 2>/dev/null)" || fail "$clone_arg is not a git repository"
 [[ "$(cd "$top" && pwd -P)" == "$clone" ]] || fail "$clone_arg is not the root of the agents clone"
