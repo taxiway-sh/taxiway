@@ -7,15 +7,14 @@ trap 'rm -rf "$test_dir"' EXIT
 
 fixture() {
   local tree="$test_dir/$1"
-  mkdir -p "$tree/.agents/skills/demo" "$tree/.claude/skills" "$tree/docs/contributing" "$tree/tests/live"
+  mkdir -p "$tree/.agents/skills/demo" "$tree/.agents/skills/taxiway-testing" "$tree/.claude/skills" \
+    "$tree/docs/contributing" "$tree/tests/live"
   cat > "$tree/AGENTS.md" <<'MD'
 # Agents
 
 Each rule has one owner; link to it instead of restating it.
 
-## E2E scenarios
-
-Do not add parallel suites or `TestE2E_` entry points.
+Follow the [E2E scenario rule](.agents/skills/taxiway-testing/SKILL.md#e2e-scenarios).
 See [testing](docs/contributing/testing.md#writing-tests), the
 [skill](.agents/skills/demo/SKILL.md), [helpers](docs/contributing/testing.md#run-test_helperssh),
 [emphasis](docs/contributing/testing.md#emphasis-word) and
@@ -26,7 +25,7 @@ MD
 
 ## Writing tests
 
-Follow the [E2E scenario rule](https://github.com/taxiway-sh/taxiway/blob/main/AGENTS.md#e2e-scenarios).
+Follow the [E2E scenario rule](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-testing/SKILL.md#e2e-scenarios).
 Other sites are not checked: [example](https://example.invalid/missing.md).
 ```text
 [not a link](missing.md)
@@ -49,10 +48,22 @@ description: >-
   Use for the fixture.
 ---
 
-Read [AGENTS.md](../../../AGENTS.md#e2e-scenarios).
+Read [the rule](../taxiway-testing/SKILL.md#e2e-scenarios).
+MD
+  cat > "$tree/.agents/skills/taxiway-testing/SKILL.md" <<'MD'
+---
+name: taxiway-testing
+description: Use for the fixture rule owner.
+---
+
+## E2E scenarios
+
+Each orchestrator has three lifecycle E2E scenarios. Adding an orchestrator
+adds its own three scenarios. Do not add parallel suites or `TestE2E_` entry points.
 MD
   printf '# Live\n' > "$tree/tests/live/AGENTS.md"
   ln -s ../../.agents/skills/demo "$tree/.claude/skills/demo"
+  ln -s ../../.agents/skills/taxiway-testing "$tree/.claude/skills/taxiway-testing"
   mkdir -p "$tree/.agents/skills/taxiway-agents"
   cat > "$tree/.agents/skills/taxiway-agents/SKILL.md" <<'MD'
 ---
@@ -136,6 +147,10 @@ expect_fail 'relative link from docs/ to a file outside docs/' "$tree" 'docs/con
 tree="$(fixture duplicate)"
 printf 'Do not add parallel\nsuites here either.\n' >> "$tree/tests/live/AGENTS.md"
 expect_fail 'duplicated normative phrase' "$tree" "tests/live/AGENTS.md: restates 'parallel suite'"
+
+tree="$(fixture e2e-rule-in-agents)"
+printf 'Adding an orchestrator adds its own\nthree scenarios.\n' >> "$tree/AGENTS.md"
+expect_fail 'E2E rule restated outside its skill' "$tree" "AGENTS.md: restates 'adds its own three scenarios'; link to .agents/skills/taxiway-testing/SKILL.md"
 
 tree="$(fixture no-frontmatter)"
 printf '# Demo\n\nNo frontmatter.\n' > "$tree/.agents/skills/demo/SKILL.md"
