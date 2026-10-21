@@ -18,13 +18,14 @@ resuming a named subject answers this question; reconcile it directly. It does
 not authorize publishing, merging or starting additional subjects.
 
 Reconcile before assigning anything. Inspect `git worktree list`, branches,
-issues, PRs, check results and available local handoffs, using `gh` with
-bounded fields and results (see the [invariants](../../../AGENTS.md#invariants)). Check
+issues, PRs, check results and the
+[state repository](../taxiway-agents/SKILL.md#state-repository), using `gh`
+with bounded fields and results (see the [invariants](../../../AGENTS.md#invariants)). Check
 ownership and whether agents or tests are still running before assigning or
-rerunning work. Historical notes do not prove a process is running or a check
-passed; old-head results do not validate a new commit; unknown past results
-remain unknown. Do not claim drafts, diagnoses, tests or state writes exist
-without an actual artifact, process or result.
+rerunning work. Historical comments or heartbeats do not prove a process is
+running or a check passed; old-head results do not validate a new commit;
+unknown past results remain unknown. Do not claim drafts, diagnoses, tests or
+state writes exist without an actual commit, comment, process or result.
 
 - **New need:** follow [`taxiway-intake`](../taxiway-intake/SKILL.md).
 - **Backlog:** follow [`taxiway-triage`](../taxiway-triage/SKILL.md); the user
@@ -38,8 +39,9 @@ on GitHub (issues, branches, PRs, checks), and that of scheduled agents in the
 and shows that a subject is taken. The coordinator session is the maintainer's
 entry point for status, decisions and priorities: it delegates work to
 subagents or dedicated sessions and reads that state rather than relying on
-memory; decisions not recorded there come from the prior conversation or a
-local handoff, as [Resume](#pause-resume-and-finish) says.
+memory. A decision recorded nowhere there, in the repository or in the
+current conversation is asked of the maintainer, then recorded as
+[Decisions](#decisions) says.
 
 ## Approvals
 
@@ -107,9 +109,9 @@ maintainer.
   [`taxiway-intake`](../taxiway-intake/SKILL.md). Preserve unrelated work and
   credentials.
 - **Studies and plans** stay out of Git
-  ([invariants](../../../AGENTS.md#invariants)): the maintainer first reviews
-  them in a private page or a file outside the repository; once approved, they
-  are posted in English as an issue comment.
+  ([invariants](../../../AGENTS.md#invariants)): they are shown to the
+  maintainer in the session; once approved, they are posted in English as an
+  issue comment.
 
 ## Interaction
 
@@ -158,12 +160,13 @@ actionable request per blocker, and never invent percentages or finish dates.
   Interrupting a client does not guarantee remote jobs or child tests stopped;
   reconcile them before restarting or cleaning.
 - **Resume:** read this skill again and reconcile worktrees, commits, issues,
-  PRs, current-head results, live agents and processes before assigning work.
-  Use the prior conversation or an uncommitted local handoff for decisions not
-  represented there; never commit private run state, auth or logs. A stale
-  handoff or absent message is not proof that a test stopped; preserve
-  uncertain work until ownership and state are established, and do not launch
-  duplicate agents or tests.
+  PRs, current-head results, the state repository, live agents and processes
+  before assigning work. A decision not recorded on GitHub, in the state
+  repository or in the repository is asked of the maintainer, not inferred;
+  never commit private run state, auth or logs. An old comment or an absent
+  message is not proof that a test stopped; preserve uncertain work until
+  ownership and state are established, and do not launch duplicate agents or
+  tests.
 - **Finish:** state that nothing continues after the session ends. Close
   subagents and child sessions whose mission has ended and list any still
   running. List each subject's remaining work and pending decisions, the
