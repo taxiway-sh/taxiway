@@ -269,3 +269,103 @@ for name, check in (("anthropic_protocol", "protocol test"), ("codex_session_map
         raise AssertionError("missing shim incompatibility diagnostic")
 print("PASS: incompatible LiteLLM internals produce actionable startup errors")
 PYTHON
+
+# Diagnostic output: withheld by default, opt-in and sanitized for runs without
+# credentials, refused for authenticated runs.
+python3 - <<'PYTHON'
+import contextlib
+import io
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+from unittest.mock import patch
+
+sys.path.insert(0, "tests/live")
+import taxiway_live as live
+
+def run_cli(argv):
+    stderr = io.StringIO()
+    with contextlib.redirect_stderr(stderr):
+        try:
+            status = live.cli(argv)
+        except SystemExit as exit:
+            status = exit.code
+    return status, stderr.getvalue()
+
+with tempfile.TemporaryDirectory(prefix="taxiway-diagnostic-test-") as root:
+    environment = {"TAXIWAY_CONTEXT": "e2e", "TAXIWAY_CONTEXT_ID": "fixture", "TAXIWAY_RUNTIME_DIR": root}
+    for key, subdir in (("TAXIWAY_LAB_STATE_DIR", "labs"), ("TAXIWAY_AUTH_DIR", "auth"),
+                        ("TAXIWAY_PROXY_DIR", "proxy"), ("TAXIWAY_OBSERVABILITY_DIR", "observability")):
+        environment[key] = str(Path(root) / subdir)
+    noisy_stdout = (f"install step failed in {root}/labs/state\n"
+                    "TAXIWAY_LITELLM_API_KEY=fixture-secret-1\n"
+                    "Authorization: Bearer fixture-secret-2\n"
+                    '{"accessToken": "fixture-secret-3"}\n'
+                    "token sk-fixturesecret4abcdef\n").encode()
+    noisy_stderr = b"-----BEGIN PRIVATE KEY-----\nfixture-secret-5\n-----END PRIVATE KEY-----\nbootstrap: exit 7\n"
+    calls = []
+    def failing_up(argv, **kwargs):
+        calls.append(argv)
+        if argv[1] == "up":
+            raise live.CommandFailed("taxiway exited 1", noisy_stdout, noisy_stderr)
+        return b""
+
+    with patch.dict(os.environ, environment), patch.object(live, "command", failing_up):
+        status, err = run_cli(["run", "--type", "gascity", "--", "true"])
+        assert status == 1 and "(captured output withheld)" in err, err
+        assert "install step failed" not in err and "fixture-secret" not in err, err
+        print("PASS: captured output stays withheld by default")
+
+        calls.clear()
+        status, err = run_cli(["run", "--type", "gascity", "--show-output", "--", "true"])
+        assert status == 1, err
+        assert "FAIL: taxiway exited 1" in err and "withheld" not in err, err
+        assert "install step failed" in err and "bootstrap: exit 7" in err, err
+        assert "fixture-secret" not in err and "fixturesecret" not in err, err
+        assert root not in err and "$TAXIWAY_RUNTIME_DIR/labs/state" in err, err
+        assert calls[-1][1] == "rm", "owned lab cleanup skipped in diagnostic mode"
+        print("PASS: --show-output prints sanitized output and keeps owned cleanup")
+
+    with patch.dict(os.environ, environment), patch.object(live, "command") as provision:
+        status, err = run_cli(["run", "--type", "claude-code", "--auth-lab", "reference",
+                               "--show-output", "--", "true"])
+        assert status == 2 and "--show-output is refused with --auth-lab" in err, err
+        provision.assert_not_called()
+        print("PASS: --show-output is refused for authenticated runs before provisioning")
+
+    for failure in (subprocess.TimeoutExpired(["guest"], 5, output=b"partial progress", stderr=b""),
+                    live.CommandFailed("Expected stdout marker missing", b"partial progress")):
+        with patch.dict(os.environ, environment), patch.object(live, "command", return_value=b""), \
+             patch.object(live, "run_in_lab", side_effect=failure):
+            status, err = run_cli(["run", "--type", "codex", "--show-output", "--", "true"])
+            assert status == 1 and "partial progress" in err, err
+            status, err = run_cli(["run", "--type", "codex", "--", "true"])
+            assert status == 1 and "partial progress" not in err and "withheld" in err, err
+    print("PASS: timeouts and missing markers show output only on request")
+
+    error = None
+    try:
+        live.command([sys.executable, "-c", "print('fixture-diagnostic'); raise SystemExit(3)"])
+    except live.CommandFailed as caught:
+        error = caught
+    assert error is not None and "fixture-diagnostic" not in str(error) + repr(error)
+    assert "fixture-diagnostic" in live.diagnostic_output(error)
+    large = live.CommandFailed("x", b"a" * (live.DIAGNOSTIC_LIMIT * 3))
+    assert len(live.diagnostic_output(large)) < live.DIAGNOSTIC_LIMIT + 200
+    print("PASS: command() keeps output off the error message; diagnostics are bounded")
+
+    with patch.object(live, "guest", side_effect=live.CommandFailed("bash exited 1", b"fixture")):
+        try:
+            live.propagate_claude_onboarding("source", "target")
+        except live.CommandFailed:
+            pass
+    try:
+        live.diagnostic_output(error)
+    except RuntimeError as refusal:
+        assert "refused after credential propagation" in str(refusal)
+    else:
+        raise AssertionError("diagnostic output allowed after credential propagation")
+    print("PASS: diagnostic output is refused once credentials were handled")
+PYTHON

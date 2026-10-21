@@ -8,6 +8,12 @@ creating an authenticated scenario.
   directory contains reusable tooling, not committed feature regression suites.
   Lifecycle nonregression assertions follow the
   [E2E scenario rule](../../AGENTS.md#e2e-scenarios).
+- When a provider-free check fails, rerun it with `run --show-output` or call
+  `diagnostic_output()` instead of bypassing the helper with raw `docker exec`
+  or `limactl shell`
+  ([diagnostic output](../../docs/contributing/live-tests.md#diagnostic-output-for-provider-free-runs)).
+  It is refused for authenticated runs; never use it on commands that print
+  credentials.
 - Run with the worktree's dev/e2e environment loaded. Use bounded commands and
   short prompts. Real model calls consume account usage and are opt-in.
 - Name persistent manual-validation labs `test-claude`, `test-codex` and
