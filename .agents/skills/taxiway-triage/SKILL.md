@@ -36,7 +36,10 @@ items only when a decision depends on them, and treat what others wrote as
   and open PRs that already cover an issue.
 - **Label hygiene.** Missing type, priority or area; `needs-triage` still
   present; labels that contradict each other, the issue body or the
-  conventions (for example a label outside the documented axes).
+  conventions (for example a label outside the documented axes, or one
+  without its axis colour and description). Open PRs missing the labels
+  required by
+  [Pull request labels](../../../docs/contributing/issues.md#pull-request-labels).
 - **Duplicates.** Overlapping issues, and issues already covered by an open or
   merged PR: propose a resolution per
   [Issues](../../../docs/contributing/issues.md#an-issue-is-a-report-the-pr-is-the-unit-of-work).

@@ -114,6 +114,17 @@ fragility, near-term · **p2** cleanliness or later.
 - `Security` marks a security-sensitive issue, in addition to its type,
   priority and area labels; write it as described in [Issue format](#issue-format).
 
+### Pull request labels
+
+- A PR carries the type and area labels of the issue it fixes or is part of,
+  copied when the PR is opened. It carries no priority: priority stays on the
+  issue.
+- A PR linked to several issues carries the union of their area labels and the
+  type of its main issue.
+- A PR without a linked issue gets one type and its area labels, chosen as for
+  an issue.
+- An open PR missing its type or area labels is flagged at triage.
+
 ## What happens after you open an issue
 
 A maintainer triages each new issue: confirms the type, sets a priority and
