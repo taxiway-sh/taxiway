@@ -16,9 +16,11 @@
 /.worktrees/
 
 # Local editor/agent/vault state
-# Track .claude/skills/<name> discovery symlinks; ignore other .claude state.
+# Track .claude/skills/<name> discovery symlinks and the shared
+# .claude/settings.json; ignore other .claude state.
 .claude/*
 !.claude/skills/
+!.claude/settings.json
 __pycache__/
 .idea/
 .obsidian/

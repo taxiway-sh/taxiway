@@ -82,6 +82,18 @@ tests under `site/`, and what they call.
 - Checks fork CI does not cover (lifecycle E2E, Lima, live validation) are
   reported as "could not run" for the contributor's code.
 
+## Agent permission files
+
+These files are sensitive: a change to them changes what agents may run
+without a permission prompt, so it needs the maintainer's careful review of
+every line:
+
+- `.claude/settings.json`: its `permissions.allow` holds only
+  `Bash(scripts/agents/push-heartbeat.sh:*)`; a broader rule, or one for
+  another command, needs the maintainer's explicit decision;
+- `scripts/agents/push-heartbeat.sh`: the command that rule allows, which
+  commits and pushes to `main` of `taxiway-sh/agents`.
+
 ## Public writing
 
 - Issues, PRs, comments, release notes and the scheduled agents' state
