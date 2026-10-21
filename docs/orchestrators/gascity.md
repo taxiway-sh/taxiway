@@ -186,10 +186,15 @@ publish it.
 
 An idle `gastown` city keeps calling the model (see
 [Limitations](#limitations)). Pause it whenever it is not in use, from
-`taxiway shell <lab>`:
+`taxiway shell <lab>`. When you stop using the lab:
 
 ```bash
 cd /lab/work/gc && gc suspend
+```
+
+Before you use it again or run `taxiway start`:
+
+```bash
 cd /lab/work/gc && gc resume
 ```
 
@@ -230,8 +235,9 @@ fails without deleting anything.
   are not in that pack. On an idle Lima lab with the default model and
   `effort=high`, boot started a fresh session about every 30 seconds and the
   witness ran back-to-back patrol cycles, for about $40 of gateway spend per
-  hour. [Pause the City](#pause-the-city) when it is not in use; tracked in
-  #259.
+  hour. Spend depends on the model and effort; the default effort is `max`
+  ([Settings](#settings)). [Pause the City](#pause-the-city) when it is not
+  in use; tracked in #259.
 - Every `gc` command prints a `named_session ... mode "always" with wake_mode
   "fresh"` warning for the mayor, deacon, boot and witness. The pack chooses
   this lifecycle on purpose and Gas City cannot acknowledge it yet
