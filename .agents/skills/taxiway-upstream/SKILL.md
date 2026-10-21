@@ -45,10 +45,12 @@ documented in [`docs/orchestrators/`](../../../docs/orchestrators/).
 A cloud session's GitHub proxy opens the GitHub API and github.com pages only
 to the repositories attached to the session, public ones included; any other
 repository gets HTTP 403. Attaching does not help: `add_repo` with access
-`read` on a public repository attaches nothing (it allows anonymous git clone
-and fetch only), and attaching with credentials needs access `push`, which is
+`read` on a public repository attaches nothing (anonymous git already reads
+public repositories, so the call only reports that), and attaching with credentials needs access `push`, which is
 never requested for any repository other than `taxiway-sh/agents`. Upstream
-reads therefore go through git alone:
+reads therefore go through git alone, where `<url>` is
+`https://github.com/<owner>/<repository>` and
+`git ls-remote --symref <url> HEAD` names the default branch:
 
 1. **Versions** from the tags:
    `git ls-remote --tags https://github.com/<owner>/<repository>`.
@@ -62,19 +64,25 @@ reads therefore go through git alone:
    `git -C <scratch-dir> show <tag>:<path>`.
 3. **An upstream PR's state** from `git ls-remote <url> refs/pull/<n>/head`:
    the PR is merged when that commit is reachable from the default branch, and
-   its fix shipped when it is reachable from a release tag. In the scratch
-   repository, fetch the PR head and that branch or tag without file contents,
+   its fix shipped when it is reachable from a release tag. In a fresh scratch
+   repository (`git init <dir>`, `git -C <dir> remote add origin <url>`; never
+   a shallow one from step 2, whose history stays cut), fetch the PR head and that branch or tag without file contents,
    so the history is complete
    (`git fetch --filter=blob:none origin refs/pull/<n>/head +<ref>:refs/upstream`),
    then run `git merge-base --is-ancestor <commit> refs/upstream`; a `--depth`
    fetch can cut the history short and report a merged PR as not merged. A
    squash merge leaves that commit unreachable, and its subject usually ends in
    `(#<n>)`; a rebase merge keeps the PR's commit subjects under new SHAs. Look
-   for either with `git log --grep` on `refs/upstream`. A `refs/pull/<n>/merge`
+   for either on `refs/upstream`: `git log --grep='(#<n>)'`, or
+   `git log -F --grep='<subject>'` for a commit subject. A `refs/pull/<n>/merge`
    ref shows an open PR that GitHub can merge; without it, an open PR with
    conflicts and a PR closed without merging cannot be told apart this way:
    report it as not merged.
-4. **Release notes** from the CHANGELOG or from annotated tags.
+4. **Release notes** from the CHANGELOG or from annotated tags. When a project
+   keeps its notes only on GitHub Releases, read its documentation site if it
+   has one outside github.com, or `git log --oneline <old-tag>..<new-tag>` in
+   a fresh scratch repository fetched without file contents, and report the
+   missing notes under Needs the maintainer.
 
 When a run needs something only the API gives, such as an upstream issue's
 state, it reports it under Needs the maintainer in [Output](#output) instead of
@@ -161,7 +169,9 @@ A dependency watch or upstream investigation, interactive or
    needs. Drafts are written in full; nothing is published.
 4. **Needs the maintainer.** Every item waiting for approval, with its link:
    creating or changing issues and labels, pushing a branch or opening a PR,
-   any upstream publication, real-provider checks.
+   any upstream publication, real-provider checks. It also lists the upstream
+   state the run could not read through git (an issue's state, release notes
+   kept only on GitHub), with its link.
 
 On a scheduled run, report only what changed since the previous run; when
 nothing changed, say so in one line.
