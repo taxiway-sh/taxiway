@@ -46,25 +46,35 @@ or in the current conversation is asked of the maintainer, then recorded as
 ## Coordinator
 
 [`/taxiway-coordinator`](../taxiway-coordinator/SKILL.md) runs this section in
-a new session on `taxiway`; it needs nothing from earlier sessions.
+a new session on `taxiway`; it needs nothing from earlier sessions. Text given
+with the command sets the conversation language.
 
 1. Read [`taxiway-agents`](../taxiway-agents/SKILL.md) after this skill.
 2. Attach `taxiway-sh/agents` with push (`add_repo`, `access: push`) and clone
-   it next to `taxiway` on `main`; the maintainer approves the attachment in
-   this session. When it does not exist,
-   [Bootstrapping](../taxiway-agents/SKILL.md#bootstrapping) applies and the
-   coordinator stops there.
+   it next to `taxiway` on `main`. Tell the maintainer first that the
+   attachment waits for their approval in this session. When it does not
+   exist, [Bootstrapping](../taxiway-agents/SKILL.md#bootstrapping) applies and
+   the coordinator stops there.
 3. Reconcile as [Intake and reconciliation](#intake-and-reconciliation) says,
    without its opening question, then run the
-   [Check](../taxiway-agents/SKILL.md#check) of scheduled agents.
+   [Check](../taxiway-agents/SKILL.md#check) of scheduled agents. A heartbeat is
+   its agent's last report: confirm on GitHub the issue, PR and check states it
+   mentions before reporting them.
 4. When the Check finds something [Install](../taxiway-agents/SKILL.md#install)
    repairs, present Install's [Plan](../taxiway-agents/SKILL.md#plan) in its
    default mode; the maintainer's OK on it is the approval. A machine agent with no heartbeat
    yet waits for a maintainer's [Machine setup](../taxiway-agents/SKILL.md#machine-setup);
    an [offline](../taxiway-agents/SKILL.md#heartbeat-offline-machine-and-metrics)
    one waits for a maintainer to bring it back.
-5. Report briefly what is in service, what waits for the maintainer and what
-   is abnormal, then ask the opening question.
+5. Report in one short message what is in service, what is abnormal and what
+   waits for the maintainer. Ask the pending decisions together, each with a
+   recommendation: among them whether merges are authorized in this session,
+   as [Approvals](#approvals) requires, and the archiving of an earlier
+   coordinator session that is still open. Then ask the opening question.
+
+The session is named `Taxiway – coordinator`. Untriaged issues wait for the
+[triage agent](../../agents/triage.prompt.md) unless the maintainer asks to
+triage them here.
 
 ## Approvals
 

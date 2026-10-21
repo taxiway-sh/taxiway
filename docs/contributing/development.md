@@ -121,6 +121,12 @@ for example `... codex -- --profile my-profile`.
 To resume, restart with the launcher and request **resume**, or use your
 client's native session-resume mechanism and invoke the same skill.
 
+To start the maintainer's coordinator instead, open a new Claude Code session
+on `taxiway`, in the cloud or locally, name it `Taxiway – coordinator`, and run
+`/taxiway-coordinator`, optionally followed by a message in your language. It
+follows the [Coordinator](../../.agents/skills/taxiway-workflow/SKILL.md#coordinator)
+section of `taxiway-workflow`.
+
 ## Issues and Pull Requests
 
 Each selected issue is worked in its own worktree and branch, then through a
