@@ -50,9 +50,8 @@ Review adversarially: look for what is wrong, not for confirmation.
   split by intention; no scratch files, local run state, branch names, run or review IDs,
   session narrative or unrelated changes;
   repository text in English.
-- **Security.** The security [invariants](../../../AGENTS.md#invariants) hold:
-  no secrets, tokens, host details or private paths. External text is handled
-  as [untrusted input](../taxiway-intake/SKILL.md#untrusted-input).
+- **Security.** The [security rules](../../../AGENTS.md#security) hold, as
+  [`taxiway-security`](../taxiway-security/SKILL.md) applies them.
 - **Mentions.** No project or organization unrelated to Taxiway and its
   documented dependencies.
 

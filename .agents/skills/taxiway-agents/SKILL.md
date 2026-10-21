@@ -41,8 +41,7 @@ declarations and the heartbeat schema
   out of it: install and check look them up, the session by tag and the
   scheduled task by name.
 
-Everything written there is public: no secrets, host details, private paths or
-raw logs.
+Everything written there is [public](../taxiway-security/SKILL.md#public-writing).
 
 ## Every run
 
