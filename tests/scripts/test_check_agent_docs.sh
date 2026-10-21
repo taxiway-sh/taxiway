@@ -200,6 +200,14 @@ PY2
   expect_fail "agent title with ${case%%:*}" "$tree" "title must be 'Taxiway – <role> agent (<scope>)'"
 done
 
+tree="$(fixture agent-title-format-character)"
+python3 - "$tree/.agents/agents/watch.json" <<'PY2'
+import json, sys
+data = json.load(open(sys.argv[1])); data["title"] = "Taxiway \u2013 watch agent (fix\u200bture)"
+json.dump(data, open(sys.argv[1], "w"))
+PY2
+expect_fail 'agent title with a zero-width character' "$tree" 'title must not contain invisible format characters'
+
 tree="$(fixture agent-duplicate-title-case)"
 sed 's/"watch"/"other"/; s/"0 4 \* \* \*"/"0 5 * * *"/; s/watch agent (fixture)/Watch agent (Fixture)/' "$tree/.agents/agents/watch.json" > "$tree/.agents/agents/other.json"
 printf '# Other\n' > "$tree/.agents/agents/other.prompt.md"

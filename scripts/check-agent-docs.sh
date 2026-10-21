@@ -11,6 +11,7 @@ import json
 import pathlib
 import re
 import sys
+import unicodedata
 
 root = pathlib.Path(sys.argv[1]).resolve()
 # Pages rendered by the site link to repository files through this URL.
@@ -294,7 +295,9 @@ def check_agents():
                 errors.append(f"{name}: {field} must be a non-empty string")
         title = data.get("title")
         if isinstance(title, str) and title:
-            if decl.stem == "watchdog" and title != WATCHDOG_TITLE:
+            if any(unicodedata.category(c) == "Cf" for c in title):
+                errors.append(f"{name}: title must not contain invisible format characters")
+            elif decl.stem == "watchdog" and title != WATCHDOG_TITLE:
                 errors.append(f"{name}: title must be {WATCHDOG_TITLE!r}")
             elif decl.stem != "watchdog" and not TITLE.fullmatch(title):
                 errors.append(f"{name}: title must be 'Taxiway \u2013 <role> agent (<scope>)'")
