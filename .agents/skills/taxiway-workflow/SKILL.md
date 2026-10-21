@@ -117,7 +117,10 @@ issue or PR where it was taken. Do not write ADRs or separate decision logs, and
 do not restate the rule elsewhere: link to its owner.
 
 When the user corrects you, or answers a question that applies beyond the
-current task, propose on the spot to record it this way.
+current task, propose on the spot to record it this way in its owner. When you
+do something that no skill or document describes, such as a new procedure, a
+workaround or a check that turned out to matter, say so briefly and offer the
+same.
 
 ## Status on demand
 
@@ -150,6 +153,7 @@ actionable request per blocker, and never invent percentages or finish dates.
   cleaned-up states.
 - **Frictions observed and rules to record:** end with this short list for the
   user: missing, ambiguous or contradictory rules, workarounds used, checks
-  that could not run and refused tools. Propose each as a change to its owner
-  ([Decisions](#decisions)) or an issue through
-  [`taxiway-intake`](../taxiway-intake/SKILL.md).
+  that could not run and refused tools. Then run
+  [`taxiway-learn`](../taxiway-learn/SKILL.md) on the session and present its
+  candidates the way it says, frictions included; nothing is written until the
+  user picks.
