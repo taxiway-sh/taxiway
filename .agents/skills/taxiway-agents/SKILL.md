@@ -48,8 +48,14 @@ raw logs.
 
 The scheduled task always sends the same bootstrap prompt:
 
-> Reset the `taxiway` and `agents` clones to `origin/main`, then read
-> `taxiway/.agents/agents/<id>.prompt.md` and follow it.
+> Update the `taxiway` and `agents` clones on `main` with
+> `git fetch origin main` and `git merge --ff-only origin/main`, then read
+> `taxiway/.agents/agents/<id>.prompt.md` and follow it. If a clone cannot
+> fast-forward, report it and do not reset it.
+
+A clone whose fetch or fast-forward fails, or that is not on `main`, is
+reported: the run writes a `failed` heartbeat if the `agents` clone allows it,
+then stops. A run never resets or force-updates a clone.
 
 Each run then:
 
