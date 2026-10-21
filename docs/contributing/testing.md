@@ -173,7 +173,7 @@ the Docker driver, using their real orchestrator and agent assets.
 
 The scenarios cover installation and verification inside the lab, gateway
 access, workspace preparation, start, stop, restart, diagnosis, reset, and
-removal. They mirror the public `taxiway-sh/e2e-fixture` fixture into a
+removal. They mirror the public `taxiway-sh/e2e-fixture` repository into a
 lab-local bare Git repository, then clone the working tree from that isolated
 remote. After start and restart, `taxiway shell <lab> --check` verifies that
 the session target is ready without opening an interactive shell.

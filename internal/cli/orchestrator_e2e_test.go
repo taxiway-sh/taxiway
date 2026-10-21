@@ -2027,7 +2027,7 @@ func runE2EGastownHandoff(t *testing.T, state *RootState, id string) {
 	})
 	// Initiate from Mayor (no patrol cooldown): repeat remote refinery handoff,
 	// then exercise Mayor's self-handoff through the same restart builder.
-	for attempt, target := range []string{"ah-refinery", "ah-refinery", "hq-mayor"} {
+	for attempt, target := range []string{"ef-refinery", "ef-refinery", "hq-mayor"} {
 		runE2EStep(t, fmt.Sprintf("gt:handoff[%s,attempt=%d]", target, attempt+1), func(t *testing.T) {
 			before := run(t, "tmux", "-L", status.Tmux.Socket, "display-message", "-p", "-t", target, "#{pane_pid}")
 			role := "e2e_fixture/refinery"
