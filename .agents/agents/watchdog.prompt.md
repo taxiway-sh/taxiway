@@ -9,9 +9,12 @@ heartbeat or with a manual [Check](../skills/taxiway-agents/SKILL.md#check).
 
 ## Checks
 
-1. For each other agent declared in `.agents/agents/`, apply
-   [Check](../skills/taxiway-agents/SKILL.md#check). A run still in progress is
-   reported as running, not as late.
+1. For each other agent declared in `.agents/agents/` on `main`, whatever its
+   job, apply [Check](../skills/taxiway-agents/SKILL.md#check). Compare its
+   last heartbeat with the latest time its schedule fired, whether it runs
+   weekly or several times a day. A run still in progress is reported as
+   running, not as late. A declared agent missing from `deployed.json` is
+   reported as not installed, not as failed.
 2. Check that the last scheduled run of each nightly workflow (`e2e.yml`,
    `install.yml`, `model-catalog-update.yml`) started within the past 24 hours,
    and report its conclusion; a run not finished yet is pending.
