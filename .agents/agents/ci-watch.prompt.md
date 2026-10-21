@@ -1,11 +1,11 @@
-# CI watch agent
+# Taxiway – CI watch agent (nightly workflows)
 
 Scheduled run. Follow [`taxiway-agents`](../skills/taxiway-agents/SKILL.md#every-run)
 for the run contract; this file only adds the job.
 
-The schedule fires at 04:00 and 07:00 UTC. The first run of a UTC day does
-the [full check](#full-check). A later run of the same day, after a heartbeat
-dated that day, is the [catch-up](#catch-up).
+The schedule fires at 04:00 and 07:00 UTC. A run is the
+[catch-up](#catch-up) only when an `ok` heartbeat of this agent is already
+dated that UTC day; otherwise it does the [full check](#full-check).
 
 ## Full check
 
@@ -39,7 +39,10 @@ dated that day, is the [catch-up](#catch-up).
 
 ## Catch-up
 
-Recheck only the runs that were pending in the day's first run. Report each
+Recheck only the runs that the day's full check reported as pending, as
+listed in its report in this session; `waiting` does not carry them. When
+that report is not in the session, recheck every nightly run that finished
+after that heartbeat's `date`. Report each
 one that failed, diagnosed and deduplicated as in the [full check](#full-check),
 and each one still not finished; when none failed, reply one line. The
 heartbeat keeps the first run's `waiting` items that are still open.

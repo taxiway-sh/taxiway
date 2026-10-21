@@ -5,8 +5,8 @@ for the run contract; this file only adds the job. The job is owned by the
 `taxiway-contributions` skill (`.agents/skills/taxiway-contributions/SKILL.md`);
 when it is not on `main`, write a `partial` heartbeat that says so and stop.
 
-1. **Find** what changed since the previous heartbeat's `date` (on the first
-   run, the past 7 days): new external issues, comments on issues and PRs,
+1. **Find** what changed since the `date` of this agent's last heartbeat
+   with result `ok`, or in the past 7 days when there is none: new external issues, comments on issues and PRs,
    external PRs and new commits on them, merged external PRs, and
    contributions past the delays that skill defines for stale contributions.
 2. **Handle** each item per the skill's situations, and report per its
