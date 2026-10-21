@@ -116,14 +116,19 @@ fragility, near-term · **p2** cleanliness or later.
 
 ### Pull request labels
 
-- A PR carries the type and area labels of the issue it fixes or is part of,
-  copied when the PR is opened. It carries no priority: priority stays on the
-  issue.
-- A PR linked to several issues carries the union of their area labels and the
-  type of its main issue.
-- A PR without a linked issue gets one type and its area labels, chosen as for
-  an issue.
-- An open PR missing its type or area labels is flagged at triage.
+- A PR is linked to the issues it fixes (`Fixes #n`, `Closes #n`) and to the
+  issues it is part of (`Refs #n`). A `Related:` line is not a link.
+- A PR's type is the type of the issue it primarily fixes (its first `Fixes`
+  or `Closes`), otherwise of its first `Refs`. A PR with no linked issue gets
+  a type chosen for the change, as for an issue.
+- A PR's area labels are the union of its linked issues' area labels and the
+  areas the PR itself changes. When it changes an area its issue lacks, the PR
+  gets that label and the label is proposed on the issue.
+- A PR carries no priority: priority stays on the issue.
+- Whoever opens the PR copies these labels when they can; otherwise they are
+  added at triage. Existing labels are never removed to satisfy this rule.
+- Triage flags a PR missing its type or area labels, or carrying a priority
+  label.
 
 ## What happens after you open an issue
 
