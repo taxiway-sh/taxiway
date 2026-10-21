@@ -113,6 +113,8 @@ fragility, near-term · **p2** cleanliness or later.
   `good first issue`; they are not area axes.
 - `Security` marks a security-sensitive issue, in addition to its type,
   priority and area labels; write it as described in [Issue format](#issue-format).
+- `automation` ("Opened by a Taxiway workflow") marks a PR opened by a
+  Taxiway workflow; like `Security`, it is a marker, not an axis.
 
 ### Pull request labels
 
@@ -126,6 +128,10 @@ fragility, near-term · **p2** cleanliness or later.
   areas the PR itself changes. When it changes an area its issue lacks, the PR
   gets that label and the label is proposed on the issue.
 - A PR carries no priority: priority stays on the issue.
+- A PR opened by a Taxiway workflow carries `automation` plus a type and its
+  area labels like any PR; the workflow sets them so they survive each
+  regeneration. The model catalog PR carries `automation`, `enhancement` and
+  `capability:gateway`.
 - Whoever opens the PR copies these labels when they can; otherwise they are
   added at triage. Existing labels are never removed to satisfy this rule.
 - Triage flags a PR missing its type or area labels, or carrying a priority
