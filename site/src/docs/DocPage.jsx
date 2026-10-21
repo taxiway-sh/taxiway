@@ -23,6 +23,11 @@ import 'highlight.js/styles/github-dark.css';
 import './docs.css';
 import '../styles/page.css';
 
+// The Markdown pipeline of every docs page. Exported so the link test renders
+// the bodies, and their heading ids, exactly as the site does.
+export const remarkPlugins = [remarkGfm];
+export const rehypePlugins = [rehypeSlug, [rehypeHighlight, { ignoreMissing: true }]];
+
 // A fenced code block with a copy-to-clipboard button.
 function CodeBlock({ children }) {
   const ref = React.useRef(null);
@@ -275,8 +280,8 @@ export function DocPage({ doc }) {
             {/* Section label above the title; the index (empty group) reads "Overview". */}
             <span className="tw-eyebrow" style={{ display: 'block', marginBottom: 'var(--space-3)' }}>{doc.group || 'Overview'}</span>
             <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={[rehypeSlug, [rehypeHighlight, { ignoreMissing: true }]]}
+              remarkPlugins={remarkPlugins}
+              rehypePlugins={rehypePlugins}
               components={components}
             >
               {doc.raw}
