@@ -25,12 +25,15 @@ lives in [`CONTRIBUTING.md`](../../../CONTRIBUTING.md); keep both consistent.
 
 ## Autonomy
 
-Every comment, review, assignment, label change and closure is a draft under
-the [approvals matrix](../taxiway-workflow/SKILL.md#approvals): it starts at
-`ask` and is posted only after the maintainer approves it. Thank-you and
-acknowledgement comments are the first candidates for `auto` once per-action
-levels exist ([#196](https://github.com/taxiway-sh/taxiway/issues/196)).
-Approving a fork's CI run and merging always stay with the maintainer.
+Every comment, review, assignment, label change and closure starts at `ask`
+and is posted only after the maintainer approves it: under the
+[approvals matrix](../taxiway-workflow/SKILL.md#approvals) in a session, and
+through the action classes `comment-issue`, `review-pr`, `assign-issue`,
+`label-issue`, `close-issue` and `close-pr` at `ask` in a scheduled agent
+([Autonomy](../taxiway-agents/SKILL.md#autonomy)). Thank-you and
+acknowledgement comments are the first candidates for promotion to `auto`.
+Approving a fork's CI run is no action class, and it stays with the
+maintainer, like merging.
 
 ## Tone
 
