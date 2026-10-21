@@ -158,8 +158,8 @@ lab capability).
 - **Heavy capabilities are opt-in.** A container engine, large templates or
   other costly components are explicit settings or lab capabilities, off by
   default.
-- **Same behavior on every host.** macOS, Linux and Windows with WSL2 give the
-  same result for the same command.
+- **Same behavior on every host OS**: macOS, Linux and Windows with WSL2; see
+  the [invariants](../../../AGENTS.md#invariants).
 - **Taxiway intervenes only for its own concerns.** Gateway, authentication,
   trust, recording, autonomy and the lab lifecycle (start, stop, reset);
   process management stays the orchestrator's.
@@ -176,10 +176,10 @@ lab capability).
   orchestrator supports it.
 - Document in the adapter page every place the key appears (files, units,
   process arguments, tmux environment) and compare with the other adapters:
-  Claude Code and Codex pass it to their tmux session with `tmux -e`, Gas Town
-  sources the lab environment file in `launch-agent.sh`, Gas City writes it
-  into a Lima supervisor unit and, on every driver, into process arguments
-  through `tmux -e`
+  Claude Code, Codex and Gas City pass it to their tmux sessions with
+  `tmux new-session -e`, so it briefly appears in process arguments; Gas Town
+  sources the lab environment file in `launch-agent.sh`; Gas City also writes
+  it into a Lima supervisor unit
   ([Gateway key exposure](../../../docs/orchestrators/gascity.md#gateway-key-exposure),
   tracked in [#180](https://github.com/taxiway-sh/taxiway/issues/180)).
   Gateway-key and secrets handling beyond this belongs to the
