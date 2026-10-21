@@ -197,7 +197,7 @@ fails without deleting anything.
   is pinned is tracked in #178.
 - Agent sessions run Claude Code with its classic renderer
   (`CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1`). The Gas Town pack that Gas City
-  1.5.0 pins (commit `33d3a43`) sends the mouse wheel to tmux copy mode even
+  1.5.0 pins (commit `33d3a43`) sends wheel-up to tmux copy mode even
   over fullscreen applications, whose tmux history is empty, so wheel-up could
   not scroll an agent session back. Removing this workaround once a release
   bundles [gastownhall/gascity-packs#205](https://github.com/gastownhall/gascity-packs/pull/205)
