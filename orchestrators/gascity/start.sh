@@ -152,6 +152,11 @@ claude_env = {
     "ENABLE_TOOL_SEARCH": os.environ["ENABLE_TOOL_SEARCH"],
     "ENABLE_CLAUDEAI_MCP_SERVERS": os.environ["ENABLE_CLAUDEAI_MCP_SERVERS"],
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": os.environ.get("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "1"),
+    # The Gas Town pack pinned by Gas City 1.5.0 sends wheel-up to tmux copy
+    # mode even over fullscreen apps, whose history is then empty. Keep the
+    # classic renderer until a release ships gastownhall/gascity-packs#205
+    # (tracked in #260).
+    "CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN": "1",
 }
 for name in ("ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL",
              "ANTHROPIC_DEFAULT_HAIKU_MODEL", "ANTHROPIC_DEFAULT_FABLE_MODEL",

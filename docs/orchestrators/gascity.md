@@ -195,6 +195,13 @@ fails without deleting anything.
   `auth_token_env` explicitly. Removing this workaround once a release
   containing [gastownhall/gascity#5985](https://github.com/gastownhall/gascity/pull/5985)
   is pinned is tracked in #178.
+- Agent sessions run Claude Code with its classic renderer
+  (`CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1`). The Gas Town pack that Gas City
+  1.5.0 pins (commit `33d3a43`) sends the mouse wheel to tmux copy mode even
+  over fullscreen applications, whose tmux history is empty, so wheel-up could
+  not scroll an agent session back. Removing this workaround once a release
+  bundles [gastownhall/gascity-packs#205](https://github.com/gastownhall/gascity-packs/pull/205)
+  is tracked in #260.
 - On Lima, the gateway key is also stored in Gas City's supervisor unit, and
   sessions receive it through `tmux -e` arguments; see
   [Gateway key exposure](#gateway-key-exposure) (tracked in #180).

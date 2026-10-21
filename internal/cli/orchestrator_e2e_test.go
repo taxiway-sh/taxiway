@@ -2329,6 +2329,9 @@ assert key not in fragment.read_text(), 'managed fragment must reference, not in
 args = (pathlib.Path('/proc') / pid / 'cmdline').read_bytes().split(b'\0')
 efforts = [args[i + 1].decode() for i, arg in enumerate(args[:-1]) if arg == b'--effort']
 assert efforts == [sys.argv[4]], 'session must run with the selected effort, got %s' % efforts
+assert env.get(b'CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN') == b'1', 'session must keep the classic renderer (#260)'
+alternate = subprocess.check_output(['tmux', '-L', sys.argv[1], 'display-message', '-p', '-t', sys.argv[2], '#{alternate_on}'], text=True).strip()
+assert alternate == '0', 'session pane must stay on the main screen so tmux keeps its scrollback (#260), got alternate_on=%s' % alternate
 `, e2eGascitySocket, session, e2eGascityCityDir, effort)
 }
 
