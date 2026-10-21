@@ -56,9 +56,11 @@ Decided in [#177](https://github.com/taxiway-sh/taxiway/issues/177).
 - Run the scenarios of every orchestrator that consumes the change (an agent
   shared by several orchestrators covers each of them), and all three when the
   Up, PrepareRun and PhaseByPhase paths are all affected.
-- Merge criterion: the affected scenarios ran and passed on the proposed code.
-  Core CI does not run them; a skipped or blocked run is not validation: report
-  it and resolve it before claiming E2E validation.
+- Merge criterion: the affected scenarios ran and passed on the proposed code,
+  in a run Taxiway controls (CI, or the maintainer's run on a maintainer
+  branch); an external contributor's run on their own machine is evidence
+  only. Core CI does not run them; a skipped or blocked run is not validation:
+  report it and resolve it before claiming E2E validation.
 
 ## Live validation: Docker or Lima
 

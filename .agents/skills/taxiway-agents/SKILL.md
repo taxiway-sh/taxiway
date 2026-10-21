@@ -93,6 +93,9 @@ The scheduled task always sends the same bootstrap prompt:
 > `taxiway/.agents/agents/<id>.prompt.md` and follow it. If a clone cannot
 > fast-forward, report it and do not reset it.
 
+It carries no authorization phrase: auto mode refuses such a phrase as an
+injection.
+
 A clone whose fetch or fast-forward fails, or that is not on `main`, is
 reported: the run writes a `failed` heartbeat if the `agents` clone allows it,
 then stops. A run never resets or force-updates a clone.
@@ -141,7 +144,9 @@ and says why.
 
 A run whose prompt ends with `Dry run: write nothing; report what you would
 write.` writes nothing, heartbeat and `approvals` included: the answers it
-does not record stay for the next run. It reports what it would have written.
+does not record stay for the next run. It reports what it would have written,
+marking its proposal ids as dry run: an answer to one is not recorded, and the
+next real run proposes again with a new id.
 
 ## Autonomy
 
