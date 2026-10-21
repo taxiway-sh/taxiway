@@ -1,13 +1,12 @@
 ---
 name: check-agents
-description: Use when asked for the state of Taxiway's cloud scheduled agents, or when invoked as /check-agents.
+description: Use when asked for the state of Taxiway's scheduled agents, or when invoked as /check-agents.
 argument-hint: "[id]"
 ---
 
 # Check agents
 
-Reports, per declared cloud agent, its heartbeat, session and scheduled task,
-and old sessions waiting for archive. Writes nothing.
+Reports the state of Taxiway's scheduled agents.
 
 Argument, optional: an agent `id` (default: every agent).
 
