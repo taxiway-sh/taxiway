@@ -36,24 +36,35 @@ done
 clone_arg="${2:-$repo_dir/../agents}"
 [[ -d "$clone_arg" ]] || fail "agents clone not found: $clone_arg"
 clone="$(cd "$clone_arg" && pwd -P)"
-top="$(git -C "$clone" rev-parse --show-toplevel 2>/dev/null)" || fail "$clone_arg is not a git repository"
+# Every git command on the clone goes through g: the clone's hooks and file
+# system monitor would otherwise run under this script's permission rule.
+g() { git -C "$clone" -c core.hooksPath=/dev/null -c core.fsmonitor=false "$@"; }
+top="$(g rev-parse --show-toplevel 2>/dev/null)" || fail "$clone_arg is not a git repository"
 [[ "$(cd "$top" && pwd -P)" == "$clone" ]] || fail "$clone_arg is not the root of the agents clone"
-origin="$(git -C "$clone" config --get remote.origin.url)" || fail "the agents clone has no origin remote"
+# The clone's own git configuration may hold only what a plain clone writes:
+# other keys (includes, filters, signing or ssh programs, URL rewrites) could
+# run code or redirect the push.
+unexpected="$(g config --local --name-only --list | grep -vE \
+  '^(core\.(repositoryformatversion|filemode|bare|logallrefupdates|ignorecase|precomposeunicode|symlinks)|remote\.origin\.(url|fetch)|branch\..+\.(remote|merge)|gc\.auto|user\.(name|email))$' \
+  | sort -u || true)"
+[[ -z "$unexpected" ]] || fail "the agents clone's git config sets keys this script does not allow:
+$unexpected"
+origin="$(g config --get remote.origin.url)" || fail "the agents clone has no origin remote"
 case "$origin" in
   https://github.com/taxiway-sh/agents|https://github.com/taxiway-sh/agents.git) ;;
   git@github.com:taxiway-sh/agents.git|ssh://git@github.com/taxiway-sh/agents.git) ;;
   *) fail "the clone's origin is $origin, not taxiway-sh/agents" ;;
 esac
-branch="$(git -C "$clone" symbolic-ref --quiet --short HEAD)" || fail "the agents clone is not on a branch; check out main"
+branch="$(g symbolic-ref --quiet --short HEAD)" || fail "the agents clone is not on a branch; check out main"
 [[ "$branch" == main ]] || fail "the agents clone is on '$branch', not main"
-git_dir="$(git -C "$clone" rev-parse --absolute-git-dir)"
+git_dir="$(g rev-parse --absolute-git-dir)"
 [[ ! -e "$git_dir/rebase-merge" && ! -e "$git_dir/rebase-apply" ]] || fail "a rebase is in progress in the agents clone"
 
 heartbeat="status/$id.json"
 [[ -f "$clone/$heartbeat" ]] || fail "$heartbeat not found in the agents clone: write it first"
 # Only the heartbeat may differ from HEAD: anything else staged or modified
 # would be committed with it, or would block the rebase on a rejected push.
-others="$( (git -C "$clone" diff --name-only; git -C "$clone" diff --cached --name-only) \
+others="$( (g diff --name-only; g diff --cached --name-only) \
   | grep -vxF "$heartbeat" | sort -u || true)"
 [[ -z "$others" ]] || fail "other changes in the agents clone, commit or revert them first:
 $others"
@@ -75,16 +86,13 @@ data["date"] = sys.argv[2]
 path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
 PY
 
-# Hooks in the clone would run under this script's permission rule: disable
-# them for every git command that could trigger one.
-g() { git -C "$clone" -c core.hooksPath=/dev/null "$@"; }
 g fetch --quiet origin main || fail "git fetch origin main failed; nothing was committed"
 # Anything already committed locally would be pushed with the heartbeat.
 [[ "$(g rev-list --count origin/main..HEAD)" == 0 ]] \
   || fail "the agents clone has commits that are not on origin/main; push or drop them first"
 g merge --quiet --ff-only origin/main \
   || fail "cannot fast-forward the agents clone to origin/main; nothing was committed"
-python3 -c 'import jsonschema' 2>/dev/null \
+python3 -I -c 'import jsonschema' 2>/dev/null \
   || fail "the python3 module jsonschema is not installed; it is needed to validate the state"
 # Run the validator from origin/main, never from the working tree, so local
 # edits to it cannot run under this script.
@@ -92,7 +100,7 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 g show origin/main:scripts/check-status.py > "$tmp/check-status.py" 2>/dev/null \
   || fail "scripts/check-status.py not found on origin/main of the agents repository"
-python3 "$tmp/check-status.py" "$clone" \
+python3 -I "$tmp/check-status.py" "$clone" \
   "$agents_dir/status.schema.json" "$agents_dir/queue.schema.json" \
   || fail "state validation failed (see above); nothing was committed"
 

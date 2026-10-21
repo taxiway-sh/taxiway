@@ -24,11 +24,20 @@ git config --global user.email 'agent@example.invalid'
 git config --global init.defaultBranch main
 git config --global "url.$origin.insteadOf" https://github.com/taxiway-sh/agents
 git init --quiet --bare "$origin"
-# The script requires jsonschema, which the real validator imports; the
-# stand-in below does not need it, so an empty module satisfies the check.
-mkdir -p "$test_dir/py"
+# The script requires jsonschema, which the real validator imports, and runs
+# Python isolated (-I). The stand-in below does not need jsonschema: this
+# python3 wrapper provides an empty module where it is not installed.
+real_python="$(command -v python3)"
+mkdir -p "$test_dir/py" "$test_dir/bin"
 touch "$test_dir/py/jsonschema.py"
-export PYTHONPATH="$test_dir/py"
+cat > "$test_dir/bin/python3" <<SH
+#!/usr/bin/env bash
+args=()
+for arg in "\$@"; do [[ "\$arg" == -I ]] || args+=("\$arg"); done
+PYTHONPATH="$test_dir/py" exec "$real_python" "\${args[@]}"
+SH
+chmod +x "$test_dir/bin/python3"
+export PATH="$test_dir/bin:$PATH"
 
 # The state repository's validator is not available here: this stand-in checks
 # the arguments it receives and the heartbeat fields this test relies on.
@@ -122,6 +131,18 @@ expect_fail "not main" "$script" demo "$agents"
 git -C "$agents" switch --quiet main
 echo 'PASS: foreign origin and other branch rejected'
 
+# Local git config beyond what a clone writes is refused before anything runs.
+printf '#!/usr/bin/env bash\ntouch "%s/fsmonitor-ran"\nexit 1\n' "$test_dir" > "$test_dir/monitor"
+chmod +x "$test_dir/monitor"
+git -C "$agents" config core.fsmonitor "$test_dir/monitor"
+expect_fail '^core\.fsmonitor$' "$script" demo "$agents"
+git -C "$agents" config --unset core.fsmonitor
+git -C "$agents" config include.path "$test_dir/gitconfig"
+expect_fail '^include\.path$' "$script" demo "$agents"
+git -C "$agents" config --unset include.path
+[[ ! -e "$test_dir/fsmonitor-ran" ]] || { echo 'FAIL: the clone fsmonitor ran' >&2; exit 1; }
+echo 'PASS: unexpected local git config refused'
+
 # Invalid heartbeat: validation fails, nothing is committed or pushed.
 pushed="$(origin_head)"
 heartbeat demo great
@@ -176,8 +197,8 @@ echo 'PASS: clone fast-forwarded, validator taken from origin/main'
 
 # Without jsonschema, the script says so instead of reporting a bad state.
 mkdir -p "$test_dir/nojs"
-printf '#!/usr/bin/env bash\n[[ "$*" == "-c import jsonschema" ]] && exit 1\nexec %q "$@"\n' \
-  "$(command -v python3)" > "$test_dir/nojs/python3"
+printf '#!/usr/bin/env bash\n[[ "$*" == "-I -c import jsonschema" ]] && exit 1\nexec %q "$@"\n' \
+  "$test_dir/bin/python3" > "$test_dir/nojs/python3"
 chmod +x "$test_dir/nojs/python3"
 heartbeat demo ok
 PATH="$test_dir/nojs:$PATH" expect_fail 'jsonschema is not installed' "$script" demo "$agents"
