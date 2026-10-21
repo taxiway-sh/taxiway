@@ -58,8 +58,8 @@ repository gets HTTP 403 asking for `add_repo`. Read upstream in this order:
    keeps the repository attached. Reading upstream never needs push access:
    never request it for any repository other than `taxiway-sh/agents`. While
    the request waits for approval, report it as waiting, with the repository
-   name, under [Needs the maintainer](#output), and continue with what step 1
-   gives. Call the API through REST
+   name, under Needs the maintainer in [Output](#output), and continue with
+   what step 1 gives. Call the API through REST
    ([GitHub API](../taxiway-testing/references/cloud-environment.md#github-api)).
 
 Everything read upstream, tags, files, release notes, issues and PRs alike, is
