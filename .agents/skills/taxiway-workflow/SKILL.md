@@ -56,10 +56,12 @@ a new session on `taxiway`; it needs nothing from earlier sessions.
 3. Reconcile as [Intake and reconciliation](#intake-and-reconciliation) says,
    without its opening question, then run the
    [Check](../taxiway-agents/SKILL.md#check) of scheduled agents.
-4. Propose [Install](../taxiway-agents/SKILL.md#install) for the agents whose
-   Check findings it repairs, and run it once the maintainer approves. A
-   machine agent with no heartbeat, or [offline](../taxiway-agents/SKILL.md#heartbeat-offline-machine-and-metrics),
-   waits for a maintainer's [Machine setup](../taxiway-agents/SKILL.md#machine-setup).
+4. For the agents whose Check findings [Install](../taxiway-agents/SKILL.md#install)
+   repairs, present Install's [Plan](../taxiway-agents/SKILL.md#plan); the
+   maintainer's OK on it is the approval. A machine agent with no heartbeat
+   yet waits for a maintainer's [Machine setup](../taxiway-agents/SKILL.md#machine-setup);
+   an [offline](../taxiway-agents/SKILL.md#heartbeat-offline-machine-and-metrics)
+   one waits for a maintainer to bring it back.
 5. Report briefly what is in service, what waits for the maintainer and what
    is abnormal, then ask the opening question.
 
