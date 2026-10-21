@@ -61,12 +61,13 @@ var ReferenceURLs = map[string]string{
 }
 
 // chatRetirementTemplates are the known ChatGPT subscription retirement
-// notices. A parsed section's whole body, normalised, must be exactly one of
-// them: the notice sentence and its OpenAI API exclusion sentence, plus at most
-// the guidance known for that model. A qualifier, a second announcement, a list
-// or any other text makes the notice unknown and needs manual review. Both
-// retire the model from Codex signed in with ChatGPT, which is the `chatgpt`
-// route, and explicitly leave the OpenAI API out of scope.
+// notices. A parsed section's heading must be exactly "<model> retirement" and
+// its whole body, normalised, exactly one of them: the notice sentence and its
+// OpenAI API exclusion sentence. Only the effective form may then carry the
+// guidance known for that model. A qualifier, a second announcement, a list or
+// any other text makes the notice unknown and needs manual review. Both retire
+// the model from Codex signed in with ChatGPT, which is the `chatgpt` route,
+// and explicitly leave the OpenAI API out of scope.
 var chatRetirementTemplates = []*regexp.Regexp{
 	regexp.MustCompile(`^On (?P<date>[A-Z][a-z]+ [0-9]{1,2}, [0-9]{4}), (?P<model>(?i:GPT)-[A-Za-z0-9. -]+?) will retire from ChatGPT, ChatGPT Work, and Codex\. This retirement does not apply to the OpenAI API\.$`),
 	regexp.MustCompile(`^Effective (?P<date>[A-Z][a-z]+ [0-9]{1,2}, [0-9]{4})(?:, at (?P<clock>noon|(?:1[0-2]|[1-9])(?::[0-5][0-9])? ?[AaPp]M) (?P<zone>P[DS]?T|E[DS]?T|C[DS]?T|M[DS]?T|UTC|GMT)(?: \((?P<utc>(?:[01]?[0-9]|2[0-3]):[0-5][0-9]) UTC\))?)?, (?P<model>(?i:GPT)-[A-Za-z0-9. -]+?) retires from Codex for users signed in with ChatGPT\. The OpenAI API and Codex sessions authenticated with an API key (?:aren't|aren\x{2019}t|are not) affected\.(?: (?P<guidance>.+))?$`),
@@ -132,16 +133,25 @@ func chatSameUTCDay(clock, zone, utc string) error {
 	return nil
 }
 
-// A paragraph of a section's heading or body that names both "effective" and
-// a retirement makes the section a notice to parse, whatever its heading, so a
-// near-miss notice fails closed instead of being skipped.
+// A section whose heading or body names both "effective" and a retirement is
+// a notice to parse, whatever its heading, so a near-miss notice fails closed
+// instead of being skipped.
 var chatEffective = regexp.MustCompile(`(?i)\beffective\b`)
 var chatRetire = regexp.MustCompile(`(?i)\bretir`)
-var chatParagraphBreak = regexp.MustCompile(`\n[ \t]*\n`)
 
 // chatNormalise maps CRLF line endings, no-break spaces (U+00A0) and
-// non-breaking hyphens (U+2011) before parsing.
-var chatNormalise = strings.NewReplacer("\r\n", "\n", string(rune(0x00a0)), " ", string(rune(0x2011)), "-")
+// non-breaking hyphens (U+2011), and drops zero-width characters (U+200B,
+// U+200C, U+200D, U+2060, U+FEFF) before parsing.
+var chatNormalise = strings.NewReplacer(
+	"\r\n", "\n",
+	string(rune(0x00a0)), " ",
+	string(rune(0x2011)), "-",
+	string(rune(0x200b)), "",
+	string(rune(0x200c)), "",
+	string(rune(0x200d)), "",
+	string(rune(0x2060)), "",
+	string(rune(0xfeff)), "",
+)
 var whitespace = regexp.MustCompile(`\s+`)
 var chatVersionID = regexp.MustCompile(`^gpt-[0-9.]+$`)
 
@@ -341,21 +351,23 @@ func Discover(s Sources) (Discovery, error) {
 	// Check each Markdown section independently: one understood announcement
 	// must never hide another or lend it an API-scope disclaimer.
 	sections := regexp.MustCompile(`(?m)^#{1,6} `).Split(chatNormalise.Replace(string(s.ChatGPT)), -1)
-	for _, section := range sections {
-		// Historical summaries and links are not primary announcements. A
-		// retirement heading, a future announcement or a paragraph naming an
-		// effective retirement always requires parsing.
-		heading, body, _ := strings.Cut(section, "\n")
-		effective := false
-		for _, p := range append([]string{heading}, chatParagraphBreak.Split(body, -1)...) {
-			effective = effective || (chatEffective.MatchString(p) && chatRetire.MatchString(p))
+	for i, section := range sections {
+		// Text before the first heading has no heading of its own.
+		heading, body := "", section
+		if i > 0 {
+			heading, body, _ = strings.Cut(section, "\n")
 		}
-		lower := strings.ToLower(section)
+		// Markdown wraps sentences at arbitrary points.
+		heading = strings.TrimSpace(whitespace.ReplaceAllString(heading, " "))
+		text := strings.TrimSpace(whitespace.ReplaceAllString(body, " "))
+		// Historical summaries and links are not primary announcements. A
+		// retirement heading, a future announcement or an effective retirement
+		// always requires parsing.
+		effective := (chatEffective.MatchString(heading) && chatRetire.MatchString(heading)) || (chatEffective.MatchString(text) && chatRetire.MatchString(text))
+		lower := strings.ToLower(heading + " " + text)
 		if !effective && !strings.Contains(strings.ToLower(heading), "retirement") && !strings.Contains(lower, "will retire") && !strings.Contains(lower, "will be retired") {
 			continue
 		}
-		// Markdown wraps sentences at arbitrary points.
-		text := strings.TrimSpace(whitespace.ReplaceAllString(body, " "))
 		var match []string
 		var template *regexp.Regexp
 		for _, t := range chatRetirementTemplates {
@@ -373,6 +385,10 @@ func Discover(s Sources) (Discovery, error) {
 			return ""
 		}
 		model := group("model")
+		// A qualified heading ("postponed", "tentative") can void its body.
+		if !strings.EqualFold(heading, model+" retirement") {
+			return d, fmt.Errorf("chatgpt: unrecognized retirement notice; manual source review required")
+		}
 		id := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(model)), " ", "-")
 		if guidance := group("guidance"); guidance != "" && guidance != chatRetirementGuidance[id] {
 			return d, fmt.Errorf("chatgpt: unrecognized retirement notice; manual source review required")

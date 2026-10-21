@@ -113,7 +113,8 @@ func TestDiscoverIgnoresHistoricalSummaryLinks(t *testing.T) {
 
 func TestDiscoverRejectsMixedAnnouncementFormatsInOneSection(t *testing.T) {
 	s := fixtureSources()
-	s.ChatGPT = append(s.ChatGPT, []byte("On November 1, 2026, GPT-6 Sol will be retired from Codex.\n")...)
+	const exclusion = "This retirement does not apply to the OpenAI API.\n"
+	s.ChatGPT = []byte(strings.Replace(string(s.ChatGPT), exclusion, exclusion+"On November 1, 2026, GPT-6 Sol will be retired from Codex.\n", 1))
 	if _, err := Discover(s); err == nil {
 		t.Fatal("unrecognized second announcement ignored")
 	}
@@ -156,20 +157,35 @@ func TestDiscoverReadsEachKnownChatGPTRetirementForm(t *testing.T) {
 	}
 }
 
-func TestDiscoverParsesEffectiveNoticeUnderAnyHeading(t *testing.T) {
-	const notice = "## Codex updates\nEffective October 14, 2026, GPT-5.5 retires from Codex for users signed in\nwith ChatGPT."
+func TestDiscoverRejectsEffectiveNoticeUnderAnotherHeading(t *testing.T) {
+	for _, test := range []struct{ name, chatgpt string }{
+		{"other heading", "# Models\n## Codex updates\n" + effectiveSentences + "## Choose a model\nchoose `gpt-6-sol` when available.\n"},
+		{"other heading without exclusion", "# Models\n## Codex updates\nEffective October 14, 2026, GPT-5.5 retires from Codex for users signed in\nwith ChatGPT.\n## Choose a model\nchoose `gpt-6-sol` when available.\n"},
+		{"postponed heading", "# Models\n## GPT-5.5 retirement (postponed, dates below are no longer valid)\n" + effectiveSentences + "## Choose a model\nchoose `gpt-6-sol` when available.\n"},
+		{"tentative heading", "# Models\n## Tentative Codex plan, subject to change\n" + effectiveSentences + "## Choose a model\nchoose `gpt-6-sol` when available.\n"},
+		{"preamble before any heading", "Draft, not yet confirmed:\n" + effectiveSentences + "# Models\n## Choose a model\nchoose `gpt-6-sol` when available.\n"},
+		{"notice split across paragraphs", "# Models\n## Codex updates\nEffective October 14, 2026.\n\nGPT-5.5 retires from Codex for users signed in with ChatGPT.\n## Choose a model\nchoose `gpt-6-sol` when available.\n"},
+		{"zero-width space in effective", "# Models\n## Codex updates\nEffec" + string(rune(0x200b)) + "tive October 14, 2026, GPT-5.5 retires from Codex for users signed in with ChatGPT.\n## Choose a model\nchoose `gpt-6-sol` when available.\n"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			s := fixtureSources()
+			s.ChatGPT = []byte(test.chatgpt)
+			if _, err := Discover(s); err == nil || !strings.Contains(err.Error(), "unrecognized retirement notice") {
+				t.Fatalf("error = %v, want unrecognized retirement notice", err)
+			}
+		})
+	}
+}
+
+func TestDiscoverReadsHeadingCaseInsensitively(t *testing.T) {
 	s := fixtureSources()
-	s.ChatGPT = []byte("# Models\n" + notice + " The OpenAI API and Codex sessions authenticated with an API key aren't affected.\n## Choose a model\nchoose `gpt-6-sol` when available.\n")
+	s.ChatGPT = []byte("# Models\n## gpt-5.5 Retirement\n" + effectiveSentences + "## Choose a model\nchoose `gpt-6-sol` when available.\n")
 	d, err := Discover(s)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := d.Retirements["gpt-5.5"]; got.Date != "2026-10-14" || got.Scope != "subscription" {
-		t.Fatalf("notice under another heading ignored: %#v", d.Retirements)
-	}
-	s.ChatGPT = []byte("# Models\n" + notice + "\n## Choose a model\nchoose `gpt-6-sol` when available.\n")
-	if _, err := Discover(s); err == nil || !strings.Contains(err.Error(), "unrecognized retirement notice") {
-		t.Fatalf("unscoped notice under another heading: error = %v", err)
+	if got := d.Retirements["gpt-5.5"]; got.Date != "2026-10-14" {
+		t.Fatalf("gpt-5.5 retirement = %#v", got)
 	}
 }
 
@@ -201,10 +217,11 @@ func TestDiscoverReadsEffectiveNoticeTypographyAndTimes(t *testing.T) {
 		{"non-breaking space in date", "Effective October" + string(rune(0x00a0)) + "14, 2026, GPT-5.5 retires from Codex for users signed in with ChatGPT."},
 		{"non-breaking hyphen in model", "Effective October 14, 2026, GPT" + string(rune(0x2011)) + "5.5 retires from Codex for users signed in with ChatGPT."},
 		{"morning time with conversion", "Effective October 14, 2026, at 9:30 AM EDT (13:30 UTC), GPT-5.5 retires from Codex for users signed in with ChatGPT."},
+		{"zero-width characters", "Effective October 14, 2026," + string(rune(0x200d)) + " GPT-5.5 retires" + string(rune(0xfeff)) + " from Codex for users signed in with ChatGPT."},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			s := fixtureSources()
-			s.ChatGPT = []byte("# Models\n## Codex updates\n" + test.notice + exclusion + "\n## Choose a model\nchoose `gpt-6-sol` when available.\n")
+			s.ChatGPT = []byte("# Models\n## GPT-5.5 retirement\n" + test.notice + exclusion + "\n## Choose a model\nchoose `gpt-6-sol` when available.\n")
 			d, err := Discover(s)
 			if err != nil {
 				t.Fatal(err)
@@ -261,7 +278,8 @@ func TestDiscoverRejectsAmbiguousEffectiveRetirement(t *testing.T) {
 		{"list", "- " + notice + exclusion, unknown},
 		{"code fence", "```\n" + notice + exclusion + "```\n", unknown},
 		{"changed guidance", strings.Replace(liveBody, "`gpt-6.1-sol`", "`gpt-6-sol`", 1), unknown},
-		{"guidance of another model", strings.Replace(liveBody, "GPT-5.5 retires", "GPT-6 Sol retires", 1), unknown},
+		{"guidance of another model", "## GPT-6 Sol retirement\n" + strings.Replace(liveBody, "GPT-5.5 retires", "GPT-6 Sol retires", 1), unknown},
+		{"heading of another model", "## GPT-6 Sol retirement\n" + notice + exclusion, unknown},
 		{"ambiguous date", "Effective mid-October 2026, GPT-5.5 retires from Codex for users signed in with ChatGPT." + exclusion, unknown},
 		{"at the earliest", "Effective October 14, 2026, at the earliest, GPT-5.5 retires from Codex for users signed in with ChatGPT." + exclusion, unknown},
 		{"at a later date", "Effective October 14, 2026, at a later date, GPT-5.5 retires from Codex for users signed in with ChatGPT." + exclusion, unknown},
@@ -272,11 +290,15 @@ func TestDiscoverRejectsAmbiguousEffectiveRetirement(t *testing.T) {
 		{"next UTC day", "Effective October 14, 2026, at 11 PM PDT (06:00 UTC), GPT-5.5 retires from Codex for users signed in with ChatGPT." + exclusion, "another UTC date"},
 		{"next UTC day without conversion", "Effective October 14, 2026, at 11 PM PT, GPT-5.5 retires from Codex for users signed in with ChatGPT." + exclusion, "another UTC date"},
 		{"UTC conversion mismatch", "Effective October 14, 2026, at noon PDT (20:00 UTC), GPT-5.5 retires from Codex for users signed in with ChatGPT." + exclusion, "does not match"},
-		{"unknown model", "Effective October 14, 2026, GPT-6 Mystery retires from Codex for users signed in with ChatGPT." + exclusion, "ambiguous retirement model"},
+		{"unknown model", "## GPT-6 Mystery retirement\nEffective October 14, 2026, GPT-6 Mystery retires from Codex for users signed in with ChatGPT." + exclusion, "ambiguous retirement model"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			section := test.section
+			if !strings.HasPrefix(section, "## ") {
+				section = "## GPT-5.5 retirement\n" + section
+			}
 			s := fixtureSources()
-			s.ChatGPT = []byte("# Models\n## GPT-5.5 retirement\n" + test.section + "\n## Choose a model\nchoose `gpt-6-sol` when available.\n")
+			s.ChatGPT = []byte("# Models\n" + section + "\n## Choose a model\nchoose `gpt-6-sol` when available.\n")
 			_, err := Discover(s)
 			if err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("error = %v, want %q", err, test.want)
