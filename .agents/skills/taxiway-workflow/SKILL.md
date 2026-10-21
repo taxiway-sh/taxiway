@@ -26,23 +26,19 @@ passed; old-head results do not validate a new commit; unknown past results
 remain unknown. Do not claim drafts, diagnoses, tests or state writes exist
 without an actual artifact, process or result.
 
-Several sessions, cloud or local, may work on Taxiway at once, and none sees
-another's worktrees or processes. Shared state is what is on GitHub:
-
-- **Before taking a subject,** check the remote branches and open PRs that
-  reference its issue, not only local ones; an issue with a branch or a PR
-  in progress belongs to that session unless the maintainer reassigns it.
-- **When taking a subject,** make it visible: push the branch early or open a
-  draft PR that references the issue, under the
-  [approvals](#approvals).
-- **The coordinator session** is the maintainer's entry point for status,
-  decisions and priorities. It delegates work to subagents or to dedicated
-  sessions and reads their state from GitHub and the state repository,
-  never from memory.
-
 - **New need:** follow [`taxiway-intake`](../taxiway-intake/SKILL.md).
 - **Backlog:** follow [`taxiway-triage`](../taxiway-triage/SKILL.md); the user
   selects the work.
+
+Several sessions, cloud or local, may work on Taxiway at once, scheduled
+agents included, and none sees another's worktrees or processes: the state of
+work is on GitHub (issues, branches, PRs, checks), and that of scheduled agents
+in the [state repository](../taxiway-agents/SKILL.md#state-repository).
+[Selection](../taxiway-issue/SKILL.md#1-selection) says how a session checks
+and shows that a subject is taken. The coordinator session is the maintainer's
+entry point for status, decisions and priorities: it delegates work to
+subagents or dedicated sessions and reads that state rather than relying on
+memory; decisions follow [Resume](#pause-resume-and-finish).
 
 ## Approvals
 
@@ -169,8 +165,9 @@ actionable request per blocker, and never invent percentages or finish dates.
   duplicate agents or tests.
 - **Finish:** state that nothing continues after the session ends. Close
   subagents and child sessions whose mission has ended and list any still
-  running. List each subject's remaining work and pending decisions, any
-  still-running tests with their owners, and the resume action. The final
+  running. List each subject's remaining work and pending decisions, the
+  branches and PRs it leaves open, any still-running tests with their owners,
+  and the resume action. The final
   report links issues and PRs, states delivered behavior, actual checks and
   remaining limits, and distinguishes code-ready, independently reviewed,
   PR-open, merged and cleaned-up states.

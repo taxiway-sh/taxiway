@@ -14,8 +14,17 @@ follows the [approvals matrix](../taxiway-workflow/SKILL.md#approvals).
 - Work only on an issue the maintainer selected
   ([workflow](../taxiway-workflow/SKILL.md#intake-and-reconciliation)).
 - Check ownership and existing work before starting: assignees, open PRs that
-  reference the issue, `git worktree list`, local and remote branches. Resume
-  or coordinate existing work instead of duplicating it.
+  reference the issue, `git worktree list`, local and remote branches. Other
+  sessions' worktrees are invisible, so only what is on GitHub counts: an issue
+  that is assigned, or has an open PR or a recently pushed branch, is taken.
+  Resume or coordinate with its owner instead of duplicating it. An external
+  contributor's claim follows
+  [`taxiway-contributions`](../taxiway-contributions/SKILL.md). A branch with
+  no recent activity and no open PR is reported to the maintainer, who
+  decides.
+- Once the subject is taken, propose pushing its branch early so other
+  sessions see it; until the push is approved, say that they cannot. Once
+  pushed, review fixes are new commits ([Implementation](#3-implementation)).
 - Remove `needs-triage` as the
   [label conventions](../../../docs/contributing/issues.md#label-conventions)
   say.
