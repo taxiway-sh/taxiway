@@ -32,7 +32,8 @@ regenerate its bot branch (`automation/*`) and drop an agent's commits there.
 
 ## State repository
 
-`taxiway-sh/agents` is public and holds run state only, never rules:
+`taxiway-sh/agents` is public and holds run state and improvement records,
+never rules:
 
 - `status/<id>.json`, the heartbeat written at the end of every run:
   `id`, `date` (UTC, ISO 8601), `result` (`ok`, `partial` or `failed`),
@@ -47,7 +48,11 @@ regenerate its bot branch (`automation/*`) and drop an agent's commits there.
 - `deployed.json`: for each installed agent, its schedule, `model` and the
   `promptVersion` it was installed from. Session and scheduled task IDs stay
   out of it: install and check look them up, the session by tag and the
-  scheduled task by name.
+  scheduled task by name;
+- `improvement/`, trials and rejected proposals, defined by
+  [`taxiway-improve`](../taxiway-improve/SKILL.md#state-layout), and
+  `learn/campaigns/`, history campaign progress, defined by
+  [`taxiway-learn`](../taxiway-learn/SKILL.md#history-campaigns).
 
 Everything written there is public: no secrets, host details, private paths or
 raw logs.

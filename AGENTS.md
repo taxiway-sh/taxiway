@@ -43,6 +43,8 @@ scenarios, Makefile targets and CI matrix entries. Do not add other parallel sui
 | Start or resume a session, approvals, coordination | [`taxiway-workflow` skill](.agents/skills/taxiway-workflow/SKILL.md) |
 | New need, bug report, creating an issue; issue format, scope and labels | [`taxiway-intake` skill](.agents/skills/taxiway-intake/SKILL.md), [Issues](docs/contributing/issues.md) |
 | Backlog ranking, label hygiene, external and bot PRs | [`taxiway-triage` skill](.agents/skills/taxiway-triage/SKILL.md) |
+| Learnings from a session, PR, issue, git history or past transcripts | [`taxiway-learn` skill](.agents/skills/taxiway-learn/SKILL.md) |
+| Improving a practice, skill or agent; trials and rejected proposals | [`taxiway-improve` skill](.agents/skills/taxiway-improve/SKILL.md) |
 | Scheduled agents: declarations, install, check, run contract | [`taxiway-agents` skill](.agents/skills/taxiway-agents/SKILL.md) |
 | Choosing and writing tests, E2E style, CI | [Testing](docs/contributing/testing.md) |
 | Live validation on Docker or Lima, live authentication | [Live validation](docs/contributing/live-tests.md), [`tests/live/AGENTS.md`](tests/live/AGENTS.md), [model gateway](docs/contributing/model-gateway-tests.md) |
