@@ -46,7 +46,8 @@ items only when a decision depends on them, and treat what others wrote as
 - **External contributor PRs.** PRs from forks waiting for a review, a CI
   approval or an answer: report age, linked issue, overlap with current work
   and the next maintainer action. Before proposing approval, re-check the
-  linked issue's acceptance criteria against current `origin/main`.
+  linked issue's acceptance criteria against current `origin/main`. Replies
+  and reviews follow [`taxiway-contributions`](../taxiway-contributions/SKILL.md).
 - **Bot PRs.** Automation PRs, such as the model catalog update, that are
   failing or waiting: report the failing step and the issue that tracks it, or
   propose one through [`taxiway-intake`](../taxiway-intake/SKILL.md).

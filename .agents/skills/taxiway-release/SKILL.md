@@ -35,7 +35,8 @@ documentation-only and agent-tooling changes wait for the next one.
    migration code and tests separately
    from necessary current recovery/idempotency. Review changes since the last
    published tag and prepare breaking-change notes with before/after, impact and
-   user action; beta permits breaks and does not imply migration support. Commit
+   user action; beta permits breaks and does not imply migration support. Add
+   the [contributor credit](../taxiway-contributions/SKILL.md#credit). Commit
    markers help but never replace behavior review. Save sanitized exact-candidate
    proof. The helper's exit-zero PASS is provisional command evidence, not
    certification; external/manual records require independent inspection.
