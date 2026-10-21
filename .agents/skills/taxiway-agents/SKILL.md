@@ -28,11 +28,11 @@ Each agent is declared in this repository and changes only through reviewed PRs:
 and `taxiway-sh/agents`); the read-only attachments of public upstream
 repositories that a run makes through
 [`taxiway-upstream`](../taxiway-upstream/SKILL.md#reading-upstream-from-a-cloud-session)
-are not declared there. `read` means the agent never pushes to that
-repository. `write` on `taxiway-sh/taxiway` means pushing, without force, to
-branches other than `main`; `make lint` requires it exactly when
-`push-pr-branch` or `change-agent-system` is at `ask` or `auto`. Issue and PR
-writes follow [Autonomy](#autonomy). This is declared, not enforced: a cloud session can
+are not declared there. `read` means the agent never pushes to that repository.
+`write` on `taxiway-sh/taxiway` means pushing, without force, to branches other
+than `main`; `make lint` requires it exactly when `push-pr-branch` or
+`change-agent-system` is at `ask` or `auto`. Issue and PR writes follow
+[Autonomy](#autonomy). This is declared, not enforced: a cloud session can
 usually push, so agents cannot change their own instructions only because
 `main` is protected and changes go through reviewed PRs. A Taxiway workflow may
 regenerate its bot branch (`automation/*`) and drop an agent's commits there.
