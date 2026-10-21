@@ -27,13 +27,13 @@ documentation-only and agent-tooling changes wait for the next one.
    controlled-provider E2Es do not prove real delegation or model availability.
    Work through the pre-publication table and documentation/behavior checklist.
    Reuse existing E2Es and live helpers. Coordinate one heavy run at a time;
-   bound commands and provider usage. Authentication recovery may need one native
-   user reconnection: distinguish auth from model/network failures, continue
-   independent checks, and preserve credentials/unrelated labs.
-4. Inspect actual test counts, skips, outputs/effects, observed versions/models,
+   bound commands and provider usage. Authentication failures follow
+   [When authentication fails](../../../docs/contributing/live-tests.md#when-authentication-fails).
+4. Inspect actual test counts, skips, outputs/effects, observed versions/models
+   (against the pins in [`taxiway-upstream`](../taxiway-upstream/SKILL.md#where-versions-live)),
    shipped assets and doc/help/code coherence. Audit historical compatibility/
-   migration code and tests separately
-   from necessary current recovery/idempotency. Review changes since the last
+   migration code and tests against the [beta invariant](../../../AGENTS.md#invariants),
+   separately from necessary current recovery/idempotency. Review changes since the last
    published tag and prepare breaking-change notes with before/after, impact and
    user action; beta permits breaks and does not imply migration support. Commit
    markers help but never replace behavior review. Save sanitized exact-candidate
@@ -41,12 +41,8 @@ documentation-only and agent-tooling changes wait for the next one.
    certification; external/manual records require independent inspection.
    Missing auth, skipped cases, timeouts, old-head E2Es and agent claims never
    count as validation. Leave unknown checks NOT_EXECUTED with pending actions.
-   Consult Security Cloud privately before accepting review: establish scan date,
-   SHA and coverage, assess intervening changes and triage findings. Unavailable
-   or obsolete results leave review incomplete; an unresolved serious relevant
-   vulnerability blocks publication. Keep findings, repros and screenshots out
-   of public issues/PRs/notes/logs; publish only aggregate security status. An
-   opened UI or empty response never proves that findings were reviewed.
+   Run the [private security review](../taxiway-security/SKILL.md#private-security-review)
+   before accepting review.
 5. Have a different reviewer inspect findings, fixes and proof; rerun affected
    checks on the final candidate. Present release blockers, qualified combinations,
    untested paths and the report, even under deadline pressure, and end with
@@ -56,13 +52,13 @@ documentation-only and agent-tooling changes wait for the next one.
    does not replace published installation.
 6. Qualification-only requests perform no tag, push or publication. A request
    to publish authorizes only the explicit requested publication after the recipe;
-   follow `release.md` and do not push main. After authorized publication, start
+   follow `release.md`. After authorized publication, start
    a separate `--phase post --candidate vX.Y.Z` report. Inspect all six installation
    matrix jobs and test installed archives on the actual Mac. Report failures;
    never silently overwrite an existing tag/release.
 
 Clean only scenario-owned resources using existing helpers. Preserve reference
-labs until their cleanup is authorized. Keep reports/logs/auth/recordings out of
-Git. End with actual evidence, remaining checks and owned processes, and state
+labs until their cleanup is authorized. End with actual evidence, remaining
+checks and owned processes, and state
 that monitoring stops with the session. Evaluator sessions, runner/oracles and
 scientific analysis remain outside Taxiway qualification.

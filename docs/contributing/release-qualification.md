@@ -28,10 +28,9 @@ failure evidence, not permission to duplicate an uncertain in-flight run.
 
 The lightweight helper records evidence; it does not schedule a campaign,
 publish, discover all failures, sanitize logs or certify a recipe automatically.
-Its JSON/Markdown reports stay outside Git. Use a private directory; do not
-pass secrets in commands, notes or filenames, dump environment variables, or
-export raw credential files, account journals or model transcripts. Log files
-are private (`0600` under a `0700` directory); inspect and sanitize before sharing.
+Its JSON/Markdown reports and log files (`0600` under a `0700` directory) stay
+outside Git and are handled as private evidence under
+[secrets and credentials](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-security/SKILL.md#secrets-and-credentials).
 
 ```bash
 candidate=$(git rev-parse HEAD)
@@ -127,33 +126,10 @@ the contribution workflow. Do not add a separate job for each recipe assertion.
 
 ### Private security review
 
-Before accepting `review`, consult Codex Security Cloud privately for the
-repository. Record the scan date, scanned commit SHA and covered paths/checks
-in private evidence tied to the candidate. Check freshness and coverage: a scan
-of an older SHA does not qualify the candidate unless the intervening changes
-have been explicitly assessed. Missing access, unavailable results, unknown
-coverage or an obsolete scan leave this security review incomplete; they never
-mean that no findings exist.
-
-Before accepting `review`, also run a secret scan over
-`<previous-tag>..<candidate>`, recording the tool and version in private
-evidence; an untriaged finding blocks publication.
-
-Triage each finding privately against the candidate, including severity,
-relevance, remediation and verification. An unresolved serious vulnerability
-that affects the release blocks publication. Preserve a private disposition
-for other findings and explain any remaining uncertainty to the user. Do not
-mark `review` PASS until both independent feature review and this security
-review have sufficient evidence.
-
-Never put vulnerability details, reproduction steps, exploit material, finding
-screenshots or raw scanner output in public issues, pull requests, release notes
-or public logs. Keep those details in the private security channel and private
-proof; coordinate any necessary private remediation with the user. Public
-communication contains only an aggregate status, such as security review
-complete, incomplete or blocked, without disclosing findings. Opening Security
-Cloud or receiving an empty/unavailable response is not evidence that findings
-were consulted.
+Before accepting `review`, run the
+[private security review](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-security/SKILL.md#private-security-review)
+of the candidate. Do not mark `review` PASS until both the independent feature
+review and the security review have sufficient evidence.
 
 ### Documentation and behavior checklist
 

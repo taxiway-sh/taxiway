@@ -10,5 +10,5 @@
   "workdir": "taxiway",
   "skills": ["taxiway-agents"],
   "outputs": ["report", "status/watchdog.json"],
-  "autonomy": "ask"
+  "autonomy": {}
 }

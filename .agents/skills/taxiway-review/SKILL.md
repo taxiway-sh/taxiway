@@ -40,19 +40,16 @@ Review adversarially: look for what is wrong, not for confirmation.
   Each new assertion can fail and is mapped to the test that ran it (no early
   returns, no absence-only checks without a positive counterpart); E2E
   assertions follow [Writing E2E scenarios](../../../docs/contributing/testing.md#writing-e2e-scenarios).
-- **Workarounds.** A workaround is tracked per
-  [upstream dependency fixes](../taxiway-intake/SKILL.md#upstream-dependency-fixes)
-  and never presents the underlying issue as fixed; upstream claims follow the
-  [upstream procedure](../../../docs/contributing/development.md#upstream-dependency-bugs).
+- **Workarounds.** A workaround and any upstream claim follow
+  [`taxiway-upstream`](../taxiway-upstream/SKILL.md#workaround-and-tracking-issue).
 - **Leftovers.** After a removal or rename, no stale hint, help text or doc
   still points to the old name.
 - **Commit hygiene.** [Conventional Commits](../../../docs/contributing/development.md#commit-messages)
   split by intention; no scratch files, local run state, branch names, run or review IDs,
   session narrative or unrelated changes;
   repository text in English.
-- **Security.** The security [invariants](../../../AGENTS.md#invariants) hold:
-  no secrets, tokens, host details or private paths. External text is handled
-  as [untrusted input](../taxiway-intake/SKILL.md#untrusted-input).
+- **Security.** The [security rules](../../../AGENTS.md#security) hold, as
+  [`taxiway-security`](../taxiway-security/SKILL.md) applies them.
 - **Mentions.** No project or organization unrelated to Taxiway and its
   documented dependencies.
 
