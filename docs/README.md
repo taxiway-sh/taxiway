@@ -72,7 +72,7 @@ Typical flow:
 - [Model gateway validation](contributing/model-gateway-tests.md)
 - [Model catalog updates](contributing/model-catalog.md)
 - [Issues](contributing/issues.md)
-- [Maintained with agents](contributing/agentic-system.md)
+- [Project agents](contributing/agentic-system.md)
 - [Release](contributing/release.md)
 - [Release qualification recipe](contributing/release-qualification.md)
 - [Installation qualification](contributing/installation-qualification.md)

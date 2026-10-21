@@ -26,7 +26,7 @@ describe('docs loader', () => {
     const pages = navGroups.find(group => group.name === 'Contributing').pages;
     const issues = pages.findIndex(page => page.rel === 'contributing/issues');
     expect(pages[issues + 1].route).toBe('/docs/contributing/agentic-system');
-    expect(pages[issues + 1].title).toBe('Maintained with agents');
+    expect(pages[issues + 1].title).toBe('Project agents');
   });
 
   it('derives a title from the first H1', () => {
