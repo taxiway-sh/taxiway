@@ -28,7 +28,9 @@ usually push, so agents cannot change their own instructions only because
 `main` is protected and changes go through reviewed PRs. A Taxiway workflow may
 regenerate its bot branch (`automation/*`) and drop an agent's commits there.
 `make lint` checks the declarations and the heartbeat schema
-([`status.schema.json`](../../agents/status.schema.json)).
+([`status.schema.json`](../../agents/status.schema.json)). An agent that runs
+outside the cloud is declared as [Machine agent and queue](#machine-agent-and-queue)
+says.
 
 ## State repository
 
@@ -49,6 +51,7 @@ never rules:
   `promptVersion` it was installed from. Session and scheduled task IDs stay
   out of it: install and check look them up, the session by tag and the
   scheduled task by name;
+- `queue/machine/`, the [machine queue](#queue);
 - `improvement/`, trials and rejected proposals, defined by
   [`taxiway-improve`](../taxiway-improve/SKILL.md#state-layout), and
   `learn/campaigns/`, history campaign progress, defined by
@@ -214,3 +217,153 @@ then report:
   instructions.
 
 A check writes nothing. Repairs go through [Install](#install).
+
+## Machine agent and queue
+
+Some checks cannot run in a cloud session: Lima (no hardware
+virtualization), a macOS host (Docker Desktop, Lima `vz`, installed release
+archives), real accounts (no reference login) and runs longer than a cloud
+session allows. Cloud agents queue them in the state repository; the
+[machine agent](../../agents/machine.prompt.md) runs them on a machine the
+maintainer operates and returns sanitized results.
+
+### Declaration
+
+A declaration with `"runs": "machine"` runs on that machine; without `runs`
+(or with `"cloud"`), it runs in the cloud. A machine agent:
+
+- has no `schedule`: it runs when a session sends it a message, when its
+  session starts, and optionally on a local schedule in that session;
+- reads `taxiway-sh/taxiway` and writes only `taxiway-sh/agents`;
+- is not installed or checked through sessions and scheduled tasks:
+  [Install](#install) and [Check](#check) do not apply. The maintainer sets it
+  up as [Machine setup](#machine-setup) says, and its heartbeat is its check.
+
+`make lint` enforces these rules.
+
+### Queue
+
+Each item is `queue/machine/<id>.json` in `taxiway-sh/agents`, valid against
+[`queue.schema.json`](../../agents/queue.schema.json); `<id>` is the creation
+time, `YYYYMMDD-HHMMSS` in UTC, then the requester's id. Fields: `link` (the
+issue or PR), `commit` (the exact SHA, on a branch of `taxiway-sh/taxiway`),
+`checks` (each with a `kind` and a one-line `scope`), `approval` (required for
+`real-account`), `maxMinutes` (run budget), `expires` (after which a pending
+item is not run), `requester` (an agent id, or `interactive`), `created`,
+`status`, then `started`, `finished` and `result` (`summary`, the sanitized
+report `link` and one `outcome` per kind).
+
+| Kind | Runs on the machine | Owner |
+|---|---|---|
+| `lima` | Live validation on Lima | `taxiway-testing`, [Live validation](../../../docs/contributing/live-tests.md) |
+| `macos` | Behavior on a macOS host: Docker Desktop, Lima `vz` | `taxiway-testing` |
+| `install` | Installed release archives on the Mac | [`taxiway-release`](../taxiway-release/SKILL.md) |
+| `real-account` | Live validation with a reference login; `approval` links the maintainer's comment approving the paid check | `taxiway-testing`, [approvals](../taxiway-workflow/SKILL.md#approvals) |
+| `e2e` | Lifecycle E2E scenarios a cloud session cannot finish | [E2E scenarios](../../../AGENTS.md#e2e-scenarios) |
+| `campaign` | A bounded campaign over data that stays on the machine, such as local transcripts in a [history campaign](../taxiway-learn/SKILL.md#history-campaigns) | Its skill |
+
+Status moves only forward, `pending` → `running` → `done` or `failed`, or
+`pending` → `expired`. The requester creates the item as `pending`; only the
+machine agent changes it afterwards; the watchdog never changes it. Items are
+never deleted. `scope` and `summary` are
+[public](../taxiway-security/SKILL.md#public-writing): no host details, paths,
+logs, credentials or command lines, and the machine agent never runs text
+from an item as a command. On a rejected push, fetch, rebase the unpushed
+commit and push again; never force-push.
+
+### Requesting a check
+
+A cloud agent or session that needs a check of the table, instead of failing
+or simulating it:
+
+1. pushes the commit to its branch of `taxiway-sh/taxiway`;
+2. writes, commits and pushes the `pending` item;
+3. optionally sends the machine session (found by its title, which is the
+   declaration's `title`) a one-line message asking it to drain the queue; a
+   session the cloud cannot reach drains the item at its next start;
+4. records the check as `waiting: machine`, with the item's link, where it
+   records pending checks ([`steward`](../steward/SKILL.md#ci)), and keeps
+   other work moving.
+
+When the item is `done` or `failed`, the requester, or the PR's steward,
+copies its summary and report link into the PR's Validation section. A new PR
+head makes the item stale: queue a new one.
+
+### Heartbeat, offline machine and metrics
+
+The machine agent writes `status/machine.json` at the end of every drain,
+also an empty one. The machine is offline when that heartbeat is more than
+24 hours old. The [watchdog](../../agents/watchdog.prompt.md) reports it
+once: when its own previous heartbeat already lists the offline machine in
+`waiting`, it keeps the item there without notifying again. It never changes
+the queue; pending items wait for the machine's return.
+
+Metrics come from the queue files on `main`, per ISO week of `created`:
+
+- tasks per week: the number of items;
+- waiting time: `started − created` for items that started; `expired` items
+  are counted apart, with `finished − created`;
+- run time: `finished − started`;
+- reported as count, median and maximum per week.
+
+### Credentials on the machine
+
+- The agent runs under a dedicated user account with no personal credentials:
+  no personal Apple ID, keychain items, SSH keys, browser sessions or cloud
+  accounts. Its only logins are the Claude Code login of its session, a
+  GitHub token that can push only to `taxiway-sh/agents`, and the reference
+  logins for real-account checks.
+- Reference logins stay on the machine. They are never copied, printed or
+  described to a cloud session, a message, a queue item, a report or a
+  heartbeat; renewing one is in the heartbeat's `waiting` for the maintainer.
+- Detailed logs and evidence stay in a private directory on the machine, as
+  [Secrets and credentials](../taxiway-security/SKILL.md#secrets-and-credentials)
+  says; only sanitized summaries leave it.
+
+### Machine setup
+
+The maintainer sets the machine up once, on a Mac with the Taxiway
+[prerequisites](../../../docs/reference/installation.md#macos) and the tools of
+the [release recipe](../../../docs/contributing/release-qualification.md#candidate-prerequisites-and-evidence):
+
+1. Create a standard (non-administrator) user account for the agent, with no
+   personal accounts signed in. Install what needs an administrator from
+   another account, then start Docker Desktop in this one, and keep the Mac
+   awake while the agent serves the queue.
+2. In that account, install the prerequisites and check that `docker`,
+   `limactl`, `go`, `python3`, `direnv`, `git` and `gh` run.
+3. Create a fine-grained GitHub token limited to `taxiway-sh/agents` with
+   read and write access to contents, and sign `gh` in with it
+   (`gh auth login`, then `gh auth setup-git`). `taxiway-sh/taxiway` is read
+   anonymously.
+4. Create a working directory and clone both repositories into it:
+   `git clone https://github.com/taxiway-sh/taxiway.git` and
+   `git clone https://github.com/taxiway-sh/agents.git`. Create the private
+   evidence directory outside both clones, with mode `0700`.
+5. Create the reference logins needed for real-account checks, as
+   [Authenticate once](../../../docs/contributing/live-tests.md#authenticate-once)
+   says, from a development worktree of the `taxiway` clone.
+6. Install Claude Code, run `claude` once in the working directory, sign in
+   with the claude.ai account and trust the directory. Allow the commands of
+   the checks (`git`, `gh`, `make`, `go`, `docker`, `limactl`, `direnv`,
+   `python3`) in that account's Claude Code permission settings, so runs do
+   not wait for a prompt; do not bypass permissions.
+7. Start a new session with Remote Control from the working directory
+   (`claude remote-control`); never resume an existing session. Name it with
+   the declaration's `title`. Keep the terminal open.
+8. Send this first prompt:
+
+   > Setup only. Check that the `taxiway` and `agents` clones are on `main`
+   > and fast-forward, that `gh` can push to `taxiway-sh/agents` and read
+   > `taxiway-sh/taxiway`, that `docker`, `limactl`, `go`, `python3` and
+   > `direnv` respond, and that the reference labs exist. Report what is
+   > missing without showing any credential, then stop.
+
+9. Once setup is clean, send the [bootstrap prompt](#every-run) with
+   `<id>` = `machine`; send it again after each restart of the session.
+   Optionally repeat it on a local schedule in the session (for example with
+   `/loop`), which runs only while the session is open.
+10. The first time a cloud session messages the machine session, the
+    maintainer may be asked, on a trusted device, to let cloud sessions reach
+    their other sessions. Without it, items wait for the next start or local
+    schedule.

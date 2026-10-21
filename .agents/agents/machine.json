@@ -1,0 +1,16 @@
+{
+  "id": "machine",
+  "title": "Taxiway – machine agent (Lima, macOS, real accounts)",
+  "runs": "machine",
+  "model": "default",
+  "repositories": {
+    "taxiway-sh/taxiway": "read",
+    "taxiway-sh/agents": "write"
+  },
+  "workdir": "taxiway",
+  "skills": ["taxiway-agents", "taxiway-release", "taxiway-security"],
+  "outputs": ["report", "queue/machine/", "status/machine.json"],
+  "autonomy": {
+    "write-state": "auto"
+  }
+}

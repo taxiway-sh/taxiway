@@ -9,13 +9,16 @@ heartbeat or with a manual [Check](../skills/taxiway-agents/SKILL.md#check).
 
 ## Checks
 
-1. For each other agent declared in `.agents/agents/`, apply
+1. For each other agent declared in `.agents/agents/` that runs in the cloud, apply
    [Check](../skills/taxiway-agents/SKILL.md#check). A run still in progress is
    reported as running, not as late.
 2. Check that the last scheduled run of each nightly workflow (`e2e.yml`,
    `install.yml`, `model-catalog-update.yml`) started within the past 24 hours,
    and report its conclusion; a run not finished yet is pending.
-3. Collect every heartbeat's `waiting` items.
+3. Collect every heartbeat's `waiting` items. A machine agent's heartbeat is
+   its check; report an offline machine as
+   [Heartbeat, offline machine and metrics](../skills/taxiway-agents/SKILL.md#heartbeat-offline-machine-and-metrics)
+   says, with the number of pending queue items and the oldest one's age.
 4. Collect the `approvals` entries of every `status/<id>.json` commit since
    the watchdog's previous heartbeat (`git log`; with no previous heartbeat,
    the past 24 hours), answered `corrected` for a
