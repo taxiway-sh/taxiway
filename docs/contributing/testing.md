@@ -220,7 +220,8 @@ depends on external accounts and interactive state and is outside this suite.
 
 | Workflow | Trigger | Coverage |
 |---|---|---|
-| `ci.yml` | Push, pull request, or manual | Build, Go unit tests, shell tests, and lints |
+| `ci.yml` | Push, pull request, or manual | `core-checks`: build, Go unit tests, shell tests, and lints; `site-checks`: site tests and build |
+| `pages.yml` | Push to `main` that changes `site/` or `docs/`, or manual | Site tests and build, then deployment of the site |
 | `e2e.yml` | Daily at 22:17 UTC, or manual | Source-tree orchestrator lifecycles through Docker |
 
 End-to-end tests run separately from the fast core checks. Their matrix uses
@@ -229,8 +230,8 @@ End-to-end tests run separately from the fast core checks. Their matrix uses
 The end-to-end workflow has one Ubuntu job per orchestrator. Each job runs
 `up`, `prepare-run`, and `phase-by-phase` in that order.
 
-Run the site checks locally for documentation and frontend changes; they are
-not part of `ci.yml`.
+Run the site checks locally for documentation and frontend changes; the
+`site-checks` job of `ci.yml` runs them again on every push and pull request.
 
 For end-to-end failures, inspect the failing orchestrator's `up`, `prepare-run`,
 or `phase-by-phase` step, then rerun that scope locally.

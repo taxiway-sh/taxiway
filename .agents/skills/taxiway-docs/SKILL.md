@@ -152,9 +152,10 @@ The landing page (`site/src/App.jsx` and `site/src/sections/`) is public.
 
 - **Any change under `docs/` or `site/`:** the site checks,
   `npm ci`, `npm test` and `npm run build` in `site/`
-  ([Testing](../../../docs/contributing/testing.md#local-checks)). They are not
-  in `ci.yml`, and the site deploy workflow builds `main` without running the
-  tests, so run them before the PR and report them in its Validation section.
+  ([Testing](../../../docs/contributing/testing.md#local-checks)). Run them
+  before the PR and report them in its Validation section; the `site-checks`
+  job of `ci.yml` runs them again on the PR
+  ([CI structure](../../../docs/contributing/testing.md#ci-structure)).
 - **Any Markdown change:** `make lint`, whose `check-agent-docs` checks
   relative links, anchors and the blob URL rule in every page and skill.
 - **Not covered by tests:** diagram rendering and visual wrapping. Look at the
