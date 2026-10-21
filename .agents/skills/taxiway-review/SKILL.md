@@ -102,8 +102,9 @@ Review adversarially: look for what is wrong, not for confirmation.
 - **Tighter fixes.** A fix prefers tightening or removing text to adding it,
   and adds only what the finding requires, such as a missing rule or test.
 - **Convergence.** After blocking or should-fix findings are fixed, or when
-  the scope of the change changes, a new approving round follows. When two rounds after the first still find some,
-  stop and present the remaining findings to the maintainer.
+  the scope of the change changes, a new approving round follows. When two
+  rounds after the first still find some, stop and present the remaining
+  findings to the maintainer.
 
 ## Review reports
 
