@@ -328,11 +328,12 @@ expect_fail 'frictions without an item limit' "$tree" 'status.schema.json: frict
 
 n=0
 for change in 'del frictions["items"]["properties"]["summary"]["maxLength"]' \
+              'del frictions["items"]["properties"]["summary"]["minLength"]' \
               'frictions["items"]["properties"]["summary"]["type"] = "array"'; do
   n=$((n + 1))
   tree="$(fixture "heartbeat-frictions-summary-$n")"
   edit_schema "$tree" "$change"
-  expect_fail "frictions summary ($change)" "$tree" 'status.schema.json: frictions summary must be a string of at most 200 characters'
+  expect_fail "frictions summary ($change)" "$tree" 'status.schema.json: frictions summary must be a non-empty string of at most 200 characters'
 done
 
 tree="$(fixture heartbeat-frictions-open-items)"

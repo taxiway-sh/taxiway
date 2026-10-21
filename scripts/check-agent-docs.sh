@@ -256,9 +256,10 @@ def check_heartbeat_schema(schema):
             errors.append(f"{rel(schema)}: frictions link must match {PROJECT_LINK}")
         summary = frictions.get("summary")
         if (not isinstance(summary, dict) or summary.get("type") != "string"
+                or summary.get("minLength") != 1
                 or summary.get("maxLength") != FRICTION_SUMMARY_MAX):
-            errors.append(f"{rel(schema)}: frictions summary must be a string of at most"
-                          f" {FRICTION_SUMMARY_MAX} characters")
+            errors.append(f"{rel(schema)}: frictions summary must be a non-empty string of at"
+                          f" most {FRICTION_SUMMARY_MAX} characters")
         if props["frictions"].get("maxItems") != FRICTIONS_MAX:
             errors.append(f"{rel(schema)}: frictions must hold at most {FRICTIONS_MAX} items")
 
