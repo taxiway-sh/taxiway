@@ -44,7 +44,8 @@ For one practice, skill or agent:
    [`taxiway-intake`](../taxiway-intake/SKILL.md) when there is none; the
    maintainer's pick is the selection, and the PR is opened as a draft. A new
    capability, tool or agent becomes an issue proposal through `taxiway-intake`.
-   A refused one is recorded as a [rejected proposal](#rejected-proposals).
+   A refused proposal is recorded as a
+   [rejected proposal](#rejected-proposals).
 
 ## Trials
 
@@ -75,8 +76,11 @@ Until `improvement/rejected.json` exists in the [state layout](#state-layout),
 record a rejection as a comment on the issue or PR it came from, with the
 reason; the check above and step 6 of
 [`taxiway-learn`](../taxiway-learn/SKILL.md#analysis) search those comments
-too. Writing the file, like every file of the state layout, is a push to
-`taxiway-sh/agents` and follows the
+too. A rejection with no originating issue or PR (a session or history
+campaign candidate, or a proposal drawn from heartbeats or several runs) is
+recorded in `improvement/rejected.json`, creating the file if it does not
+exist yet; that is when the file is created. Both the comment and the push to
+`taxiway-sh/agents` are GitHub writes and follow the
 [approvals](../taxiway-workflow/SKILL.md#approvals).
 
 ## State layout

@@ -99,9 +99,10 @@ grouped by owner, on the issue the evidence came from, or on an issue proposed
 through [`taxiway-intake`](../taxiway-intake/SKILL.md) when there is none; the
 maintainer's pick is the selection, and the PR is opened as a draft. A
 candidate that needs work rather than wording (a new tool, check, capability
-or agent) becomes an issue proposal through `taxiway-intake`. Each refused candidate is
-recorded as a [rejected proposal](../taxiway-improve/SKILL.md#rejected-proposals)
-with the maintainer's reason. GitHub writes and pushes follow the
+or agent) becomes an issue proposal through `taxiway-intake`. Each refused
+candidate is recorded as a
+[rejected proposal](../taxiway-improve/SKILL.md#rejected-proposals) with the
+maintainer's reason. GitHub writes and pushes follow the
 [approvals](../taxiway-workflow/SKILL.md#approvals).
 
 ## History campaigns
@@ -113,8 +114,9 @@ campaign. Nothing else changes: the [guardrails](#guardrails),
 - **Where it runs.** Transcripts are processed where they live and never
   uploaded. Cloud sessions are read through the session tools, as data. Local
   transcripts of each client are read on the maintainer's machine by the
-  machine agent (#197), so that part waits until it exists; their storage
-  locations are checked at run time, not assumed.
+  machine agent ([#197](https://github.com/taxiway-sh/taxiway/issues/197)), so
+  that part waits until it exists; their storage locations are checked at run
+  time, not assumed.
 - **Selection.** A session is about Taxiway when its repository, working
   directory or worktree is a Taxiway checkout. Everything else is skipped
   silently.

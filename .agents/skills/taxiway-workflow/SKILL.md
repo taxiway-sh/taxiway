@@ -115,7 +115,7 @@ Record a maintainer decision in the rule it creates, in the skill or document
 that owns that rule (see the routing table in `AGENTS.md`), with a link to the
 issue or PR where it was taken. Do not write ADRs or separate decision logs, and
 do not restate the rule elsewhere: link to its owner. Refused improvement
-proposals are the exception: they are recorded as
+proposals and learning candidates are the exception: they are recorded as
 [rejected proposals](../taxiway-improve/SKILL.md#rejected-proposals).
 
 When the user corrects you, or answers a question that applies beyond the
