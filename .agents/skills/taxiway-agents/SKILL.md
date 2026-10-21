@@ -196,9 +196,9 @@ declaration-only PR.
 
 ## Install
 
-[`/install-agents`](../install-agents/SKILL.md) runs this section. It applies
-to every cloud declaration, or to the one `id` requested, in one of three
-modes:
+[`/install-agents`](../install-agents/SKILL.md) runs this section. It covers
+every declaration, or the one `id` requested; machine declarations only get a
+[pointer](#plan). It runs in one of three modes:
 
 - **install or update** (the default): create what is missing, rename, and
   update what differs from the declarations. Running it again changes nothing
@@ -206,26 +206,30 @@ modes:
 - **`reinstall`**: [replace](#replacing-an-agent) each agent's session and
   scheduled task, even when they match.
 - **`remove`**: for an agent no longer declared on `main`, found in
-  `deployed.json` or as a scheduled task whose stored prompt contains
-  `taxiway/.agents/agents/<id>.prompt.md`: disable its scheduled task
-  (`update_trigger`), then delete it (`delete_trigger`); rename its session
-  `OLD session – <its current title>`, remove its `taxiway-agent:<id>` tag
-  (`set_session_tags`) and archive it (`archive_session`); remove its entry
-  from `deployed.json`. A declared agent is never removed: its declaration is
-  removed first, through a reviewed PR.
+  `deployed.json` or by [lookup](#steps) 1.2 with its id: disable its
+  scheduled task (`update_trigger`), a safe stop point that keeps it
+  inspectable if the next call fails, then delete it (`delete_trigger`);
+  rename its session `OLD session – <its current title>` and archive it
+  (`archive_session`); remove its entry from `deployed.json`. A session found
+  without a scheduled task is reported to the maintainer, not archived. A
+  declared agent is never removed: its declaration is removed first, through
+  a reviewed PR.
 
 ### Bootstrapping
 
-When `taxiway-sh/agents` does not exist, stop and ask the maintainer to create
-it, public, with a `main` branch: cloud sessions cannot create repositories.
-When `deployed.json` or `status/` is missing from it, the plan creates them:
+Install never creates repositories: when `taxiway-sh/agents` does not exist,
+ask the maintainer to create it, public, with a `main` branch, and stop. The
+Install session itself needs `taxiway-sh/agents` attached with push
+(`add_repo`, `access: push`) to write `deployed.json` and `status/`. When
+`deployed.json` or `status/` is missing from it, the plan creates them:
 `deployed.json` as an empty object and `status/` with an empty `.gitkeep`.
 
 ### Plan
 
-Before any write, look up each agent as [step 1](#steps) says, then list per agent what
-will be created, renamed, updated, replaced or removed (session, scheduled
-task, `deployed.json` entry), the old sessions to archive, the test runs of
+Before any write, look up each agent as [step 1](#steps) says, then list per
+agent what will be created, renamed, updated, replaced or removed (session,
+scheduled task, `deployed.json` entry), the old sessions to
+[archive](#replacing-an-agent), the dry runs and real test runs of
 [Verification](#verification), and the agents left unchanged. Undeclared
 agents found in the default mode are listed as removable with `remove`. Wait
 for one maintainer OK covering the whole plan, as the
@@ -233,13 +237,14 @@ for one maintainer OK covering the whole plan, as the
 departs from the approved plan needs a new OK. With nothing to change, report
 it and stop.
 
-The machine agent is never installed here. For the `machine` id, or a
-declaration with `"runs": "machine"` that has no `status/<id>.json`, the plan
-points to [Machine setup](#machine-setup) instead of doing nothing silently.
+The machine agent is never installed here. When `machine` is the requested
+id, or a declaration with `"runs": "machine"` has no `status/<id>.json`, the
+plan points to [Machine setup](#machine-setup) instead of doing nothing
+silently.
 
 ### Steps
 
-For each agent in the approved plan:
+For each cloud agent in the approved plan:
 
 1. Look up the agent's session and scheduled task, in this order, stopping at
    the first match:
@@ -274,9 +279,6 @@ For each agent in the approved plan:
    task. When the model changed, [replace](#replacing-an-agent) the agent.
 5. Record the schedule, `model` and `promptVersion` in `deployed.json`.
 
-An old session (`OLD session – <title>`, not archived) whose new session
-already has an `ok` heartbeat is archived in the default mode too.
-
 ### Replacing an agent
 
 A scheduled task cannot be rebound to another session, so `reinstall` and a
@@ -289,10 +291,12 @@ model change replace both:
 3. delete the old scheduled task with `delete_trigger`;
 4. rename the old session `OLD session – <title>` with `set_session_title`
    and remove its `taxiway-agent:<id>` tag, so lookups find only the new one;
-5. archive the old session with `archive_session` only after the new session's
-   first `ok` heartbeat: a `status/<id>.json` with `result` `ok`, dated after
-   the new session's creation. Until then it stays, and [Check](#check)
-   reports it.
+5. archive the old session with `archive_session` once it is ready: an `ok`
+   `status/<id>.json` dated after the old scheduled task was deleted (step 3),
+   or after the real test run of [Verification](#verification) started. The
+   Install run that sees that heartbeat archives it, otherwise the next
+   `/install-agents` run does, listed in that run's plan; until then
+   [Check](#check) reports it.
 
 The new scheduled task's run history starts empty.
 
@@ -302,17 +306,27 @@ After the steps, for each new or changed agent:
 
 1. a new session's setup is verified: both clones, the tools, and the
    `add_repo` call approved by the maintainer in that session;
-2. one test run: send the [bootstrap prompt](#every-run) directly to the
-   agent's session (`send_message`). Do not fire its scheduled task for this:
-   a fired scheduled task may not reach a standing session. The test run is a
-   real run, at the agent's declared autonomy;
-3. its heartbeat: a new `status/<id>.json`, valid and dated after the test
-   run started; an `ok` one archives the old session of a
-   [replacement](#replacing-an-agent).
+2. a dry run, as the [approvals](../taxiway-workflow/SKILL.md#approvals)
+   require before an agent's first GitHub write: the
+   [bootstrap prompt](#every-run) followed by `Dry run: write nothing; report
+   what you would write.`, sent to the agent's session with `send_message`;
+   show its report to the maintainer;
+3. after the maintainer's OK on that report, the real test run: fire the new
+   scheduled task (`fire_trigger`), which tests its prompt and its binding. If
+   no new turn appears in the session within about 10 minutes, send the
+   bootstrap prompt with `send_message` and report that the fire did not reach
+   the session; this has been observed with a standing session. A
+   `send_message` run is peer-initiated: the agent may ask the maintainer's OK
+   in its session before writing;
+4. its heartbeat: a new `status/<id>.json`, valid and dated after the real
+   test run started. One that has not arrived when the run ends is reported as
+   pending; [Check](#check) picks it up. An `ok` one makes the old session of a
+   [replacement](#replacing-an-agent) ready to archive.
 
 End with one table, one row per agent: the mode and what was done, the
-session, the scheduled task, the test heartbeat's result, and what remains
-for the maintainer (setup approval, old session to archive, machine setup).
+session, the scheduled task, the dry run, the test heartbeat's result or
+pending, and what remains for the maintainer (setup approval, old session to
+archive, machine setup).
 
 ## Check
 
@@ -334,9 +348,10 @@ when it has more than one session or scheduled task, then report:
 - a session or scheduled task whose name is not the declared `title`;
 - a `promptVersion` behind `main`, which shows the run read older
   instructions;
-- an old session still waiting for archive (`OLD session – <title>`, not
-  archived), and whether its new session has had its first `ok` heartbeat,
-  after which Install archives it.
+- an old session (`OLD session – <title>`, not archived): `old session ready
+  to archive: run /install-agents` once it is
+  [ready](#replacing-an-agent), otherwise waiting for the new session's `ok`
+  heartbeat.
 
 A check writes nothing. Repairs go through [Install](#install).
 
