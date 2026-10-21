@@ -90,6 +90,8 @@ expect_fail() { # message-pattern command...
 }
 origin_head() { git --git-dir="$origin" rev-parse main; }
 # Portable in-place edits: BSD sed (macOS) lacks GNU in-place and insert syntax.
+# The rewritten file gets default permissions: fine for the non-executable
+# Python and JSON files edited here, not for scripts.
 prepend_line() { # line file
   { printf '%s\n' "$1"; cat "$2"; } > "$2.new" && mv "$2.new" "$2"
 }
