@@ -7,7 +7,7 @@ description: Use when preparing, qualifying, cutting or resuming a Taxiway relea
 
 Read [`AGENTS.md`](../../../AGENTS.md) and the
 [release recipe](../../../docs/contributing/release-qualification.md); durable
-E2E assertions follow the [E2E scenario rule](../../../AGENTS.md#e2e-scenarios).
+E2E assertions follow the [E2E scenario rule](../taxiway-testing/SKILL.md#e2e-scenarios).
 The recipe owns checks, evidence and phase-specific commands. Use the same
 source in Codex and Claude Code; no client-specific workflow engine is needed.
 

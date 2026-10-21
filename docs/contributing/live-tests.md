@@ -6,7 +6,10 @@ a person would manually. Choose bounded actions and observable
 results for that task; keep temporary scripts, logs and sanitized reports outside
 Git. `tests/live/` provides reusable tooling, not a feature regression suite.
 Orchestrator lifecycle nonregression assertions follow the
-[E2E scenario rule](https://github.com/taxiway-sh/taxiway/blob/main/AGENTS.md#e2e-scenarios); see [Testing](testing.md). Real model calls are explicitly opt-in and consume the
+[E2E scenario rule](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-testing/SKILL.md#e2e-scenarios); choosing Docker or Lima and
+what a cloud session cannot validate follow the
+[`taxiway-testing` skill](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-testing/SKILL.md#live-validation-docker-or-lima).
+This page owns the commands; see also [Testing](testing.md). Real model calls are explicitly opt-in and consume the
 account's subscription allowance. Account-free E2Es do not prove real-account
 model access, inference or delegation.
 
@@ -258,8 +261,8 @@ delegation, or a particular model. Inspect actual effects and traces using the
 ## Lima driver and recording recipes
 
 The automated lifecycle E2E scenarios use Docker. Lima validation is a task-specific
-manual check by an agent, selected here through the existing
-[workflow skill](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-workflow/SKILL.md).
+manual check by an agent, chosen as the
+[`taxiway-testing` skill](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-testing/SKILL.md#live-validation-docker-or-lima) says.
 These recipes preserve the useful observations of the former native scripts;
 they are not a committed executable suite. Docker results do not qualify Lima.
 Choose only the observations relevant to your feature, and report which actually
@@ -428,8 +431,9 @@ test "$(cat /lab/work/live-fixture)" = fixture && printf RESTART_OK
 Add the assertions that establish your feature's behavior: inspect a resulting
 file for an edit, client tool events for tool execution, child session metadata
 for delegation, and gateway/Langfuse generations for actual model calls.
-Reuse existing E2Es for durable regression assertions; real-account observations
-remain task-specific live evidence.
+Durable regression assertions go where the
+[E2E scenario rule](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-testing/SKILL.md#e2e-scenarios) says; real-account
+observations remain task-specific live evidence.
 
 `guest` captures shell stdout, so never print or persist credential-bearing
 output in a scenario. Keep requests small and timeouts explicit. Tests run

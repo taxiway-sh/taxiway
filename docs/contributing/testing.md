@@ -3,7 +3,9 @@
 Taxiway's E2Es prevent regressions in the lifecycle of each orchestrator on
 Docker. Live validation lets an agent simply test the feature it is developing
 on Docker or Lima, chosen according to the feature. Unit, shell and site tests
-cover their respective contracts. Choose the checks that match your change.
+cover their respective contracts. The
+[`taxiway-testing` skill](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-testing/SKILL.md) says which checks a change needs; this page
+owns the commands.
 
 To verify a published release across platforms and drivers, see
 [Installation qualification](installation-qualification.md).
@@ -25,8 +27,9 @@ Unit and shell tests provide quick feedback during development. End-to-end
 tests cover what happens when an orchestrator is provisioned and operated
 inside a lab.
 
-The [E2E scenario rule](https://github.com/taxiway-sh/taxiway/blob/main/AGENTS.md#e2e-scenarios) says where durable
-E2E assertions go. This page owns how they are written and run.
+The [E2E scenario rule](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-testing/SKILL.md#e2e-scenarios) says where durable
+E2E assertions go and which scenarios to run. This page owns how they are
+written and run.
 
 ### Writing E2E scenarios
 
@@ -111,12 +114,9 @@ LAB_NO_DOCKER=1 make test-e2e-only
 
 A skipped test is not evidence that the lifecycle works.
 
-To meet the merge criterion of the [E2E scenario rule](https://github.com/taxiway-sh/taxiway/blob/main/AGENTS.md#e2e-scenarios), run the
-affected scenarios on the proposed code. For an agent change shared by several
-orchestrators, cover each consuming orchestrator. Use `up`, `prepare-run`, and
-`phase-by-phase` when all three paths are affected. Core CI does not run them:
-the GitHub E2E workflow runs on a schedule or manual dispatch. Report a skipped
-or blocked run and resolve it before claiming E2E validation.
+The GitHub E2E workflow runs on a schedule or manual dispatch, not on pull
+requests; the [E2E scenario rule](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-testing/SKILL.md#e2e-scenarios) says which
+scenarios a change must run before merging.
 
 ### Task-specific live validation
 
@@ -236,25 +236,8 @@ or `phase-by-phase` step, then rerun that scope locally.
 
 ## Adding or updating tests
 
-Test product behavior directly; do not add a separate test layer for test
-assertions. Unit/component contracts keep their own tests. When a feature
-changes what a lab receives or does, its assertions go where the
-[E2E scenario rule](https://github.com/taxiway-sh/taxiway/blob/main/AGENTS.md#e2e-scenarios)
-says. A process being alive, a successful CLI exit, or a gateway health check
-does not prove model selection, configuration propagation, or the effect of an agent action. Assert observable
-configuration or results inside the lab; include restart/handoff paths when the
-behavior must survive session renewal. Keep expected values independent of the
-production code that selects or renders them. Perform task-specific live validation
-when the behavior requires real provider requests, without replacing the
-credential-free E2E assertions or committing a feature-specific live suite.
-
-| Change | Where to add coverage |
-|---|---|
-| Go behavior or driver command | Nearest `_test.go` file, with no build tag; verify with `make test-unit` |
-| Shell behavior | A `test_*.sh` file under `tests/scripts/`; verify with `make test-scripts` |
-| Orchestrator lifecycle or gateway protocol | Follow the [E2E scenario rule](https://github.com/taxiway-sh/taxiway/blob/main/AGENTS.md#e2e-scenarios); run the affected existing targets |
-| Real-account agent or feature behavior | Temporary manual check outside Git using `taxiway_live.py`; run explicitly in a dev/e2e context |
-| Documentation page or site navigation | Existing tests under `site/src/`; run site tests and build |
+The [`taxiway-testing` skill](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-testing/SKILL.md#change--checks) maps each kind of
+change to its checks and says where its assertions go.
 
 The existing Go E2E files start with the following directive and a blank line:
 
@@ -263,8 +246,7 @@ The existing Go E2E files start with the following directive and a blank line:
 
 ```
 
-Extend the current steps of the existing scenario functions. Local Docker
-availability checks may use `requireDockerOrSkip(t)`.
+Local Docker availability checks may use `requireDockerOrSkip(t)`.
 
 When adding documentation pages, test routes, links, and navigation rather
 than asserting a fixed total page count.
