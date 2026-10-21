@@ -21,9 +21,8 @@ dated that UTC day; otherwise it does the [full check](#full-check).
    the commits since the last green run), a test or fixture, the CI
    infrastructure, or an upstream dependency
    ([`taxiway-upstream`](../skills/taxiway-upstream/SKILL.md)). Map a failing
-   scenario or check to its owner with `taxiway-testing`, or
-   [Testing](../../docs/contributing/testing.md) while that skill is not on
-   `main`. A red `model-catalog-update.yml` run with an open draft PR belongs
+   scenario or check to its owner with
+   [`taxiway-testing`](../skills/taxiway-testing/SKILL.md). A red `model-catalog-update.yml` run with an open draft PR belongs
    to the model catalog agent: report it in one line without diagnosing it.
 3. **Deduplicate** each failure against open issues, and issues closed in the
    past 30 days, by workflow, job, test name and error signature. When an

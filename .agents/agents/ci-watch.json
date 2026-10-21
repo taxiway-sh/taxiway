@@ -8,7 +8,7 @@
     "taxiway-sh/agents": "write"
   },
   "workdir": "taxiway",
-  "skills": ["taxiway-intake", "taxiway-upstream", "taxiway-security"],
+  "skills": ["taxiway-testing", "taxiway-intake", "taxiway-upstream", "taxiway-security"],
   "outputs": ["report", "status/ci-watch.json"],
   "autonomy": {
     "comment-issue": "ask",

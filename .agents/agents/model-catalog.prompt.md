@@ -17,9 +17,9 @@ to green, or report why not.
    created for this run, so the `taxiway` clone stays on `main`:
    `git fetch origin automation/model-catalog`, then
    `git worktree add --detach <path> origin/automation/model-catalog`. Run the
-   checks the fix needs (`taxiway-testing`, or
-   [Testing](../../docs/contributing/testing.md) while that skill is not on
-   `main`), then propose the push (`push-pr-branch`) with the diff and the
+   checks the fix needs
+   ([`taxiway-testing`](../skills/taxiway-testing/SKILL.md#change--checks)),
+   then propose the push (`push-pr-branch`) with the diff and the
    results. After the maintainer's OK, push with
    `git push origin HEAD:automation/model-catalog`, never with force. When
    git refuses the push because the branch moved, fetch it, redo the fix and

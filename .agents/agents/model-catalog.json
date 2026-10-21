@@ -8,7 +8,7 @@
     "taxiway-sh/agents": "write"
   },
   "workdir": "taxiway",
-  "skills": ["taxiway-upstream", "taxiway-intake", "taxiway-security"],
+  "skills": ["taxiway-testing", "taxiway-upstream", "taxiway-intake", "taxiway-security"],
   "outputs": ["report", "status/model-catalog.json"],
   "autonomy": {
     "push-pr-branch": "ask",
