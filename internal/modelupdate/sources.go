@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -62,32 +63,89 @@ var ReferenceURLs = map[string]string{
 // chatRetirementForm is one known wording of a ChatGPT subscription retirement
 // notice. A section must state exactly one notice in exactly one known form,
 // with that form's own OpenAI API exclusion; anything else needs manual review.
-// Both patterns run on a section body whose whitespace is collapsed.
+// A notice must open a paragraph, so no qualifier ("Proposed:", "Tentative.")
+// can precede it. Patterns run on one paragraph with its whitespace collapsed;
+// scoped runs on that paragraph when scopeInParagraph is set, otherwise on the
+// whole section body.
 type chatRetirementForm struct {
-	notice, scoped *regexp.Regexp
+	notice, scoped   *regexp.Regexp
+	scopeInParagraph bool
 }
-
-// A notice starts a sentence, so a qualifier in front of it never goes unseen.
-const sentenceStart = `(?:^|[.!?:] )`
 
 // The effective form's API exclusion must be the sentence right after it, so
 // a qualified or unrelated exclusion never lends it a scope.
-const chatEffectiveNotice = sentenceStart + `Effective ([A-Z][a-z]+ [0-9]{1,2}, [0-9]{4})(?:, at (?:noon|midnight|[0-9]{1,2}(?::[0-9]{2})?(?: ?[AaPp]M)?) [A-Z]{2,4}(?: \([0-9]{1,2}:[0-9]{2} UTC\))?)?, ((?i:GPT)-[A-Za-z0-9. -]+?) retires from Codex for users signed in with ChatGPT\.`
+const chatEffectiveNotice = `^Effective (?P<date>[A-Z][a-z]+ [0-9]{1,2}, [0-9]{4})(?:, at (?P<clock>noon|midnight|(?:1[0-2]|[1-9])(?::[0-5][0-9])? ?[AaPp]M) (?P<zone>P[DS]?T|E[DS]?T|C[DS]?T|M[DS]?T|UTC|GMT)(?: \((?P<utc>(?:[01]?[0-9]|2[0-3]):[0-5][0-9]) UTC\))?)?, (?P<model>(?i:GPT)-[A-Za-z0-9. -]+?) retires from Codex for users signed in with ChatGPT\.`
 
 // Both forms retire the model from Codex signed in with ChatGPT, which is the
 // `chatgpt` route, and explicitly leave the OpenAI API out of scope.
 var chatRetirementForms = []chatRetirementForm{
 	{
-		regexp.MustCompile(sentenceStart + `On ([A-Z][a-z]+ [0-9]{1,2}, [0-9]{4}), ((?i:GPT)-[A-Za-z0-9. -]+?) will retire from ChatGPT, ChatGPT Work, and Codex`),
-		regexp.MustCompile(`retirement does not apply to the OpenAI API`),
+		notice: regexp.MustCompile(`^On (?P<date>[A-Z][a-z]+ [0-9]{1,2}, [0-9]{4}), (?P<model>(?i:GPT)-[A-Za-z0-9. -]+?) will retire from ChatGPT, ChatGPT Work, and Codex`),
+		scoped: regexp.MustCompile(`retirement does not apply to the OpenAI API`),
 	},
 	{
-		regexp.MustCompile(chatEffectiveNotice),
-		regexp.MustCompile(chatEffectiveNotice + ` The OpenAI API and Codex sessions authenticated with an API key (?:aren't|aren’t|are not) affected\.`),
+		notice:           regexp.MustCompile(chatEffectiveNotice),
+		scoped:           regexp.MustCompile(chatEffectiveNotice + ` The OpenAI API and Codex sessions authenticated with an API key (?:aren't|aren’t|are not) affected\.`),
+		scopeInParagraph: true,
 	},
 }
 
-var chatRetirementAnnouncement = regexp.MustCompile(`(?i)\b(?:will retire|will be retired|retire[sd]? (?:from|on)|retiring|retirement of)\b`)
+// Hours behind UTC for each zone a notice may name.
+var chatZoneOffsets = map[string][]int{
+	"UTC": {0}, "GMT": {0},
+	"EDT": {4}, "EST": {5}, "ET": {4, 5},
+	"CDT": {5}, "CST": {6}, "CT": {5, 6},
+	"MDT": {6}, "MST": {7}, "MT": {6, 7},
+	"PDT": {7}, "PST": {8}, "PT": {7, 8},
+}
+
+// chatSameUTCDay fails when a notice's time of day is not the recorded date in
+// UTC, or when its UTC conversion disagrees with its zone.
+func chatSameUTCDay(clock, zone, utc string) error {
+	hour, minute := 0, 0
+	switch c := strings.ToUpper(strings.ReplaceAll(clock, " ", "")); c {
+	case "NOON":
+		hour = 12
+	case "MIDNIGHT":
+	default:
+		if _, err := fmt.Sscanf(strings.TrimRight(c, "APM"), "%d:%d", &hour, &minute); err != nil {
+			minute = 0
+			if _, err = fmt.Sscanf(strings.TrimRight(c, "APM"), "%d", &hour); err != nil {
+				return fmt.Errorf("chatgpt: ambiguous retirement time %q", clock)
+			}
+		}
+		hour %= 12
+		if strings.HasSuffix(c, "PM") {
+			hour += 12
+		}
+	}
+	offsets := chatZoneOffsets[zone]
+	if utc != "" {
+		var utcHour, utcMinute int
+		if _, err := fmt.Sscanf(utc, "%d:%d", &utcHour, &utcMinute); err != nil {
+			return fmt.Errorf("chatgpt: ambiguous retirement time %q", utc)
+		}
+		offset := (utcHour - hour + 24) % 24
+		if utcMinute != minute || !slices.Contains(offsets, offset) {
+			return fmt.Errorf("chatgpt: retirement time %s %s does not match %s UTC", clock, zone, utc)
+		}
+		offsets = []int{offset}
+	}
+	for _, offset := range offsets {
+		if hour+offset >= 24 {
+			return fmt.Errorf("chatgpt: retirement time %s %s falls on another UTC date", clock, zone)
+		}
+	}
+	return nil
+}
+
+var chatRetirementAnnouncement = regexp.MustCompile(`(?i)\b(?:will retire|will be retired|retire[sd]? (?:from|on)|retiring|retirement of|deprecat\w*|sunset\w*|will be removed|no longer available)\b`)
+
+// chatEffectiveTrigger finds near-miss effective notices that no known form
+// reads, under any heading, so they fail closed instead of being skipped.
+var chatEffectiveTrigger = regexp.MustCompile(`(?i)\beffective\b.{0,200}?\bretire`)
+var chatParagraphBreak = regexp.MustCompile(`\n[ \t]*\n`)
+var chatTypography = strings.NewReplacer(" ", " ", "‑", "-")
 var whitespace = regexp.MustCompile(`\s+`)
 var chatVersionID = regexp.MustCompile(`^gpt-[0-9.]+$`)
 
@@ -291,37 +349,59 @@ func Discover(s Sources) (Discovery, error) {
 		// Historical summaries and links are not primary announcements.
 		// A retirement heading, a future announcement or a notice in a known
 		// form always requires parsing.
-		heading, body, _ := strings.Cut(section, "\n")
+		heading, body, _ := strings.Cut(chatTypography.Replace(section), "\n")
 		// Markdown wraps sentences at arbitrary points.
-		text := strings.TrimSpace(whitespace.ReplaceAllString(body, " "))
+		collapse := func(s string) string { return strings.TrimSpace(whitespace.ReplaceAllString(s, " ")) }
+		text := collapse(body)
 		var match []string
 		var form chatRetirementForm
+		var paragraph string
 		notices := 0
-		for _, f := range chatRetirementForms {
-			for _, m := range f.notice.FindAllStringSubmatch(text, -1) {
-				notices++
-				match, form = m, f
+		for _, p := range chatParagraphBreak.Split(body, -1) {
+			p = collapse(p)
+			for _, f := range chatRetirementForms {
+				if m := f.notice.FindStringSubmatch(p); m != nil {
+					notices++
+					match, form, paragraph = m, f, p
+				}
 			}
 		}
-		lower := strings.ToLower(heading + " " + text)
-		if notices == 0 && !strings.Contains(strings.ToLower(heading), "retirement") && !strings.Contains(lower, "will retire") && !strings.Contains(lower, "will be retired") {
+		all := heading + " " + text
+		lower := strings.ToLower(all)
+		if notices == 0 && !strings.Contains(strings.ToLower(heading), "retirement") && !strings.Contains(lower, "will retire") && !strings.Contains(lower, "will be retired") && !chatEffectiveTrigger.MatchString(all) {
 			continue
 		}
-		if notices != 1 || len(chatRetirementAnnouncement.FindAllString(heading+" "+text, -1)) != 1 {
+		if notices != 1 || len(chatRetirementAnnouncement.FindAllString(all, -1)) != 1 {
 			return d, fmt.Errorf("chatgpt: unrecognized retirement notice; manual source review required")
 		}
-		if !form.scoped.MatchString(text) {
+		scope := text
+		if form.scopeInParagraph {
+			scope = paragraph
+		}
+		if !form.scoped.MatchString(scope) {
 			return d, fmt.Errorf("ChatGPT retirement API scope unclear")
 		}
-		dt, e := date(match[1])
+		group := func(name string) string {
+			if i := form.notice.SubexpIndex(name); i >= 0 {
+				return match[i]
+			}
+			return ""
+		}
+		dt, e := date(group("date"))
 		if e != nil {
 			return d, e
 		}
-		id := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(match[2])), " ", "-")
+		if clock := group("clock"); clock != "" {
+			if e = chatSameUTCDay(clock, group("zone"), group("utc")); e != nil {
+				return d, e
+			}
+		}
+		model := group("model")
+		id := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(model)), " ", "-")
 		// Plain historical version IDs are unambiguous. Suffix names must resolve
 		// to an exact public Codex slug; no fuzzy family matching.
 		if !chatVersionID.MatchString(id) && !seen[id] {
-			return d, fmt.Errorf("chatgpt: ambiguous retirement model %q", match[2])
+			return d, fmt.Errorf("chatgpt: ambiguous retirement model %q", model)
 		}
 		if old, ok := d.Retirements[id]; ok && old.Date != dt {
 			return d, fmt.Errorf("conflicting retirement dates for %s", id)

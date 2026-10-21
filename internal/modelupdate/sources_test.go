@@ -164,6 +164,64 @@ func TestDiscoverParsesEffectiveNoticeUnderAnyHeading(t *testing.T) {
 	}
 }
 
+func TestDiscoverRejectsNearMissEffectiveNoticeUnderAnyHeading(t *testing.T) {
+	const rest = " retires from Codex for users signed in with ChatGPT. The OpenAI API and Codex sessions authenticated with an API key aren't affected.\n"
+	for _, test := range []struct{ name, section string }{
+		{"a.m. time", "## Codex updates\nEffective October 14, 2026, at 10 a.m. PT, GPT-5.5" + rest},
+		{"no comma before time", "## Codex updates\nEffective October 14, 2026 at noon PT, GPT-5.5" + rest},
+		{"tentatively", "## Codex updates\nEffective October 14, 2026, tentatively, GPT-5.5" + rest},
+		{"at the earliest", "## Codex updates\nEffective October 14, 2026, at the earliest, GPT-5.5" + rest},
+		{"lowercase", "## Codex updates\neffective October 14, 2026, GPT-5.5" + rest},
+		{"heading only", "## Effective October 14, 2026, GPT-5.5 retires from Codex for users signed in with ChatGPT\n"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			s := fixtureSources()
+			s.ChatGPT = []byte("# Models\n" + test.section + "\nReplace `gpt-5.5`\nchoose `gpt-6-sol` when available.\n")
+			_, err := Discover(s)
+			if err == nil || !strings.Contains(err.Error(), "unrecognized retirement notice") {
+				t.Fatalf("error = %v, want unrecognized retirement notice", err)
+			}
+		})
+	}
+}
+
+func TestDiscoverReadsEffectiveNoticeTypographyAndTimes(t *testing.T) {
+	const exclusion = " The OpenAI API and Codex sessions authenticated with an API key aren't affected.\n"
+	for _, test := range []struct{ name, notice string }{
+		{"non-breaking space in date", "Effective October 14, 2026, GPT-5.5 retires from Codex for users signed in with ChatGPT."},
+		{"non-breaking hyphen in model", "Effective October 14, 2026, GPT‑5.5 retires from Codex for users signed in with ChatGPT."},
+		{"morning time with conversion", "Effective October 14, 2026, at 9:30 AM EDT (13:30 UTC), GPT-5.5 retires from Codex for users signed in with ChatGPT."},
+		{"midnight", "Effective October 14, 2026, at midnight PT, GPT-5.5 retires from Codex for users signed in with ChatGPT."},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			s := fixtureSources()
+			s.ChatGPT = []byte("# Models\n## Codex updates\n" + test.notice + exclusion + "\nReplace `gpt-5.5`\nchoose `gpt-6-sol` when available.\n")
+			d, err := Discover(s)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := d.Retirements["gpt-5.5"]; got.Date != "2026-10-14" || got.Scope != "subscription" {
+				t.Fatalf("gpt-5.5 retirement = %#v", got)
+			}
+		})
+	}
+}
+
+func TestDiscoverSkipsDeprecatedModelsSummary(t *testing.T) {
+	s := fixtureSources()
+	s.ChatGPT = []byte("# Models\n## Recommended models\nChoose `gpt-6-sol`.\n\n## Deprecated Codex models\n\nGPT-5.5 retires from Codex with ChatGPT sign-in on October 14, 2026, at noon\nPDT (19:00 UTC). Replace `gpt-5.5` with a model available to your account and\nclient. API-key sessions aren't affected. See\n[GPT-5.5 retirement](https://learn.chatgpt.com/docs/models#gpt-55-retirement) for plan-specific\nreplacements and the migration checklist.\n")
+	d, err := Discover(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := d.Retirements["gpt-5.5"]; ok {
+		t.Fatalf("summary treated as a notice: %#v", d.Retirements)
+	}
+	if len(d.Retirements) != 1 {
+		t.Fatalf("retirements = %#v", d.Retirements)
+	}
+}
+
 func TestDiscoverRejectsAmbiguousEffectiveRetirement(t *testing.T) {
 	const notice = "Effective October 14, 2026, at noon PDT (19:00 UTC), GPT-5.5 retires from Codex for users signed in with ChatGPT."
 	const exclusion = " The OpenAI API and Codex sessions authenticated with an API key aren't affected.\n"
@@ -183,6 +241,21 @@ func TestDiscoverRejectsAmbiguousEffectiveRetirement(t *testing.T) {
 		{"exclusion for another model", notice + " Replace `gpt-5.5`. For GPT-5.4: The OpenAI API and Codex sessions authenticated with an API key aren't affected.\n", "API scope unclear"},
 		{"second retiring model", notice + exclusion + "GPT-5.4 is retiring soon.\n", "unrecognized retirement notice"},
 		{"second retirement of", notice + exclusion + "The retirement of GPT-5.4 follows.\n", "unrecognized retirement notice"},
+		{"second deprecation", notice + exclusion + "GPT-5.4 is deprecated.\n", "unrecognized retirement notice"},
+		{"second sunset", notice + exclusion + "GPT-5.4 sunsets next.\n", "unrecognized retirement notice"},
+		{"second removal", notice + exclusion + "GPT-5.4 will be removed.\n", "unrecognized retirement notice"},
+		{"second unavailable", notice + exclusion + "GPT-5.4 is no longer available.\n", "unrecognized retirement notice"},
+		{"colon qualifier", "Unless postponed: " + notice + exclusion, "unrecognized retirement notice"},
+		{"proposed", "Proposed: " + notice + exclusion, "unrecognized retirement notice"},
+		{"question qualifier", "Still undecided? " + notice + exclusion, "unrecognized retirement notice"},
+		{"tentative", "Tentative. " + notice + exclusion, "unrecognized retirement notice"},
+		{"qualified announced form", "Update: On October 14, 2026, GPT-5.5 will retire from ChatGPT, ChatGPT Work, and Codex\nretirement does not apply to the OpenAI API.\n", "unrecognized retirement notice"},
+		{"hour without AM or PM", "Effective October 14, 2026, at 10 PDT, GPT-5.5 retires from Codex for users signed in with ChatGPT." + exclusion, "unrecognized retirement notice"},
+		{"invalid hour", "Effective October 14, 2026, at 13 PM PDT, GPT-5.5 retires from Codex for users signed in with ChatGPT." + exclusion, "unrecognized retirement notice"},
+		{"unknown zone", "Effective October 14, 2026, at noon XYZ, GPT-5.5 retires from Codex for users signed in with ChatGPT." + exclusion, "unrecognized retirement notice"},
+		{"next UTC day", "Effective October 14, 2026, at 11 PM PDT (06:00 UTC), GPT-5.5 retires from Codex for users signed in with ChatGPT." + exclusion, "another UTC date"},
+		{"next UTC day without conversion", "Effective October 14, 2026, at 11 PM PT, GPT-5.5 retires from Codex for users signed in with ChatGPT." + exclusion, "another UTC date"},
+		{"UTC conversion mismatch", "Effective October 14, 2026, at noon PDT (20:00 UTC), GPT-5.5 retires from Codex for users signed in with ChatGPT." + exclusion, "does not match"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			s := fixtureSources()
