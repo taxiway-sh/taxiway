@@ -201,13 +201,11 @@ cd /lab/work/gc && gc resume
 `gc suspend` records the city as suspended in
 `/lab/work/gc/.gc/runtime/suspension-state.json`: the supervisor drains the
 running agent sessions and starts no new ones until `gc resume`. The state
-stays in the city. The start phase waits for active agent sessions, so any
-command that runs it on a suspended city times out: `taxiway start`, and
-`taxiway up` or `taxiway run` when they rerun that phase (on a stopped lab,
-after a settings or profile change, or with `--force`, which keeps the city).
-Run `gc resume` first. Within a lab, only `taxiway start --force` and
-`taxiway reset` delete the city and its suspension state; `taxiway rm` removes
-the whole lab.
+stays in the city. The start phase waits for active agent sessions, so a
+command that restarts a suspended city without deleting it times out, such as
+`taxiway start`, or `taxiway up` on a stopped lab. Run `gc resume` first.
+Within a lab, only `taxiway start --force` and `taxiway reset` delete the city
+and its suspension state; `taxiway rm` removes the whole lab.
 
 ## Reset
 
