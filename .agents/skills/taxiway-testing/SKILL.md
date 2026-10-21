@@ -95,3 +95,10 @@ contract checked after `create`.
 - Update [Installation qualification](../../../docs/contributing/installation-qualification.md)
   when the scenario or runner coverage changes. Running the workflow is a
   GitHub action under the [approvals](../taxiway-workflow/SKILL.md#approvals).
+
+## Cloud sessions
+
+Before running Docker, E2E or Go tests in a cloud container, read
+[`references/cloud-environment.md`](references/cloud-environment.md): the
+Docker daemon, the root user, the network proxy and GitHub API access differ
+from a workstation, and ignoring them invalidates runs.

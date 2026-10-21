@@ -116,7 +116,9 @@ A skipped test is not evidence that the lifecycle works.
 
 The GitHub E2E workflow runs on a schedule or manual dispatch, not on pull
 requests; the [E2E scenario rule](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-testing/SKILL.md#e2e-scenarios) says which
-scenarios a change must run before merging.
+scenarios a change must run before merging. In a cloud session, read its
+[environment notes](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-testing/references/cloud-environment.md)
+first.
 
 ### Task-specific live validation
 
