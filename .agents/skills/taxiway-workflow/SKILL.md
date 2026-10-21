@@ -30,15 +30,16 @@ without an actual artifact, process or result.
 - **Backlog:** follow [`taxiway-triage`](../taxiway-triage/SKILL.md); the user
   selects the work.
 
-Several sessions, cloud or local, may work on Taxiway at once, scheduled
-agents included, and none sees another's worktrees or processes: the state of
-work is on GitHub (issues, branches, PRs, checks), and that of scheduled agents
-in the [state repository](../taxiway-agents/SKILL.md#state-repository).
+Several sessions, cloud or local, may work on Taxiway at once, scheduled agents
+included, and none sees another's worktrees or processes: the state of work is
+on GitHub (issues, branches, PRs, checks), and that of scheduled agents in the
+[state repository](../taxiway-agents/SKILL.md#state-repository).
 [Selection](../taxiway-issue/SKILL.md#1-selection) says how a session checks
 and shows that a subject is taken. The coordinator session is the maintainer's
 entry point for status, decisions and priorities: it delegates work to
 subagents or dedicated sessions and reads that state rather than relying on
-memory; decisions follow [Resume](#pause-resume-and-finish).
+memory; decisions not recorded there come from the prior conversation or a
+local handoff, as [Resume](#pause-resume-and-finish) says.
 
 ## Approvals
 
@@ -167,10 +168,9 @@ actionable request per blocker, and never invent percentages or finish dates.
   subagents and child sessions whose mission has ended and list any still
   running. List each subject's remaining work and pending decisions, the
   branches and PRs it leaves open, any still-running tests with their owners,
-  and the resume action. The final
-  report links issues and PRs, states delivered behavior, actual checks and
-  remaining limits, and distinguishes code-ready, independently reviewed,
-  PR-open, merged and cleaned-up states.
+  and the resume action. The final report links issues and PRs, states
+  delivered behavior, actual checks and remaining limits, and distinguishes
+  code-ready, independently reviewed, PR-open, merged and cleaned-up states.
 - **Frictions observed and rules to record:** end by running
   [`taxiway-learn`](../taxiway-learn/SKILL.md) on the session and presenting
   its candidates the way it says. Its list includes the frictions observed,
