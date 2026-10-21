@@ -1,9 +1,8 @@
 # Gas City
 
-The `gascity` adapter provisions [Gas City](https://gascity.com)
-([gastownhall/gascity](https://github.com/gastownhall/gascity)), the
-orchestration toolkit that runs Gas Town-style agent cities, with a workspace
-shell. The adapter provisions Claude Code as the agent CLI inside the lab.
+The `gascity` adapter provisions
+[Gas City](https://github.com/gastownhall/gascity), the orchestration toolkit
+that runs Gas Town-style agent cities, with a workspace shell. The adapter provisions Claude Code as the agent CLI inside the lab.
 
 ## Quick Start
 

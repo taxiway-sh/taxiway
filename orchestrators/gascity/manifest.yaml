@@ -1,6 +1,6 @@
 name: gascity
 description: Gas City city, rig and workspace shell
-docs_url: https://gascity.com
+docs_url: https://github.com/gastownhall/gascity
 agents:
   - claude-code
 settings:

@@ -1,6 +1,6 @@
 name: gastown
 description: Gas Town HQ + workspace shell
-docs_url: https://gastownhall.ai
+docs_url: https://github.com/gastownhall/gastown
 agents:
   - claude-code
 settings:

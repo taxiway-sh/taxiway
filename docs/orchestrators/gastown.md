@@ -1,8 +1,8 @@
 # Gas Town
 
-The `gastown` adapter provisions [gastownhall/gastown](https://gastownhall.ai)
-with a workspace shell. The adapter provisions Claude Code as the agent CLI
-inside the lab.
+The `gastown` adapter provisions
+[Gas Town](https://github.com/gastownhall/gastown) with a workspace shell. The
+adapter provisions Claude Code as the agent CLI inside the lab.
 
 ## Quick Start
 

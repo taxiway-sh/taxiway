@@ -2193,7 +2193,7 @@ func TestShell_GastownDefaultBranch(t *testing.T) {
 	root, state, mock, stdout, stderr := buildUpTestRoot(t)
 
 	// Write the final gastown manifest.yaml (no shell: block).
-	manifestContent := "name: gastown\ndescription: Gas Town HQ + workspace shell\ndocs_url: https://gastownhall.ai\n"
+	manifestContent := "name: gastown\ndescription: Gas Town HQ + workspace shell\ndocs_url: https://github.com/gastownhall/gastown\n"
 	require.NoError(t, os.WriteFile(
 		filepath.Join(state.RepoDir, "orchestrators", "gastown", "manifest.yaml"),
 		[]byte(manifestContent), 0644,
