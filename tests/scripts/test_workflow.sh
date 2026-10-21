@@ -30,7 +30,7 @@ assert len(args) == 3, args
 prompt = args[-1]
 assert '.agents/skills/taxiway-workflow/SKILL.md' in prompt
 assert 'AGENTS.md' in prompt
-assert '3 agents' in prompt and '1 heavy' in prompt
+assert 'at most 3 agents' in prompt and '1 heavy' in prompt
 assert 'seconds' not in prompt, prompt
 assert 'new need or problem' in prompt and 'backlog' in prompt
 PY
@@ -40,6 +40,8 @@ python3 - "$test_dir/args" <<'PY'
 import pathlib, sys
 args = pathlib.Path(sys.argv[1]).read_bytes().decode().split('\0')[:-1]
 assert args[0] == '--print' and len(args) == 2, args
+assert 'measured host capacity' in args[1], args[1]
+assert 'agents including' not in args[1], args[1]
 PY
 set +e
 WORKFLOW_EXIT=37 bash "$launcher" claude

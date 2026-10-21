@@ -108,7 +108,8 @@ Claude Code, or explicitly ask it to read the canonical skill. That explicit
 read also works if client skill discovery or Claude's `agents-md` plugin is
 unavailable.
 
-Set the `--max-agents` and `--max-heavy-tests` capacity hints if needed:
+By default the session sizes agent concurrency to measured host capacity. Use
+`--max-agents` to cap it and `--max-heavy-tests` to limit concurrent Docker/Lima runs:
 
 ```bash
 bash scripts/contribution-workflow.sh codex --max-agents 3 --max-heavy-tests 1
