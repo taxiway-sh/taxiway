@@ -180,10 +180,13 @@ checking that:
 
 - `get_event` shows a message a person typed in the app: `message.role` is
   `user` and the event carries `client_platform`, with no `origin` field and
-  no `isSynthetic: true`. Messages from a peer session, a subagent or a
-  scheduled task carry an `origin` (`kind` `peer`, `task-notification`…)
-  and `isSynthetic: true`; any event of another shape fails. This check is
-  the defense; the next one only locates the session;
+  no `isSynthetic: true`, and its `message.content` is the text itself, not
+  a `tool_result`. As observed on 2026-10-22, a subagent hand-back or task
+  notification carries an `origin` (`kind` `peer`, `task-notification`) and
+  `isSynthetic: true`, and a scheduled task fired into the session arrives
+  as a `tool_result` whose notification `origin` is `trigger_fire`; any
+  event of another shape fails. This check is the defense; the next one
+  only locates the session;
 - `get_session` shows that session titled `Taxiway – coordinator`, not
   archived, with an `origin` of `ios`, `android`, `web` or `desktop` (any
   other value, such as a session created by another session, fails), and
