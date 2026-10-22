@@ -687,6 +687,31 @@ func TestBootstrap_CallsScript(t *testing.T) {
 	require.True(t, containsStr(mock.ExecLog, "bootstrap.sh"), "expected bootstrap.sh in ExecLog, got %v", mock.ExecLog)
 }
 
+func TestStart_PrintsShellAttachHintWithLabName(t *testing.T) {
+	root, state, _, stdout, stderr := buildAliasTestRoot(t)
+	// Lab name differs from the orchestrator so the hint must carry the
+	// lab name, not the orchestrator name (taxiway-sh/taxiway#75).
+	id := idName("example-lab")
+	require.NoError(t, state.Driver.Create(context.Background(), id, driver.CreateOptions{}))
+	require.NoError(t, state.Driver.WriteLabRef(context.Background(), id, config.LabRef{Lab: "example-lab", Orch: "gastown", Driver: "mock"}))
+
+	out, _, err := execAlias(t, root, stdout, stderr, "start", "example-lab")
+	require.NoError(t, err)
+	require.Contains(t, out, "Attach with: taxiway shell example-lab")
+	require.NotContains(t, out, "taxiway shell gastown")
+}
+
+func TestStart_DryRunOmitsShellAttachHint(t *testing.T) {
+	root, state, _, stdout, stderr := buildAliasTestRoot(t)
+	id := idName("dry-lab")
+	require.NoError(t, state.Driver.Create(context.Background(), id, driver.CreateOptions{}))
+	require.NoError(t, state.Driver.WriteLabRef(context.Background(), id, config.LabRef{Lab: "dry-lab", Orch: "gastown", Driver: "mock"}))
+
+	out, _, err := execAlias(t, root, stdout, stderr, "start", "dry-lab", "--dry-run")
+	require.NoError(t, err)
+	require.NotContains(t, out, "Attach with:")
+}
+
 func TestStart_CallsScript(t *testing.T) {
 	root, state, mock, stdout, stderr := buildAliasTestRoot(t)
 	createAliasLab(t, state, "gastown")
