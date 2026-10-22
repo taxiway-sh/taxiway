@@ -88,6 +88,13 @@ named so, or asks the maintainer to.
    `Taxiway – coordinator` that is not archived. Then ask the opening question
    unless the first message answered it.
 
+When the maintainer answers a scheduled agent's proposals in the coordinator
+session, the coordinator relays the answers as
+[Relayed answers](../taxiway-agents/SKILL.md#relayed-answers) says: one relay
+per agent for each maintainer message, with that message's `uuid`, to the
+session that [Install](../taxiway-agents/SKILL.md#steps) step 1
+finds, then confirms to the maintainer what it relayed.
+
 Untriaged issues wait for the [triage agent](../../agents/triage.prompt.md)
 unless the maintainer asks for their triage.
 

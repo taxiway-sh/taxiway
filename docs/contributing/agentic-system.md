@@ -211,7 +211,10 @@ is the same for every scheduled agent:
    the run reports the heartbeat as not pushed, with the reason, and pushes
    it no other way.
 4. **Report.** It ends with a short report in its session, where the
-   maintainer reads it and answers each proposal by its id.
+   maintainer reads it and answers each proposal by its id, there or in the
+   coordinator session, which
+   [relays](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-agents/SKILL.md#relayed-answers)
+   the answer.
 
 ## Autonomy
 
