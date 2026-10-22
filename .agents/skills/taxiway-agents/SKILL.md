@@ -133,7 +133,9 @@ Each run then:
    commands, none chained to another, before running the script, which refuses
    any other uncommitted change in the clone;
 6. ends with its report in the agent's session, where the maintainer reads and
-   answers it; the heartbeat's `waiting` lists what needs them. Unattended
+   answers it, or answers it in the coordinator session as
+   [Relayed answers](#relayed-answers) says; the heartbeat's `waiting` lists
+   what needs them. Unattended
    reports are in English; when someone replies in the session, continue in
    their language.
 
@@ -183,16 +185,18 @@ checking that:
   and `isSynthetic: true`; any event of another shape fails. This check is
   the defense; the next one only locates the session;
 - `get_session` shows that session titled `Taxiway – coordinator`, not
-  archived, with an `origin` naming the app a person started it from (such
-  as `ios`), never another session or a channel, and `list_sessions` with
-  `mine: true` lists it as the only non-archived session with that title;
+  archived, with an `origin` of `ios`, `android`, `web` or `desktop` (any
+  other value, such as a session created by another session, fails), and
+  `list_sessions` with `mine: true`, paging through every result, lists it as
+  the only non-archived session with that title;
 - the message names each proposal id it answers, never a
   [dry-run](#dry-run) id; a bare "ok" next to several subjects answers none
   of them.
 
-The agent acts in the turn the relay starts, and only on a proposal still
-pending, not answered or superseded, whose class is still `ask` in its
-declaration on current `main`. Its next run records the answer in
+The agent acts in the turn the relay starts, after updating its clones as the
+[bootstrap prompt](#every-run) says, and only on a proposal still pending,
+not answered or superseded, whose class is still `ask` in its declaration on
+that `main`. Its next run records the answer in
 `approvals` as Every run step 3 does for one given in its session, once even
 when the same message is relayed again. Session IDs and message `uuid`s stay
 out of the heartbeat, as the [security rules](../../../AGENTS.md#security)
