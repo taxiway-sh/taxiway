@@ -69,6 +69,7 @@ EOF
 [[ -f "$FAKE_LAB/installed-claude" ]] || exit 127
 case "${1:-}" in
   --version) echo "$(cat "$FAKE_LAB/installed-claude") (Claude Code)" ;;
+  auth) echo '{"loggedIn":true,"authMethod":"test","apiProvider":"test"}' ;;
   *) exit 0 ;;
 esac
 EOF

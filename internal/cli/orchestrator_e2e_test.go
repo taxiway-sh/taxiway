@@ -411,7 +411,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 
 	runE2EScriptDryRunStep(t, "taxiway:verify[--dry-run]", root, tb, state, stateDir, id, false, dryRunLabels.Verify, "verify", lab)
 	runE2EStep(t, "taxiway:verify", func(t *testing.T) {
-		runE2ECommand(t, root, tb, "verify", lab)
+		runE2EVerifyWithoutClaudeSession(t, root, tb, state, id, lab, orch, fakeUpstream)
 		runE2EAssert(t, "assert:phase-verified", func(t *testing.T) {
 			assertE2EPhase(t, stateDir, id, phases.PhaseVerify)
 		})
@@ -476,6 +476,11 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 	if orch != "codex" {
 		runE2EStep(t, "fixture:complete-native-onboarding", func(t *testing.T) {
 			configureE2ECompletedClaudeOnboarding(t, state, id, orch)
+		})
+		// Claude Code is now authenticated against the lab gateway, so a
+		// session started by verify would reach the fake upstream.
+		runE2EStep(t, e2eCommandStepAt("after-auth", "verify"), func(t *testing.T) {
+			runE2EVerifyWithoutClaudeSession(t, root, tb, state, id, lab, orch, fakeUpstream)
 		})
 	}
 
@@ -1332,6 +1337,40 @@ func runE2ECommand(t *testing.T, root *cobra.Command, tb *dockerTestBuf, args ..
 	out, errOut, err := execDockerRoot(t, root, tb, args...)
 	require.NoError(t, err, "taxiway %v failed\nstdout:\n%s\nstderr:\n%s", args, out, errOut)
 	return out
+}
+
+// runE2EVerifyWithoutClaudeSession runs verify and, for orchestrators that
+// verify Claude Code, asserts it only checked Claude Code: a session would
+// leave a transcript and send a model request through the lab gateway.
+func runE2EVerifyWithoutClaudeSession(t *testing.T, root *cobra.Command, tb *dockerTestBuf, state *RootState, id, lab, orch string, upstream *e2eModelUpstream) {
+	t.Helper()
+	if orch == "codex" {
+		runE2ECommand(t, root, tb, "verify", lab)
+		return
+	}
+	transcripts := e2eClaudeTranscripts(t, state, id)
+	modelRequests := upstream.modelRequestCount()
+	runE2ECommand(t, root, tb, "verify", lab)
+	runE2EAssert(t, "assert:verify-no-claude-transcript", func(t *testing.T) {
+		require.Equal(t, transcripts, e2eClaudeTranscripts(t, state, id), "verify must not start a Claude Code session")
+	})
+	runE2EAssert(t, "assert:verify-no-model-request", func(t *testing.T) {
+		require.Equal(t, modelRequests, upstream.modelRequestCount(), "verify must not send a model request through the lab gateway")
+	})
+}
+
+func e2eClaudeTranscripts(t *testing.T, state *RootState, id string) string {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	var stdout, stderr bytes.Buffer
+	result, err := state.Driver.Exec(ctx, id, driver.ExecRequest{
+		Argv:   []string{"bash", "-c", `if [ -d "$HOME/.claude/projects" ]; then find "$HOME/.claude/projects" -type f | sort; fi`},
+		Stdout: &stdout, Stderr: &stderr,
+	})
+	require.NoError(t, err, "list Claude transcripts: %s", stderr.String())
+	require.Zero(t, result.ExitCode, "list Claude transcripts: %s", stderr.String())
+	return stdout.String()
 }
 
 func e2eCommandStepAt(contextName, command string, args ...string) string {
@@ -3012,9 +3051,16 @@ type e2eProtocolRequest struct {
 }
 
 type e2eModelUpstream struct {
-	baseURL  string
-	mu       sync.Mutex
-	fixtures map[string]*e2eProtocolFixture
+	baseURL       string
+	mu            sync.Mutex
+	fixtures      map[string]*e2eProtocolFixture
+	modelRequests int
+}
+
+func (u *e2eModelUpstream) modelRequestCount() int {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return u.modelRequests
 }
 
 func startE2EFakeModelUpstream(t *testing.T) *e2eModelUpstream {
@@ -3034,6 +3080,9 @@ func startE2EFakeModelUpstream(t *testing.T) *e2eModelUpstream {
 			return
 		}
 		if r.Method == http.MethodPost && (r.URL.Path == "/v1/messages" || r.URL.Path == "/backend-api/codex/responses") {
+			fixtureUpstream.mu.Lock()
+			fixtureUpstream.modelRequests++
+			fixtureUpstream.mu.Unlock()
 			var payload struct {
 				Model  string `json:"model"`
 				Stream bool   `json:"stream"`
