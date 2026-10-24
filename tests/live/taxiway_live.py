@@ -109,7 +109,9 @@ def validate_context():
 
 
 def command(argv, *, data=None, timeout=300):
-    result = subprocess.run(argv, input=data, stdout=subprocess.PIPE,
+    result = subprocess.run(argv, input=data,
+                            stdin=subprocess.DEVNULL if data is None else None,
+                            stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, timeout=timeout)
     if result.returncode:
         # Never echo output or argv: either can contain credentials. Output is
