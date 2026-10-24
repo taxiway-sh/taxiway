@@ -346,12 +346,16 @@ func prepareLabLiteLLMSidecarFiles(state *RootState, labStateDir, authDir string
 	if err != nil {
 		return labLiteLLMSidecarFiles{}, err
 	}
+	models, err = labModelsWithAvailableAuth(state, ref, models, includeCodexModels)
+	if err != nil {
+		return labLiteLLMSidecarFiles{}, err
+	}
 	proxy, err := state.resolveProxyRuntime()
 	if err != nil {
 		return labLiteLLMSidecarFiles{}, err
 	}
 	if _, err := ensureLiteLLMConfig(state, labDir, includeCodexModels, enableCodexSessionMapper, models); err != nil {
-		return labLiteLLMSidecarFiles{}, err
+		return labLiteLLMSidecarFiles{}, fmt.Errorf("lab %q (orchestrator %q): %w", ref.Lab, ref.Orch, err)
 	}
 
 	langfuseEnv := ""
@@ -478,17 +482,9 @@ func resolveLabModels(state *RootState, ref config.LabRef) (modelcatalog.Catalog
 	if orchManifest == nil {
 		return catalog, models, nil
 	}
-	providers := map[string]bool{}
-	for _, agent := range orchManifest.Agents {
-		manifest, err := config.LoadAgentManifest(state.RepoDir, agent)
-		if err != nil {
-			return catalog, nil, err
-		}
-		if manifest != nil && manifest.LiteLLM != nil {
-			for _, provider := range manifest.LiteLLM.Providers {
-				providers[provider] = true
-			}
-		}
+	providers, err := orchestratorModelProviders(state, orchManifest)
+	if err != nil {
+		return catalog, nil, err
 	}
 	if len(providers) == 0 {
 		return catalog, models, nil
@@ -533,7 +529,101 @@ func resolveLabModels(state *RootState, ref config.LabRef) (modelcatalog.Catalog
 			add(model.Name)
 		}
 	}
+	if len(models) == 0 {
+		var excluded []string
+		for _, model := range catalog.Models {
+			reason := "not selected: provider " + model.Provider + " is not used by this orchestrator"
+			if providers[model.Provider] {
+				reason = model.StatusAt(modelNow())
+				if reason == "deprecated" {
+					reason += " (explicit selection required)"
+				}
+			}
+			excluded = append(excluded, model.Name+": "+reason)
+		}
+		return catalog, nil, labModelSelectionError(ref, providers, excluded)
+	}
 	return catalog, models, nil
+}
+
+func orchestratorModelProviders(state *RootState, manifest *config.OrchManifest) (map[string]bool, error) {
+	providers := map[string]bool{}
+	for _, agent := range manifestAgents(manifest) {
+		manifest, err := config.LoadAgentManifest(state.RepoDir, agent)
+		if err != nil {
+			return nil, err
+		}
+		if manifest != nil && manifest.LiteLLM != nil {
+			for _, provider := range manifest.LiteLLM.Providers {
+				providers[provider] = true
+			}
+		}
+	}
+	return providers, nil
+}
+
+func labModelSelectionError(ref config.LabRef, providers map[string]bool, excluded []string) error {
+	names := make([]string, 0, len(providers))
+	for provider := range providers {
+		names = append(names, provider)
+	}
+	sort.Strings(names)
+	return fmt.Errorf("lab %q (orchestrator %q, providers: %s): %w", ref.Lab, ref.Orch, strings.Join(names, ", "), noUsableLiteLLMModels(excluded))
+}
+
+// A generic renderer can describe an explicitly selected ChatGPT route before
+// credentials exist. A running lab must never expose that route without its
+// prepared authentication file.
+func labModelsWithAvailableAuth(state *RootState, ref config.LabRef, selected []string, includeChatGPT bool) ([]string, error) {
+	data, err := os.ReadFile(liteLLMModelsAssetPath(state))
+	if err != nil {
+		return nil, fmt.Errorf("reading LiteLLM model catalog: %w", err)
+	}
+	catalog, err := parseLiteLLMModelCatalog(data)
+	if err != nil {
+		return nil, err
+	}
+	manifest, err := config.LoadOrchManifest(state.RepoDir, ref.Orch)
+	if err != nil {
+		return nil, err
+	}
+	providers, err := orchestratorModelProviders(state, manifest)
+	if err != nil {
+		return nil, err
+	}
+	byName := map[string]modelcatalog.Model{}
+	candidates := selected
+	for _, model := range catalog.Models {
+		byName[model.Name] = model
+		if len(selected) == 0 {
+			candidates = append(candidates, model.Name)
+		}
+	}
+	if len(providers) == 0 {
+		for _, model := range catalog.Models {
+			providers[model.Provider] = true
+		}
+	}
+	var available, excluded []string
+	for _, name := range candidates {
+		model, found := byName[name]
+		if !found {
+			// Leave unknown selections to the renderer's normal validation.
+			available = append(available, name)
+			continue
+		}
+		if len(selected) == 0 && model.StatusAt(modelNow()) != "active" {
+			excluded = append(excluded, name+": "+model.StatusAt(modelNow()))
+		} else if model.Provider == "chatgpt" && !includeChatGPT {
+			excluded = append(excluded, name+": missing ChatGPT auth (run taxiway credentials codex)")
+		} else {
+			available = append(available, name)
+		}
+	}
+	if len(available) == 0 {
+		return nil, labModelSelectionError(ref, providers, excluded)
+	}
+	return available, nil
 }
 
 func labUsesAgent(state *RootState, ref config.LabRef, agentName string) (bool, error) {

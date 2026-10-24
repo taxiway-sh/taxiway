@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -10,7 +11,113 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/taxiway-sh/taxiway/internal/config"
+	"github.com/taxiway-sh/taxiway/internal/driver"
 )
+
+func TestRenderLiteLLMConfigRejectsEmptyExposure(t *testing.T) {
+	for _, tc := range []struct {
+		name, catalog, reason string
+	}{
+		{"retired", "models: [{name: old, provider: anthropic, upstream: old, status: retired}]", "old: retired"},
+		{"missing auth", "models: [{name: codex, provider: chatgpt, upstream: codex}]", "missing ChatGPT auth"},
+		{"empty catalog", "models: []", "catalog has no models"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			state := modelCatalogState(t, tc.catalog)
+			data, err := renderLiteLLMConfig(state, false, false, nil)
+			require.Nil(t, data)
+			require.ErrorContains(t, err, "no usable LiteLLM models")
+			require.ErrorContains(t, err, tc.reason)
+			require.ErrorContains(t, err, "--set model=")
+			require.ErrorContains(t, err, "models.yaml")
+		})
+	}
+}
+
+func TestLabGatewayRejectsUnavailableModelsBeforeCompose(t *testing.T) {
+	for _, tc := range []struct {
+		name, providers, catalog, selected, reason string
+	}{
+		{"retired", "anthropic", "models: [{name: old, provider: anthropic, upstream: old, status: retired}]", "", "old: retired"},
+		{"missing auth", "chatgpt", "models: [{name: codex, provider: chatgpt, upstream: codex}]", "", "taxiway credentials codex"},
+		{"selected missing auth", "chatgpt", "models: [{name: codex, provider: chatgpt, upstream: codex}]", "codex", "taxiway credentials codex"},
+		{"unrelated provider", "anthropic", "models: [{name: old, provider: anthropic, upstream: old, status: retired}, {name: other, provider: chatgpt, upstream: other}]", "", "other: not selected"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			state, ref, stateDir, _ := gatewaySelectionTestState(t, tc.catalog, tc.providers, tc.selected)
+			calls := filepath.Join(t.TempDir(), "docker-calls")
+			t.Setenv("DOCKER_CALL_LOG", calls)
+			writeFakeDocker(t, "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$DOCKER_CALL_LOG\"\nexit 17\n")
+			err := ensureLabLiteLLMSidecar(context.Background(), state, ref)
+			require.ErrorContains(t, err, "no usable LiteLLM models")
+			require.ErrorContains(t, err, `lab "demo"`)
+			require.ErrorContains(t, err, `orchestrator "fixture"`)
+			require.ErrorContains(t, err, "providers: "+tc.providers)
+			require.ErrorContains(t, err, tc.reason)
+			require.NoFileExists(t, calls, "a rejected model selection must never reach Docker compose")
+			require.NoFileExists(t, filepath.Join(labGatewayDir(stateDir, ref), "litellm.compose.yml"))
+			require.NoFileExists(t, labLiteLLMRoutePath(stateDir, ref))
+		})
+	}
+}
+
+func TestLabGatewayExposesOnlyUsableProviderModels(t *testing.T) {
+	for _, tc := range []struct {
+		name, providers, catalog string
+		auth                     bool
+		want                     []string
+	}{
+		{"provider restriction", "anthropic", "models: [{name: claude, provider: anthropic, upstream: claude}, {name: other, provider: chatgpt, upstream: other}]", false, []string{"claude"}},
+		{"prepared ChatGPT auth", "chatgpt", "models: [{name: codex, provider: chatgpt, upstream: codex}]", true, []string{"codex"}},
+		{"mixed providers without ChatGPT auth", "anthropic, chatgpt", "models: [{name: claude, provider: anthropic, upstream: claude}, {name: codex, provider: chatgpt, upstream: codex}]", false, []string{"claude"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			state, ref, stateDir, authDir := gatewaySelectionTestState(t, tc.catalog, tc.providers, "")
+			if tc.auth {
+				path := liteLLMChatGPTAuthStatePath(authDir)
+				require.NoError(t, os.MkdirAll(filepath.Dir(path), 0700))
+				require.NoError(t, os.WriteFile(path, []byte("{}"), 0600))
+			}
+			files, err := prepareLabLiteLLMSidecarFiles(state, stateDir, authDir, ref)
+			require.NoError(t, err)
+			require.FileExists(t, files.ComposePath)
+			data, err := os.ReadFile(liteLLMConfigStatePath(labGatewayDir(stateDir, ref)))
+			require.NoError(t, err)
+			var generated liteLLMGeneratedConfig
+			require.NoError(t, yaml.Unmarshal(data, &generated))
+			var names []string
+			for _, model := range generated.ModelList {
+				names = append(names, model.ModelName)
+			}
+			require.Equal(t, tc.want, names)
+		})
+	}
+}
+
+func gatewaySelectionTestState(t *testing.T, catalog, providers, selected string) (*RootState, config.LabRef, string, string) {
+	t.Helper()
+	state := modelCatalogState(t, catalog)
+	for name, data := range map[string]string{
+		"orchestrators/fixture/manifest.yaml": "name: fixture\nagents: [fixture-agent]\nsettings: []\n",
+		"agents/fixture-agent/manifest.yaml":  "name: fixture-agent\nlitellm:\n  providers: [" + providers + "]\n",
+	} {
+		path := filepath.Join(state.RepoDir, name)
+		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0755))
+		require.NoError(t, os.WriteFile(path, []byte(data), 0644))
+	}
+	if selected != "" {
+		path := filepath.Join(state.RepoDir, "orchestrators/fixture/manifest.yaml")
+		require.NoError(t, os.WriteFile(path, []byte("name: fixture\nagents: [fixture-agent]\nsettings: [{name: model, default: "+selected+"}]\n"), 0644))
+	}
+	stateDir, authDir := t.TempDir(), t.TempDir()
+	t.Setenv("TAXIWAY_AUTH_DIR", authDir)
+	state.Flags.StateDir = stateDir
+	state.Driver = driver.NewDockerDriver(stateDir)
+	state.Proxy = proxyRuntime{Context: "host", StateDir: t.TempDir(), Port: 4000}
+	ref := config.LabRef{Lab: "demo", Orch: "fixture", Driver: "docker"}
+	require.NoError(t, writeLabGatewayEnv(stateDir, ref, map[string]string{labLiteLLMAPIKeyEnv: "fixture-key"}))
+	return state, ref, stateDir, authDir
+}
 
 func modelCatalogState(t *testing.T, catalog string) *RootState {
 	t.Helper()
