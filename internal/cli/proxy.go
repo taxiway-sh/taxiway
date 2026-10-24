@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -48,6 +49,10 @@ type proxyRoute struct {
 type proxyRouteRegistry struct {
 	Routes []proxyRoute `json:"routes"`
 }
+
+type proxyNetworkMissingError struct{ error }
+
+func (err *proxyNetworkMissingError) Unwrap() error { return err.error }
 
 func (state *RootState) resolveProxyRuntime() (proxyRuntime, error) {
 	runtime := state.Proxy
@@ -929,7 +934,13 @@ func connectProxyToNetwork(state *RootState, network string) error {
 		return nil
 	}
 	if text != "" {
-		return fmt.Errorf("connect proxy %s to network %s: %w\n%s", runtime.Container, network, err, text)
+		connectionErr := fmt.Errorf("connect proxy %s to network %s: %w\n%s", runtime.Container, network, err, text)
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && (text == "Error response from daemon: network "+network+" not found" ||
+			text == "Error response from daemon: No such network: "+network) {
+			return &proxyNetworkMissingError{connectionErr}
+		}
+		return connectionErr
 	}
 	return fmt.Errorf("connect proxy %s to network %s: %w", runtime.Container, network, err)
 }
@@ -949,6 +960,13 @@ func connectProxyToRouteNetworks(state *RootState, proxyDir string) error {
 		}
 		seen[route.Network] = struct{}{}
 		if err := connectProxyToNetwork(state, route.Network); err != nil {
+			var missing *proxyNetworkMissingError
+			if errors.As(err, &missing) {
+				// Another lab's removal may delete its network after routes were
+				// read. Leave that process's route alone and connect the rest.
+				fmt.Fprintf(os.Stderr, "Warning: proxy route %q has no Docker network; skipping its connection. Check taxiway status.\n", route.ID)
+				continue
+			}
 			return err
 		}
 	}
