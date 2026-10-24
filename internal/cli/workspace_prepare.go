@@ -54,6 +54,9 @@ func prepareWorkspaceRepository(ctx context.Context, state *RootState, ref *conf
 	if ref == nil || !workspaceConfigured(*ref) {
 		return nil
 	}
+	if err := validateWorkingDirectory(); err != nil {
+		return err
+	}
 
 	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
 	hostBareRepo := hostWorkspaceBareRepoPath(stateDir, *ref)

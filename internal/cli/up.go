@@ -473,6 +473,12 @@ type runUpOpts struct {
 }
 
 func runUp(ctx context.Context, state *RootState, ref config.LabRef, id, stateDir string, opts runUpOpts) error {
+	if !opts.dryRun && !opts.prepareOnly && !opts.skipWorkspace && workspaceConfigured(ref) &&
+		opts.from != phases.PhaseAuth && opts.from != phases.PhaseStart {
+		if err := validateWorkingDirectory(); err != nil {
+			return err
+		}
+	}
 	if opts.out == nil {
 		opts.out = os.Stdout
 	}
