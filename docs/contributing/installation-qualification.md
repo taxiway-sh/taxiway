@@ -40,7 +40,7 @@ the same five steps:
 | Step | Verification |
 |---|---|
 | Install prerequisites | Docker and Compose for both drivers; Lima and its VM dependencies for Lima labs |
-| Install Taxiway | Published installer, binary version, runtime assets, and `taxiway init` |
+| Install Taxiway | Published installer, binary version, runtime assets owned by the installing user, and `taxiway init` |
 | Verify installation | Shared services ready; create a Codex lab; check Taxiway state, the actual container or VM, and the guest runtime contract |
 | Collect failure diagnostics | Print runtime and platform diagnostics if a preceding step fails |
 | Clean up | Remove the lab and verify its state and driver resource are gone; clean up shared services |
@@ -69,6 +69,15 @@ runtime contract` for them; `0.5.0` and later releases must pass these checks.
 
 This validates installation and lab creation before orchestrator provisioning.
 It does not run authenticated agents or measure Gas Town performance.
+
+The installer extracts archives without restoring their stored owner/group.
+The installation step verifies that the binary and runtime assets belong to
+the user running it. The standalone installer regression also exercises an
+archive with a foreign owner/group, including the rendered release installer;
+run it as root in a sandbox that cannot restore that ownership when validating
+the root installation path. Published archive metadata is normalized to
+`root:root` rather than the CI runner's identity; inspect the snapshot archives
+as described in the [release recipe](release-qualification.md).
 
 ## Installation runners
 

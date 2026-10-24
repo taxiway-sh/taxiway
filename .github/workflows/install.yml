@@ -101,6 +101,8 @@ jobs:
           test -d "$HOME/.taxiway/runtime/infra"
           test -d "$HOME/.taxiway/runtime/agents"
           test -d "$HOME/.taxiway/runtime/orchestrators"
+          find "$HOME/.local/bin/taxiway" "$HOME/.taxiway/runtime" ! -user "$(id -u)" -print |
+            awk 'END { exit NR != 0 }'
           "$HOME/.local/bin/taxiway" version
           "$HOME/.local/bin/taxiway" init
 
@@ -330,6 +332,8 @@ jobs:
           test -d "$HOME/.taxiway/runtime/infra"
           test -d "$HOME/.taxiway/runtime/agents"
           test -d "$HOME/.taxiway/runtime/orchestrators"
+          find "$HOME/.local/bin/taxiway" "$HOME/.taxiway/runtime" ! -user "$(id -u)" -print |
+            awk 'END { exit NR != 0 }'
           "$HOME/.local/bin/taxiway" version
           COMPOSE_PARALLEL_LIMIT=2 "$HOME/.local/bin/taxiway" init
 
@@ -679,6 +683,8 @@ jobs:
           test -d "$HOME/.taxiway/runtime/infra"
           test -d "$HOME/.taxiway/runtime/agents"
           test -d "$HOME/.taxiway/runtime/orchestrators"
+          find "$HOME/.local/bin/taxiway" "$HOME/.taxiway/runtime" ! -user "$(id -u)" -print |
+            awk 'END { exit NR != 0 }'
           taxiway version
           taxiway init
           '@
