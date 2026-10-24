@@ -41,6 +41,60 @@ func TestLoadFetchesGatewayPinInsteadOfDevelopmentMetadata(t *testing.T) {
 	}
 }
 
+func TestLoadRejectsNullReleasePageButAcceptsEmptyArray(t *testing.T) {
+	for _, test := range []struct {
+		page      string
+		wantError bool
+	}{{"null", true}, {"[]", false}} {
+		t.Run(test.page, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.MkdirAll(filepath.Join(dir, "internal", "cli"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "internal", "cli", "lab_gateway.go"), []byte("image: litellm/litellm:1.79.0\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			t.Chdir(dir)
+			s := fixtureSources()
+			var releases []json.RawMessage
+			if err := json.Unmarshal(s.Releases, &releases); err != nil {
+				t.Fatal(err)
+			}
+			fullPage := make([]json.RawMessage, 100)
+			for i := range fullPage {
+				fullPage[i] = releases[0]
+			}
+			firstPage, err := json.Marshal(fullPage)
+			if err != nil {
+				t.Fatal(err)
+			}
+			responses := map[string][]byte{CodexURL: s.Codex, ChatGPTURL: s.ChatGPT, AnthropicURL: s.Anthropic, DeprecationsURL: s.Deprecations, ReleasesURL: firstPage, ReleasesURL + "&page=2": []byte(test.page), fmt.Sprintf(LiteLLMURL, "v1.79.0"): s.LiteLLM}
+			seenPage2 := false
+			client := &http.Client{Transport: sourceTransport(func(req *http.Request) (*http.Response, error) {
+				data, ok := responses[req.URL.String()]
+				if !ok {
+					t.Fatalf("unexpected source %s", req.URL)
+				}
+				seenPage2 = seenPage2 || req.URL.String() == ReleasesURL+"&page=2"
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(string(data))), Header: http.Header{}}, nil
+			})}
+			loaded, err := Load(context.Background(), client, "")
+			if !seenPage2 {
+				t.Fatal("second release page was not fetched")
+			}
+			if test.wantError {
+				if err == nil || !strings.Contains(err.Error(), "litellm releases page 2: expected a non-null JSON array") || loaded.PinnedVersion != "" {
+					t.Fatalf("invalid release page accepted or partial sources returned: %#v %v", loaded, err)
+				}
+				return
+			}
+			if err != nil || loaded.PinnedVersion != "1.79.0" {
+				t.Fatalf("%#v %v", loaded, err)
+			}
+		})
+	}
+}
+
 func TestLoadFixturesRequiresAllSixFiles(t *testing.T) {
 	dir := t.TempDir()
 	sources := fixtureSources()

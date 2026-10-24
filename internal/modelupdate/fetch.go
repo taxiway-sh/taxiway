@@ -130,6 +130,9 @@ func Load(ctx context.Context, client *http.Client, fixtureDir string) (Sources,
 			if err := json.Unmarshal(data, &next); err != nil {
 				return Sources{}, err
 			}
+			if next == nil {
+				return Sources{}, fmt.Errorf("litellm releases page %d: expected a non-null JSON array", page)
+			}
 			all = append(all, next...)
 		}
 		s.Releases, _ = json.Marshal(all)
