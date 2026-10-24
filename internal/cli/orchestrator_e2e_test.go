@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -1226,35 +1227,39 @@ func captureE2EDryRunRuntime(t *testing.T, state *RootState, frozenTmux bool) ma
 			continue
 		}
 		var output, diagnostic bytes.Buffer
-		result, err := d.Exec(context.Background(), id, driver.ExecRequest{
-			Argv: []string{"bash", "-c", `set -euo pipefail
+		args := []string{"bash", "-c", `set -euo pipefail
 operation=initialization
 trap 'printf "snapshot operation=%s exit=%s\n" "$operation" "$?" >&2' ERR
-# GasTown's running database and daemon logs, and Codex's scratch directory,
-# change independently of previews; so do Codex's log databases and SQLite
-# journals, excluded below.
-runtime=(-path /lab/work/gt/.dolt-data -o -path /lab/work/gt/daemon -o -path "$HOME/.codex/.tmp")
-volatile=(! -path "$HOME/.codex/logs_*.sqlite*" ! -path "$HOME/.codex/*.sqlite-wal" ! -path "$HOME/.codex/*.sqlite-shm")
-if [[ "$2" == gascity ]]; then
-  # Gas City's controller, bead stores and its agents' Claude transcripts also
-  # change on their own schedules (patrols, orders, dogs).
-  runtime+=(-o -path /lab/work/gc/.gc -o -path '/lab/work/*/.beads'
-    -o -path "$HOME/.claude/projects" -o -path "$HOME/.claude/sessions" -o -path "$HOME/.claude/todos"
-    -o -path "$HOME/.claude/shell-snapshots" -o -path "$HOME/.claude/file-history" -o -path "$HOME/.claude/statsig"
-    -o -path "$HOME/.claude/history.jsonl")
-fi
+mode=$1
+shift
+runtime=(-false)
+while [[ "$1" != -- ]]; do
+  pattern=$1
+  [[ "$pattern" = /* ]] || pattern="$HOME/$pattern"
+  runtime+=(-o -path "$pattern")
+  shift
+done
+shift
+volatile=()
+for pattern in "$@"; do
+  [[ "$pattern" = /* ]] || pattern="$HOME/$pattern"
+  volatile+=(! -path "$pattern")
+done
 for path in "$HOME/.config/taxiway" "$HOME/.codex" "$HOME/.claude" /lab/work; do
   if [ -d "$path" ]; then
     # Keep runtime directory presence while hashing persistent configuration and workspace files.
     operation=directory-modes
     find "$path" \( "${runtime[@]}" \) -printf 'mode|%m|%p\n' -prune -o "${volatile[@]}" -printf 'mode|%m|%p\n'
     operation=file-digests
-    find "$path" \( "${runtime[@]}" \) -prune -o -type f ! -path /lab/work/gt/.runtime/doctor-fix.log "${volatile[@]}" -exec sha256sum {} +
+    find "$path" \( "${runtime[@]}" \) -prune -o "${volatile[@]}" -type f -exec sha256sum {} +
   fi
 done
-if [[ "$1" != frozen ]] && command -v tmux >/dev/null 2>&1; then
+if [[ "$mode" != frozen ]] && command -v tmux >/dev/null 2>&1; then
   tmux list-sessions -F 'session|#{session_name}|#{session_id}' 2>/dev/null || true
-fi`, "capture-preview", map[bool]string{true: "frozen", false: "active"}[frozenTmux], ref.Orch},
+fi`, "capture-preview"}
+		args = append(args, e2eDryRunSnapshotExclusionArgs(t, state.RepoDir, ref.Orch, frozenTmux)...)
+		result, err := d.Exec(context.Background(), id, driver.ExecRequest{
+			Argv:   args,
 			Stdout: &output,
 			Stderr: &diagnostic,
 		})
@@ -1279,6 +1284,70 @@ fi`, "capture-preview", map[bool]string{true: "frozen", false: "active"}[frozenT
 		}
 	}
 	return snapshot
+}
+
+type e2eDryRunExclusions struct {
+	runtime  []string // Preserve these paths' modes, but omit their contents.
+	volatile []string // Omit these independently created or removed files entirely.
+}
+
+// Relative patterns are rooted at the guest home; absolute patterns stay absolute.
+var e2eAgentDryRunExclusions = map[string]e2eDryRunExclusions{
+	"claude-code": {
+		runtime: []string{
+			".claude/projects",        // Native conversation transcripts grow during a session.
+			".claude/sessions",        // Native session metadata follows running processes.
+			".claude/todos",           // Native task lists change during agent work.
+			".claude/shell-snapshots", // Native shell state is captured independently of previews.
+			".claude/file-history",    // Native edit history changes during agent work.
+			".claude/statsig",         // Native telemetry is refreshed in the background.
+		},
+		volatile: []string{
+			".claude/history.jsonl",                  // Native prompt history grows during sessions.
+			".claude/history.jsonl.lock",             // The prompt-history writer creates/removes this lock.
+			".claude/policy-limits*.stamp.json",      // Native policy-limit cache stamps are refreshed.
+			".claude/remote-settings.json.synced-at", // Background policy sync updates its timestamp.
+			".claude/.last-cleanup",                  // Native cleanup updates its own timestamp.
+		},
+	},
+	"codex": {
+		runtime: []string{".codex/.tmp"}, // Native scratch work changes independently of previews.
+		volatile: []string{
+			".codex/logs_*.sqlite*", // Native logging updates its database and journals.
+			".codex/*.sqlite-wal",   // Native databases write SQLite transaction journals.
+			".codex/*.sqlite-shm",   // Native databases update SQLite shared-memory state.
+		},
+	},
+}
+
+var e2eOrchestratorDryRunExclusions = map[string]e2eDryRunExclusions{
+	"gastown": {runtime: []string{
+		"/lab/work/gt/.dolt-data",              // The native database continues serving agent work.
+		"/lab/work/gt/daemon",                  // Native daemons update their logs independently.
+		"/lab/work/gt/.runtime/doctor-fix.log", // Native startup doctor output grows independently.
+	}},
+	"gascity": {runtime: []string{
+		"/lab/work/gc/.gc",   // Native controller state follows patrols and orders.
+		"/lab/work/*/.beads", // Native bead stores follow agent work.
+	}},
+}
+
+func e2eDryRunSnapshotExclusionArgs(t *testing.T, repoDir, orch string, frozenTmux bool) []string {
+	t.Helper()
+	exclusions := e2eOrchestratorDryRunExclusions[orch]
+	// Clone before appending so shared declarations remain unchanged across labs.
+	runtime := slices.Clone(exclusions.runtime)
+	volatile := slices.Clone(exclusions.volatile)
+	for _, agent := range e2eAgents(t, repoDir, orch) {
+		runtime = append(runtime, e2eAgentDryRunExclusions[agent].runtime...)
+		volatile = append(volatile, e2eAgentDryRunExclusions[agent].volatile...)
+	}
+	sort.Strings(runtime)
+	sort.Strings(volatile)
+	args := []string{map[bool]string{true: "frozen", false: "active"}[frozenTmux]}
+	args = append(args, slices.Compact(runtime)...)
+	args = append(args, "--")
+	return append(args, slices.Compact(volatile)...)
 }
 
 func runE2EScriptDryRunStep(
