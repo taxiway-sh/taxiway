@@ -677,6 +677,8 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		assertE2EFixtureWorkspace(t, state, id, orch)
 	})
 
+	// Run both previews before reset deletes the native client's working
+	// directory: its tmux session need not survive that deletion.
 	var resetFrozen bool
 	var resetResume func(*testing.T)
 	if expectations.readinessActions == nil {
@@ -701,19 +703,6 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 	if resetResume != nil {
 		runE2EStep(t, "fixture:resume-owned-agent-after-reset-preview", func(t *testing.T) { resetResume(t) })
 	}
-	runE2EStep(t, "taxiway:reset[--yes]", func(t *testing.T) {
-		runE2ECommand(t, root, tb, "reset", "--yes", lab)
-		_, err := os.Stat(phases.Dir(stateDir, id))
-		require.True(t, os.IsNotExist(err), "successful reset clears lifecycle markers")
-		if expectations.assertServicesStopped != nil {
-			runE2EAssert(t, "assert:orchestrator-services-stopped", func(t *testing.T) {
-				expectations.assertServicesStopped(t, state, id)
-			})
-		}
-		runE2EAssert(t, "assert:lab-listed", func(t *testing.T) {
-			assertE2EList(t, root, tb, lab, orch, "degraded", "-")
-		})
-	})
 
 	var rmFrozen bool
 	var rmResume func(*testing.T)
@@ -723,7 +712,9 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		})
 	}
 	runE2EStep(t, "taxiway:rm[--yes,--dry-run]", func(t *testing.T) {
-
+		runE2EAssert(t, "assert:workspace-populated-before-preview", func(t *testing.T) {
+			assertE2EFixtureWorkspace(t, state, id, orch)
+		})
 		existedBefore, err := state.Driver.Exists(context.Background(), id)
 		require.NoError(t, err)
 		ref := config.LabRef{Lab: lab, Orch: orch, Driver: state.Driver.Name()}
@@ -745,6 +736,19 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 	if rmResume != nil {
 		runE2EStep(t, "fixture:resume-owned-agent-after-rm-preview", func(t *testing.T) { rmResume(t) })
 	}
+	runE2EStep(t, "taxiway:reset[--yes]", func(t *testing.T) {
+		runE2ECommand(t, root, tb, "reset", "--yes", lab)
+		_, err := os.Stat(phases.Dir(stateDir, id))
+		require.True(t, os.IsNotExist(err), "successful reset clears lifecycle markers")
+		if expectations.assertServicesStopped != nil {
+			runE2EAssert(t, "assert:orchestrator-services-stopped", func(t *testing.T) {
+				expectations.assertServicesStopped(t, state, id)
+			})
+		}
+		runE2EAssert(t, "assert:lab-listed", func(t *testing.T) {
+			assertE2EList(t, root, tb, lab, orch, "degraded", "-")
+		})
+	})
 	runE2EStep(t, "taxiway:rm[--yes]", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "rm", "--yes", lab)
 		runE2EAssert(t, "assert:lab-removed", func(t *testing.T) {
