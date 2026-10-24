@@ -1200,57 +1200,72 @@ func captureE2EDryRunRuntime(t *testing.T, state *RootState, frozenTmux bool) ma
 operation=initialization
 trap 'printf "snapshot operation=%s exit=%s\n" "$operation" "$?" >&2' ERR
 mode=$1
-operation=filesystem-snapshot
-python3 - "$@" <<'PY'
-import fnmatch
-import hashlib
-import os
-import stat
-import sys
-
-separator = sys.argv.index("--", 2)
-def patterns(values):
-    return [p if p.startswith("/") else os.path.join(os.environ["HOME"], p) for p in values]
-
-runtime = patterns(sys.argv[2:separator])
-volatile = patterns(sys.argv[separator + 1:])
-def matches(path, patterns):
-    return any(fnmatch.fnmatchcase(path, pattern) for pattern in patterns)
-
-def snapshot(path):
-    # Claude's history lock is a directory created/removed during normal work.
-    # Filter its name before even lstat: find may inspect it before -path/prune.
-    if matches(path, volatile):
-        return
-    info = os.lstat(path)
-    print("mode|%o|%s" % (stat.S_IMODE(info.st_mode), path))
-    if matches(path, runtime):
-        return
-    if stat.S_ISDIR(info.st_mode):
-        with os.scandir(path) as entries:
-            for entry in entries:
-                snapshot(entry.path)
-    elif stat.S_ISREG(info.st_mode):
-        digest = hashlib.sha256()
-        with open(path, "rb") as source:
-            for chunk in iter(lambda: source.read(1024 * 1024), b""):
-                digest.update(chunk)
-        # Match sha256sum's filename escaping and two-space digest separator.
-        escaped = "\\" in path or "\n" in path
-        name = path.replace("\\", "\\\\").replace("\n", "\\n")
-        print(("\\" if escaped else "") + digest.hexdigest() + "  " + name)
-
-for root in (os.path.join(os.environ["HOME"], ".config/taxiway"),
-             os.path.join(os.environ["HOME"], ".codex"),
-             os.path.join(os.environ["HOME"], ".claude"), "/lab/work"):
-    # Uninstalled roots may be absent; errors after enumeration remain fatal.
-    try:
-        root_info = os.stat(root)
-    except FileNotFoundError:
-        continue
-    if stat.S_ISDIR(root_info.st_mode):
-        snapshot(root)
-PY
+shift
+runtime=()
+while [[ "$1" != -- ]]; do
+  pattern=$1
+  [[ "$pattern" = /* ]] || pattern="$HOME/$pattern"
+  runtime+=("$pattern")
+  shift
+done
+shift
+volatile=()
+for pattern in "$@"; do
+  [[ "$pattern" = /* ]] || pattern="$HOME/$pattern"
+  volatile+=("$pattern")
+done
+# Bootstrap preview runs before Python is installed: use only base-image tools.
+listing_dir=$(mktemp -d)
+trap 'rm -rf -- "$listing_dir"' EXIT
+matches() {
+  local path=$1 pattern
+  shift
+  for pattern in "$@"; do
+    [[ "$path" == $pattern ]] && return 0
+  done
+  return 1
+}
+snapshot() {
+  local path=$1 metadata kind listing entry
+  local -a entries
+  # Claude's history lock is a directory created/removed during normal work.
+  # Filter its name before stat or descent; find may inspect it before -path.
+  if matches "$path" "${volatile[@]}"; then
+    return
+  fi
+  operation=entry-metadata
+  metadata=$(stat -c '%a %f' -- "$path")
+  printf 'mode|%s|%s\n' "${metadata%% *}" "$path"
+  if matches "$path" "${runtime[@]}"; then
+    return
+  fi
+  # One checked, non-dereferencing lookup supplies both mode and file type.
+  kind=$((16#${metadata#* } & 0170000))
+  case "$kind" in
+    16384)
+      operation=directory-entries
+      listing=$(mktemp "$listing_dir/entries.XXXXXX")
+      # Unsorted, literal names require no child metadata. A checked file,
+      # unlike process substitution or globbing, preserves listing failures.
+      ls -A -U -1 --zero --color=never --quoting-style=literal --indicator-style=none -- "$path" > "$listing"
+      mapfile -d '' -t entries < "$listing"
+      rm -- "$listing"
+      for entry in "${entries[@]}"; do
+        snapshot "$path/$entry"
+      done
+      ;;
+    32768)
+      operation=file-digest
+      sha256sum -- "$path"
+      ;;
+  esac
+}
+for path in "$HOME/.config/taxiway" "$HOME/.codex" "$HOME/.claude" /lab/work; do
+  # Uninstalled roots may be absent; errors after enumeration remain fatal.
+  if [[ -d "$path" ]]; then
+    snapshot "$path"
+  fi
+done
 if [[ "$mode" != frozen ]] && command -v tmux >/dev/null 2>&1; then
   tmux list-sessions -F 'session|#{session_name}|#{session_id}' 2>/dev/null || true
 fi`, "capture-preview"}
