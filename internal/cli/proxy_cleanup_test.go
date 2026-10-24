@@ -117,3 +117,79 @@ exit 1
 	assert.NotContains(t, log, "network create")
 	assert.Less(t, strings.Index(log, "rm -f"), strings.Index(log, "run -d"))
 }
+
+func TestConnectProxyToRouteNetworksMissingNetwork(t *testing.T) {
+	for _, detail := range []string{
+		"Error response from daemon: network gone_default not found",
+		"Error response from daemon: No such network: gone_default",
+	} {
+		t.Run(detail, func(t *testing.T) {
+			proxyDir := t.TempDir()
+			logPath := filepath.Join(t.TempDir(), "docker.log")
+			state := &RootState{Proxy: proxyRuntime{Context: "host", Container: "taxiway-proxy"}}
+			routes := []proxyRoute{
+				{ID: "lab:gone", Kind: "lab", Network: "gone_default"},
+				{ID: "lab:healthy", Kind: "lab", Network: "healthy_default"},
+				{ID: "lab:healthy-duplicate", Kind: "lab", Network: "healthy_default"},
+			}
+			_, err := writeProxyRoutes(proxyDir, routes)
+			require.NoError(t, err)
+			before, err := os.ReadFile(proxyRoutesStatePath(proxyDir))
+			require.NoError(t, err)
+			writeFakeDocker(t, fmt.Sprintf(`#!/bin/sh
+printf '%%s\n' "$*" >> %q
+if [ "$1 $2" = 'network connect' ] && [ "$5" = gone_default ]; then echo %q >&2; exit 1; fi
+if [ "$1 $2" = 'network connect' ] && [ "$5" = healthy_default ]; then exit 0; fi
+exit 2
+`, logPath, detail))
+			warnings := captureProxyNetworkWarnings(t, func() {
+				require.NoError(t, connectProxyToRouteNetworks(state, proxyDir))
+			})
+			require.Contains(t, warnings, `Warning: proxy route "lab:gone"`)
+			require.Contains(t, warnings, "taxiway status")
+			require.NotContains(t, warnings, "Error response from daemon")
+			log, err := os.ReadFile(logPath)
+			require.NoError(t, err)
+			require.Equal(t, 1, strings.Count(string(log), "healthy_default"), "continue connecting remaining networks once")
+			after, err := os.ReadFile(proxyRoutesStatePath(proxyDir))
+			require.NoError(t, err)
+			require.Equal(t, before, after, "do not prune another process's route")
+			require.Error(t, connectProxyToNetwork(state, "gone_default"), "an explicitly requested gateway network must remain strict")
+		})
+	}
+}
+
+func TestConnectProxyToRouteNetworksKeepsRealFailures(t *testing.T) {
+	for _, detail := range []string{
+		"Error response from daemon: network another_default not found",
+		"Error response from daemon: No such container: taxiway-proxy",
+		"permission denied while connecting to Docker",
+		"Cannot connect to the Docker daemon",
+		"network missing_default not found in plugin configuration",
+	} {
+		t.Run(detail, func(t *testing.T) {
+			proxyDir := t.TempDir()
+			_, err := writeProxyRoutes(proxyDir, []proxyRoute{{ID: "lab:missing", Kind: "lab", Network: "missing_default"}})
+			require.NoError(t, err)
+			writeFakeDocker(t, fmt.Sprintf("#!/bin/sh\necho %q >&2\nexit 1\n", detail))
+			warnings := captureProxyNetworkWarnings(t, func() {
+				err := connectProxyToRouteNetworks(&RootState{}, proxyDir)
+				require.ErrorContains(t, err, detail)
+			})
+			require.Empty(t, warnings)
+		})
+	}
+}
+
+func captureProxyNetworkWarnings(t *testing.T, f func()) string {
+	t.Helper()
+	file, err := os.CreateTemp(t.TempDir(), "warnings")
+	require.NoError(t, err)
+	original := os.Stderr
+	os.Stderr = file
+	defer func() { os.Stderr = original; _ = file.Close() }()
+	f()
+	data, err := os.ReadFile(file.Name())
+	require.NoError(t, err)
+	return string(data)
+}

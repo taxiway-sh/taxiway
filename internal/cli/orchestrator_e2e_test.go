@@ -585,12 +585,43 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		runE2EStep(t, "fixture:resume-owned-agent-after-down-preview", func(t *testing.T) { downResume(t) })
 	}
 
+	scenarioT := t
+	var restoreRemovedPeerRoute func()
+	runE2EStep(t, "fixture:remove-owned-peer-network-before-down", func(t *testing.T) {
+		proxy := state.proxyRuntime()
+		network := proxy.ComposeProject + "-removed-peer"
+		routeID := "lab:" + lab + "-removed-peer"
+		out, err := exec.Command("docker", "network", "create", network).CombinedOutput()
+		require.NoError(t, err, string(out))
+		restoreRemovedPeerRoute = func() {
+			_, err := removeProxyRoute(proxy.StateDir, routeID)
+			require.NoError(scenarioT, err)
+			if e2eDockerNetworkExists(scenarioT, network) {
+				out, err := exec.Command("docker", "network", "rm", network).CombinedOutput()
+				require.NoError(scenarioT, err, string(out))
+			}
+		}
+		scenarioT.Cleanup(restoreRemovedPeerRoute)
+		_, err = upsertProxyRoute(proxy.StateDir, proxyRoute{
+			ID: routeID, Kind: "lab", Host: lab + "-removed-peer.litellm.localhost",
+			Upstream: "removed-peer:4000", Network: network,
+		})
+		require.NoError(t, err)
+		out, err = exec.Command("docker", "network", "rm", network).CombinedOutput()
+		require.NoError(t, err, string(out))
+	})
+
 	runE2EStep(t, "taxiway:down", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "down", lab)
 		runE2EAssert(t, "assert:lab-listed", func(t *testing.T) {
 			assertE2EList(t, root, tb, lab, orch, "stopped", "started")
 		})
+		runE2EAssert(t, "assert:observability-preserved-with-missing-peer-network", func(t *testing.T) {
+			assertE2EObservabilityRunning(t, state)
+			require.True(t, waitForLangfuseViaProxy(state.proxyRuntime(), 30*time.Second), "proxy must still serve the unaffected observability route")
+		})
 	})
+	runE2EStep(t, "fixture:restore-owned-peer-route", func(t *testing.T) { restoreRemovedPeerRoute() })
 
 	runE2EStep(t, e2eCommandStepAt("after-down", "up", "--type="+orch, "--skip-auth-check", "--dry-run"), func(t *testing.T) {
 		runningBefore, err := state.Driver.Running(context.Background(), id)
