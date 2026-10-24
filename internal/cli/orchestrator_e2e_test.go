@@ -703,9 +703,17 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 	}
 	runE2EStep(t, "diagnostic:retain-exited-pane", func(t *testing.T) {
 		var out bytes.Buffer
-		res, err := state.Driver.Exec(context.Background(), id, driver.ExecRequest{Argv: []string{"tmux", "set-option", "-w", "-t", orch, "remain-on-exit", "on"}, Stdout: &out, Stderr: &out})
+		res, err := state.Driver.Exec(context.Background(), id, driver.ExecRequest{Argv: []string{"bash", "-c", `set -eu
+for i in $(seq 1 100); do
+  [[ ! -e /tmp/taxiway231-startup-entered ]] || break
+  sleep 0.05
+done
+test -e /tmp/taxiway231-startup-entered
+tmux display-message -p -t "$1" 'before reset: dead=#{pane_dead} pid=#{pane_pid} cwd=#{pane_current_path}'
+tmux set-option -w -t "$1" remain-on-exit on`, "diagnostic", orch}, Stdout: &out, Stderr: &out})
 		require.NoError(t, err)
 		require.Zero(t, res.ExitCode, "%s", out.String())
+		t.Logf("%s", out.String())
 	})
 	runE2EStep(t, "taxiway:reset[--yes]", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "reset", "--yes", lab)
@@ -723,7 +731,12 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 
 	runE2EStep(t, "diagnostic:post-reset-pane", func(t *testing.T) {
 		var out bytes.Buffer
-		res, err := state.Driver.Exec(context.Background(), id, driver.ExecRequest{Argv: []string{"bash", "-c", `sleep 1; tmux list-panes -a -F 'dead=#{pane_dead} status=#{pane_dead_status} pid=#{pane_pid} cwd=#{pane_current_path}'; tmux capture-pane -p -t "$1" -S -60`, "diagnostic", orch}, Stdout: &out, Stderr: &out})
+		res, err := state.Driver.Exec(context.Background(), id, driver.ExecRequest{Argv: []string{"bash", "-c", `touch /tmp/taxiway231-startup-open
+for i in $(seq 1 100); do
+  [[ "$(tmux display-message -p -t "$1" '#{pane_dead}')" != 1 ]] || break
+  sleep 0.05
+done
+tmux list-panes -a -F 'dead=#{pane_dead} status=#{pane_dead_status} pid=#{pane_pid} cwd=#{pane_current_path}'; tmux capture-pane -p -t "$1" -S -60`, "diagnostic", orch}, Stdout: &out, Stderr: &out})
 		require.NoError(t, err)
 		t.Logf("post-reset diagnostic exit=%d: %s", res.ExitCode, out.String())
 		t.Fatal("diagnostic capture only: not a passing product test")
@@ -2860,6 +2873,25 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 						assertE2EAsciicastFile(t, session.CastPathHost)
 					})
 					runE2ECommand(t, root, tb, "record", "rm", lab, "--name", name)
+				}
+				if stoppedLab && remove {
+					var out bytes.Buffer
+					result, err := state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{
+						Argv: []string{"bash", "-c", `set -eu
+sudo mv /usr/bin/codex /usr/bin/codex-taxiway231-original
+sudo tee /usr/bin/codex >/dev/null <<'SH'
+#!/bin/bash
+set -eu
+if [[ "$1" != --version && ! -e /tmp/taxiway231-startup-open ]]; then
+  touch /tmp/taxiway231-startup-entered
+  while [[ ! -e /tmp/taxiway231-startup-open ]]; do sleep 0.05; done
+fi
+exec /usr/bin/codex-taxiway231-original "$@"
+SH
+sudo chmod 755 /usr/bin/codex`}, Stdout: &out, Stderr: &out,
+					})
+					require.NoError(t, err)
+					require.Zero(t, result.ExitCode, "%s", out.String())
 				}
 				if stoppedLab {
 					runE2ECommand(t, root, tb, "up", lab, "--skip-auth-check")
