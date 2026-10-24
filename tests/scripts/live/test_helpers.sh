@@ -18,6 +18,40 @@ from unittest.mock import patch
 sys.path.insert(0, "tests/live")
 import taxiway_live as live
 
+# Keep the caller's stdin open and empty: inheriting it would block a child
+# that reads until EOF, even though the helper has no input to send.
+saved_stdin = os.dup(0)
+read_fd, write_fd = os.pipe()
+try:
+    os.dup2(read_fd, 0)
+    with tempfile.TemporaryDirectory(prefix="taxiway-stdin-test-") as root:
+        transport = Path(root) / "transport"
+        transport.write_text(f'''#!{sys.executable}
+import sys
+assert sys.argv[1] in ('exec', 'shell')
+sys.stdout.buffer.write(sys.stdin.buffer.read())
+''')
+        transport.chmod(0o700)
+        for name in ("docker", "limactl"):
+            (Path(root) / name).symlink_to(transport)
+        with patch.dict(os.environ, {"PATH": root + os.pathsep + os.environ["PATH"]}):
+            assert live.command([sys.executable, "-c",
+                                 "import sys; sys.stdout.buffer.write(sys.stdin.buffer.read())"],
+                                timeout=2) == b""
+            for driver in ("docker", "lima"):
+                with patch.object(live, "lab_ref", return_value={"driver": driver}), \
+                        patch.object(live, "runtime_id", return_value="fixture-lab"):
+                    assert live.guest("fixture", "cat", timeout=2) == b""
+                    assert live.run_in_lab("fixture", ["codex", "exec", "fixture"],
+                                           agent="codex", timeout=2) == b""
+                    for data in (b"", b"fixture credential payload\n\x00\xff"):
+                        assert live.guest("fixture", "cat", data=data, timeout=2) == data
+finally:
+    os.dup2(saved_stdin, 0)
+    for fd in (saved_stdin, read_fd, write_fd):
+        os.close(fd)
+print("PASS: no-input commands receive EOF on Docker and Lima; explicit stdin is preserved")
+
 with tempfile.TemporaryDirectory(prefix="taxiway-helper-test-") as root:
     environment = {"TAXIWAY_CONTEXT": "e2e", "TAXIWAY_CONTEXT_ID": "fixture",
                    "TAXIWAY_RUNTIME_DIR": root}
