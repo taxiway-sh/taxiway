@@ -585,19 +585,49 @@ func TestRecordRmAmbiguousNamePreservesCasts(t *testing.T) {
 	require.Equal(t, "one", got.Sessions[0].ID)
 }
 func TestRecordRmSaveFailurePreservesCast(t *testing.T) {
-	root, state, _, out, errs := buildRecordTestRoot(t)
+	root, state, mock, out, errs := buildRecordTestRoot(t)
+	createRecordLab(t, state, mock, "demo", "sampleorch")
 	store := recording.NewStore(state.Flags.StateDir, "demo")
 	cast := filepath.Join(store.Dir(), "safe.cast")
-	require.NoError(t, store.Save(recording.Index{Sessions: []recording.Session{{ID: "one", Name: "safe", State: recording.StateStopped, CastPathHost: cast}}}))
+	session := recording.Session{ID: "one", Name: "safe", State: recording.StateRecording, RecorderSession: "recorder", CastPathHost: cast}
+	require.NoError(t, store.Save(recording.Index{Sessions: []recording.Session{session}}))
 	require.NoError(t, os.WriteFile(cast, []byte("evidence"), 0600))
-	require.NoError(t, os.Chmod(store.Dir(), 0500))
-	t.Cleanup(func() { _ = os.Chmod(store.Dir(), 0700) })
-	_, _, err := execRoot(t, root, out, errs, "record", "rm", "demo", "--name", "safe")
-	require.Error(t, err)
-	require.FileExists(t, cast)
+	indexPath := filepath.Join(store.Dir(), "recordings.json")
+	indexBefore, err := os.ReadFile(indexPath)
+	require.NoError(t, err)
+	savedIndex := filepath.Join(store.Dir(), "saved-recordings.json")
+	injected := false
+	restoreIndex := func() {
+		if injected {
+			require.NoError(t, os.Remove(indexPath))
+			require.NoError(t, os.Rename(savedIndex, indexPath))
+			injected = false
+		}
+	}
+	t.Cleanup(restoreIndex)
+	mock.ExecResponder = func(_ string, req driver.ExecRequest) driver.MockExecResponse {
+		require.Equal(t, []string{"tmux", "has-session", "-t", "=recorder"}, req.Argv)
+		// Removal has loaded the index before checking the active recorder.
+		// A directory at the destination makes the subsequent atomic rename
+		// fail for root and regular users alike, without changing production IO.
+		require.NoError(t, os.Rename(indexPath, savedIndex))
+		require.NoError(t, os.Mkdir(indexPath, 0700))
+		injected = true
+		return driver.MockExecResponse{ExitCode: 1, Stderr: "can't find session: recorder"}
+	}
+	_, _, err = execRoot(t, root, out, errs, "record", "rm", "demo", "--name", "safe", "--force")
+	require.ErrorContains(t, err, "recording: write index: recording: replace artifact:")
+	require.True(t, injected)
+	castAfter, err := os.ReadFile(cast)
+	require.NoError(t, err)
+	require.Equal(t, "evidence", string(castAfter))
+	indexAfter, err := os.ReadFile(savedIndex)
+	require.NoError(t, err)
+	require.Equal(t, indexBefore, indexAfter)
+	restoreIndex()
 	idx, err := store.Load()
 	require.NoError(t, err)
-	require.Len(t, idx.Sessions, 1)
+	require.Equal(t, []recording.Session{session}, idx.Sessions)
 }
 
 func TestRecordCommandsRejectOutsideRecordingMetadata(t *testing.T) {
