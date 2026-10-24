@@ -1325,11 +1325,12 @@ var e2eAgentDryRunExclusions = map[string]e2eDryRunExclusions{
 			".claude/statsig",         // Native telemetry is refreshed in the background.
 		},
 		volatile: []string{
-			".claude/history.jsonl",                  // Native prompt history grows during sessions.
-			".claude/history.jsonl.lock",             // The prompt-history writer creates/removes this lock directory.
-			".claude/policy-limits*.stamp.json",      // Native policy-limit cache stamps are refreshed.
-			".claude/remote-settings.json.synced-at", // Background policy sync updates its timestamp.
-			".claude/.last-cleanup",                  // Native cleanup updates its own timestamp.
+			".claude/backups/.claude.json.backup.+([0-9])", // Native config saves rotate derived timestamped backups.
+			".claude/history.jsonl",                        // Native prompt history grows during sessions.
+			".claude/history.jsonl.lock",                   // The prompt-history writer creates/removes this lock directory.
+			".claude/policy-limits*.stamp.json",            // Native policy-limit cache stamps are refreshed.
+			".claude/remote-settings.json.synced-at",       // Background policy sync updates its timestamp.
+			".claude/.last-cleanup",                        // Native cleanup updates its own timestamp.
 		},
 	},
 	"codex": {
