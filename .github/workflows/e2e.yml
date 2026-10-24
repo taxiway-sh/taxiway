@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        orchestrator: [codex, claude-code, gastown, gascity]
+        orchestrator: [codex]
     steps:
       - uses: actions/checkout@v6
 
@@ -27,12 +27,6 @@ jobs:
         run: |
           dockerd &>/var/log/dockerd.log &
           timeout 30 sh -c 'until docker info >/dev/null 2>&1; do sleep 1; done'
-
-      - name: Run orchestrator up end-to-end test
-        run: make test-e2e-${{ matrix.orchestrator }}-up
-
-      - name: Run orchestrator prepare-run end-to-end test
-        run: make test-e2e-${{ matrix.orchestrator }}-prepare-run
 
       - name: Run orchestrator phase-by-phase end-to-end test
         run: make test-e2e-${{ matrix.orchestrator }}-phase-by-phase

@@ -701,6 +701,12 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 	if resetResume != nil {
 		runE2EStep(t, "fixture:resume-owned-agent-after-reset-preview", func(t *testing.T) { resetResume(t) })
 	}
+	runE2EStep(t, "diagnostic:retain-exited-pane", func(t *testing.T) {
+		var out bytes.Buffer
+		res, err := state.Driver.Exec(context.Background(), id, driver.ExecRequest{Argv: []string{"tmux", "set-option", "-w", "-t", orch, "remain-on-exit", "on"}, Stdout: &out, Stderr: &out})
+		require.NoError(t, err)
+		require.Zero(t, res.ExitCode, "%s", out.String())
+	})
 	runE2EStep(t, "taxiway:reset[--yes]", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "reset", "--yes", lab)
 		_, err := os.Stat(phases.Dir(stateDir, id))
@@ -715,6 +721,13 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		})
 	})
 
+	runE2EStep(t, "diagnostic:post-reset-pane", func(t *testing.T) {
+		var out bytes.Buffer
+		res, err := state.Driver.Exec(context.Background(), id, driver.ExecRequest{Argv: []string{"bash", "-c", `sleep 1; tmux list-panes -a -F 'dead=#{pane_dead} status=#{pane_dead_status} pid=#{pane_pid} cwd=#{pane_current_path}'; tmux capture-pane -p -t "$1" -S -60`, "diagnostic", orch}, Stdout: &out, Stderr: &out})
+		require.NoError(t, err)
+		t.Logf("post-reset diagnostic exit=%d: %s", res.ExitCode, out.String())
+		t.Fatal("diagnostic capture only: not a passing product test")
+	})
 	var rmFrozen bool
 	var rmResume func(*testing.T)
 	if expectations.readinessActions == nil {
