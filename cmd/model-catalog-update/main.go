@@ -18,7 +18,7 @@ func run(args []string, out io.Writer) error {
 	flags := flag.NewFlagSet("model-catalog-update", flag.ContinueOnError)
 	flags.SetOutput(out)
 	catalog := flags.String("catalog", "infra/gateway/litellm/models.yaml", "catalog YAML path")
-	fixtures := flags.String("fixtures", "", "directory containing all six <source>.txt files (offline)")
+	fixtures := flags.String("fixtures", "", "offline sources: <source>.txt, gateway.txt, and litellm-v<release>.txt for newer final releases")
 	write := flags.Bool("write", false, "write proposed catalog; otherwise report only")
 	reportPath := flags.String("report", "", "write Markdown review report to this file")
 	asOf := flags.String("as-of", time.Now().UTC().Format("2006-01-02"), "evaluate retirement at this UTC date")
