@@ -216,6 +216,24 @@ Use --from <phase> to resume from a specific phase.`,
 				}
 			}
 
+			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+			var fromP phases.Phase
+			if fromPhase != "" {
+				fromP, err = phases.ParsePhase(fromPhase)
+				if err != nil {
+					return err
+				}
+			}
+			opts := runUpOpts{
+				force: force, from: fromP, prepareOnly: prepareOnly,
+				skipWorkspace: skipWorkspace, dryRun: state.Flags.DryRun,
+				settingsChanged: len(settingsSel.values) > 0 || len(settingsSel.clears) > 0,
+				profileChanged:  profileSel.set || profileSel.clear,
+			}
+			if err := preflightWorkspaceWorkingDirectory(state, ref, id, stateDir, opts); err != nil {
+				return err
+			}
+
 			// B3/I1: Persist workspace config in the sidecar immediately after it
 			// is configured, regardless of which phase we start from (--from).
 			// This ensures ref.json always reflects the current workspace so that
@@ -241,16 +259,6 @@ Use --from <phase> to resume from a specific phase.`,
 			profileChanged, err := applyProfileSelection(ctx, state, id, &ref, profileSel)
 			if err != nil {
 				return err
-			}
-
-			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
-
-			var fromP phases.Phase
-			if fromPhase != "" {
-				fromP, err = phases.ParsePhase(fromPhase)
-				if err != nil {
-					return err
-				}
 			}
 
 			return runUp(context.Background(), state, ref, id, stateDir, runUpOpts{
@@ -418,6 +426,15 @@ func newRunCmd(state *RootState) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+			if err := preflightWorkspaceWorkingDirectory(state, ref, id, stateDir, runUpOpts{
+				force: force, from: phases.PhaseGateway,
+				skipWorkspace: skipWorkspace, dryRun: state.Flags.DryRun,
+				settingsChanged: len(settingsSel.values) > 0 || len(settingsSel.clears) > 0,
+				profileChanged:  profileSel.set || profileSel.clear,
+			}); err != nil {
+				return err
+			}
 			settingsChanged, err := applySettingsSelection(ctx, state, id, &ref, settingsSel)
 			if err != nil {
 				return err
@@ -426,7 +443,6 @@ func newRunCmd(state *RootState) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
 			return runUp(ctx, state, ref, id, stateDir, runUpOpts{
 				planName:                "run",
 				force:                   force,
@@ -472,7 +488,23 @@ type runUpOpts struct {
 	profileClear            bool
 }
 
+// Check only a workspace phase that will execute, before callers persist flags
+// or invalidate phase markers. A cached workspace does not use the host cwd.
+func preflightWorkspaceWorkingDirectory(state *RootState, ref config.LabRef, id, stateDir string, opts runUpOpts) error {
+	if opts.dryRun || opts.prepareOnly || opts.skipWorkspace || !workspaceConfigured(ref) ||
+		opts.from == phases.PhaseAuth || opts.from == phases.PhaseStart {
+		return nil
+	}
+	if !opts.force && !opts.settingsChanged && !opts.profileChanged && phases.Done(stateDir, id, phases.PhaseWorkspace) {
+		return nil
+	}
+	return validateWorkspaceCloneWorkingDirectory(state, ref)
+}
+
 func runUp(ctx context.Context, state *RootState, ref config.LabRef, id, stateDir string, opts runUpOpts) error {
+	if err := preflightWorkspaceWorkingDirectory(state, ref, id, stateDir, opts); err != nil {
+		return err
+	}
 	if opts.out == nil {
 		opts.out = os.Stdout
 	}

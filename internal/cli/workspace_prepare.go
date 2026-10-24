@@ -47,12 +47,26 @@ func workspaceConfigured(ref config.LabRef) bool {
 	return ref.Workspace != nil && ref.Workspace.Repo != ""
 }
 
+// Only the initial clone inherits the caller's cwd; updates of an existing
+// mirror run with that mirror as an explicit working directory.
+func validateWorkspaceCloneWorkingDirectory(state *RootState, ref config.LabRef) error {
+	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+	mirror := hostWorkspaceBareRepoPath(stateDir, ref)
+	if _, err := os.Stat(filepath.Join(mirror, "objects")); os.IsNotExist(err) {
+		return validateWorkingDirectory()
+	}
+	return nil
+}
+
 func prepareWorkspaceRepository(ctx context.Context, state *RootState, ref *config.LabRef) error {
 	if state.Flags.DryRun {
 		return nil
 	}
 	if ref == nil || !workspaceConfigured(*ref) {
 		return nil
+	}
+	if err := validateWorkspaceCloneWorkingDirectory(state, *ref); err != nil {
+		return err
 	}
 
 	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)

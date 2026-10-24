@@ -117,6 +117,15 @@ func addDryRunFlag(cmd *cobra.Command, state *RootState) {
 	cmd.Flags().BoolVar(&state.Flags.DryRun, "dry-run", false, "print operations without executing or changing state")
 }
 
+// The initial workspace Git clone inherits the caller's directory. Check it
+// before provisioning, rather than reporting a later Git error.
+func validateWorkingDirectory() error {
+	if _, err := os.Getwd(); err != nil {
+		return fmt.Errorf("current working directory is unavailable; change to an existing directory with cd, then rerun the command: %w", err)
+	}
+	return nil
+}
+
 func topLevelCommandName(cmd *cobra.Command) string {
 	for cmd.HasParent() && cmd.Parent().Name() != "taxiway" {
 		cmd = cmd.Parent()
