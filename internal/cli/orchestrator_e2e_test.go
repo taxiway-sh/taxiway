@@ -186,6 +186,9 @@ func testE2EOrchestratorPrepareRun(t *testing.T, orch string) {
 		runE2EAssert(t, "assert:phase-verified", func(t *testing.T) {
 			assertE2EPhase(t, stateDir, id, phases.PhaseVerify)
 		})
+		runE2EAssert(t, "assert:node-toolchain-ready", func(t *testing.T) {
+			assertE2ENodeToolchain(t, state, id)
+		})
 		runE2EAssert(t, "assert:lab-listed", func(t *testing.T) {
 			assertE2EList(t, root, tb, lab, orch, "degraded", "verified")
 		})
@@ -395,6 +398,9 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		runE2ECommand(t, root, tb, "bootstrap", lab)
 		runE2EAssert(t, "assert:phase-bootstrapped", func(t *testing.T) {
 			assertE2EPhase(t, stateDir, id, phases.PhaseBootstrap)
+		})
+		runE2EAssert(t, "assert:node-toolchain-ready", func(t *testing.T) {
+			assertE2ENodeToolchain(t, state, id)
 		})
 	})
 
@@ -793,6 +799,9 @@ func testE2EOrchestratorUp(t *testing.T, orch string) {
 		runE2ECommand(t, root, tb, args...)
 		runE2EAssert(t, "assert:phase-started", func(t *testing.T) {
 			assertE2EPhase(t, stateDir, id, phases.PhaseStart)
+		})
+		runE2EAssert(t, "assert:node-toolchain-ready", func(t *testing.T) {
+			assertE2ENodeToolchain(t, state, id)
 		})
 		runE2EAssert(t, "assert:lab-listed", func(t *testing.T) {
 			assertE2EList(t, root, tb, lab, orch, "running", "started")
@@ -3230,6 +3239,23 @@ func configureE2ELiteLLMModelCatalog(t *testing.T, state *RootState, fakeUpstrea
 		require.NoError(t, err)
 		require.Equal(t, want, info.Mode().Perm(), "ChatGPT token cache must stay private: %s", path)
 	}
+}
+
+func assertE2ENodeToolchain(t *testing.T, state *RootState, id string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	var stdout, stderr bytes.Buffer
+	result, err := state.Driver.Exec(ctx, id, driver.ExecRequest{
+		Argv:   []string{"bash", "-lc", "set -e; node --version; npm --version"},
+		Stdout: &stdout, Stderr: &stderr,
+	})
+	require.NoError(t, err)
+	require.Zero(t, result.ExitCode, "Node.js/npm toolchain: %s", stderr.String())
+	versions := strings.Fields(stdout.String())
+	require.Len(t, versions, 2)
+	require.Regexp(t, `^v22\.[0-9]+\.[0-9]+$`, versions[0])
+	require.Regexp(t, `^[0-9]+\.[0-9]+\.[0-9]+`, versions[1])
 }
 
 func assertE2EGatewayModels(t *testing.T, state *RootState, id, orch string) {
