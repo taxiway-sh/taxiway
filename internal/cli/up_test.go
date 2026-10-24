@@ -926,6 +926,21 @@ func TestResumePreflightUsesRecordedDriver(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestUp_BootstrapFailureDoesNotMarkCompletion(t *testing.T) {
+	root, state, mock, stdout, stderr := buildUpTestRoot(t)
+	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+	id := idName("gastown")
+	mock.FailExec["bootstrap.sh"] = errors.New("Node.js 22 and a working npm are required")
+
+	_, _, err := execUpRoot(t, root, stdout, stderr, "up", "gastown", "--type", "gastown")
+	require.ErrorContains(t, err, "Node.js 22 and a working npm are required")
+	require.True(t, phases.Done(stateDir, id, phases.PhaseCreate))
+	for _, phase := range []phases.Phase{phases.PhaseBootstrap, phases.PhaseInstall, phases.PhaseVerify} {
+		require.False(t, phases.Done(stateDir, id, phase), "failed bootstrap must not complete %s", phase)
+	}
+	require.False(t, containsStr(mock.ExecLog, "install.sh"), "agent installation must not follow a failed bootstrap")
+}
+
 // TestUp_FailureMidway: if install fails, its marker is absent; bootstrap marker is present.
 func TestUp_FailureMidway(t *testing.T) {
 	root, state, mock, stdout, stderr := buildUpTestRoot(t)

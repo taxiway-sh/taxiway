@@ -46,17 +46,63 @@ fi
 
 install_node() {
   curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-  sudo apt-get install -y nodejs
+  # A successful setup script is insufficient: key downloads have failed while
+  # the script returned success, leaving apt to select Ubuntu's Node.js package.
+  local candidate
+  if ! sudo test -s /usr/share/keyrings/nodesource.gpg ||
+      ! sudo grep -Fq 'https://deb.nodesource.com/node_22.x' /etc/apt/sources.list.d/nodesource.sources ||
+      ! sudo grep -Fq '/usr/share/keyrings/nodesource.gpg' /etc/apt/sources.list.d/nodesource.sources; then
+    log "NodeSource setup did not configure its Node.js 22 repository and signing key; rerun bootstrap after fixing repository access."
+    return 1
+  fi
+  candidate="$(LC_ALL=C apt-cache madison nodejs | awk '$3 ~ /^([0-9]+:)?22\./ && /https:\/\/deb\.nodesource\.com\/node_22\.x/ && !found {print $3; found=1}')"
+  if [[ -z "$candidate" ]]; then
+    log "NodeSource did not provide a Node.js 22 installation candidate; rerun bootstrap after fixing repository access."
+    return 1
+  fi
+  # Select the repository's version explicitly, including when a different
+  # major is already installed and apt would otherwise keep the newer package.
+  sudo apt-get install -y --allow-downgrades --reinstall "nodejs=$candidate"
+  if ! node_toolchain_ready; then
+    log "Node.js 22 and a working npm are required; the installation is incomplete. Rerun bootstrap to repair it."
+    return 1
+  fi
+}
+
+node_toolchain_ready() {
+  local version
+  command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1 || return 1
+  version="$(node --version)" || return 1
+  [[ "$version" =~ ^v22\. ]] && npm --version >/dev/null 2>&1
 }
 
 node_install_planned=false
-if ! taxiway_can_inspect || ! command -v node >/dev/null 2>&1; then
+if ! taxiway_can_inspect || ! node_toolchain_ready; then
   if taxiway_is_plan; then
     node_install_planned=true
   fi
   taxiway_step "Installing Node.js 22" install_node
 else
   log "Node already installed ($(node --version))"
+fi
+
+if ! taxiway_is_plan; then
+  for tool in docker npm python3 java git tmux asciinema; do
+    if ! command -v "$tool" >/dev/null 2>&1; then
+      log "Required tool $tool is missing; rerun bootstrap to repair the toolchain."
+      exit 1
+    fi
+    version_flag=--version
+    case "$tool" in java) version_flag=-version ;; tmux) version_flag=-V ;; esac
+    if ! "$tool" "$version_flag" >/dev/null 2>&1; then
+      log "Required tool $tool is not usable; rerun bootstrap to repair the toolchain."
+      exit 1
+    fi
+  done
+  if ! node_toolchain_ready; then
+    log "Node.js 22 and a working npm are required; rerun bootstrap to repair the toolchain."
+    exit 1
+  fi
 fi
 
 # Enable corepack so pnpm/yarn are available when a workspace asks for them.
