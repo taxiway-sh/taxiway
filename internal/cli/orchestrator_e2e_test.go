@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -677,6 +678,8 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		assertE2EFixtureWorkspace(t, state, id, orch)
 	})
 
+	// Run both previews before reset deletes the native client's working
+	// directory: its tmux session need not survive that deletion.
 	var resetFrozen bool
 	var resetResume func(*testing.T)
 	if expectations.readinessActions == nil {
@@ -701,19 +704,6 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 	if resetResume != nil {
 		runE2EStep(t, "fixture:resume-owned-agent-after-reset-preview", func(t *testing.T) { resetResume(t) })
 	}
-	runE2EStep(t, "taxiway:reset[--yes]", func(t *testing.T) {
-		runE2ECommand(t, root, tb, "reset", "--yes", lab)
-		_, err := os.Stat(phases.Dir(stateDir, id))
-		require.True(t, os.IsNotExist(err), "successful reset clears lifecycle markers")
-		if expectations.assertServicesStopped != nil {
-			runE2EAssert(t, "assert:orchestrator-services-stopped", func(t *testing.T) {
-				expectations.assertServicesStopped(t, state, id)
-			})
-		}
-		runE2EAssert(t, "assert:lab-listed", func(t *testing.T) {
-			assertE2EList(t, root, tb, lab, orch, "degraded", "-")
-		})
-	})
 
 	var rmFrozen bool
 	var rmResume func(*testing.T)
@@ -723,7 +713,9 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		})
 	}
 	runE2EStep(t, "taxiway:rm[--yes,--dry-run]", func(t *testing.T) {
-
+		runE2EAssert(t, "assert:workspace-populated-before-preview", func(t *testing.T) {
+			assertE2EFixtureWorkspace(t, state, id, orch)
+		})
 		existedBefore, err := state.Driver.Exists(context.Background(), id)
 		require.NoError(t, err)
 		ref := config.LabRef{Lab: lab, Orch: orch, Driver: state.Driver.Name()}
@@ -745,6 +737,19 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 	if rmResume != nil {
 		runE2EStep(t, "fixture:resume-owned-agent-after-rm-preview", func(t *testing.T) { rmResume(t) })
 	}
+	runE2EStep(t, "taxiway:reset[--yes]", func(t *testing.T) {
+		runE2ECommand(t, root, tb, "reset", "--yes", lab)
+		_, err := os.Stat(phases.Dir(stateDir, id))
+		require.True(t, os.IsNotExist(err), "successful reset clears lifecycle markers")
+		if expectations.assertServicesStopped != nil {
+			runE2EAssert(t, "assert:orchestrator-services-stopped", func(t *testing.T) {
+				expectations.assertServicesStopped(t, state, id)
+			})
+		}
+		runE2EAssert(t, "assert:lab-listed", func(t *testing.T) {
+			assertE2EList(t, root, tb, lab, orch, "degraded", "-")
+		})
+	})
 	runE2EStep(t, "taxiway:rm[--yes]", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "rm", "--yes", lab)
 		runE2EAssert(t, "assert:lab-removed", func(t *testing.T) {
@@ -1000,7 +1005,7 @@ func quiesceE2EDryRunAgent(owner, t *testing.T, state *RootState, id, orch strin
 		return false, func(*testing.T) {}
 	}
 	// A restarted native client writes and removes temporary/session files
-	// asynchronously, including after reset while rm preview takes its snapshot.
+	// asynchronously.
 	// Freeze only this fixture's pane process tree while checking that preview
 	// preserves every file, then resume even if the assertion fails.
 	var stopped bytes.Buffer
@@ -1191,35 +1196,82 @@ func captureE2EDryRunRuntime(t *testing.T, state *RootState, frozenTmux bool) ma
 			continue
 		}
 		var output, diagnostic bytes.Buffer
-		result, err := d.Exec(context.Background(), id, driver.ExecRequest{
-			Argv: []string{"bash", "-c", `set -euo pipefail
+		args := []string{"bash", "-c", `set -Eeuo pipefail
 operation=initialization
 trap 'printf "snapshot operation=%s exit=%s\n" "$operation" "$?" >&2' ERR
-# GasTown's running database and daemon logs, and Codex's scratch directory,
-# change independently of previews; so do Codex's log databases and SQLite
-# journals, excluded below.
-runtime=(-path /lab/work/gt/.dolt-data -o -path /lab/work/gt/daemon -o -path "$HOME/.codex/.tmp")
-volatile=(! -path "$HOME/.codex/logs_*.sqlite*" ! -path "$HOME/.codex/*.sqlite-wal" ! -path "$HOME/.codex/*.sqlite-shm")
-if [[ "$2" == gascity ]]; then
-  # Gas City's controller, bead stores and its agents' Claude transcripts also
-  # change on their own schedules (patrols, orders, dogs).
-  runtime+=(-o -path /lab/work/gc/.gc -o -path '/lab/work/*/.beads'
-    -o -path "$HOME/.claude/projects" -o -path "$HOME/.claude/sessions" -o -path "$HOME/.claude/todos"
-    -o -path "$HOME/.claude/shell-snapshots" -o -path "$HOME/.claude/file-history" -o -path "$HOME/.claude/statsig"
-    -o -path "$HOME/.claude/history.jsonl")
-fi
+mode=$1
+shift
+runtime=()
+while [[ "$1" != -- ]]; do
+  pattern=$1
+  [[ "$pattern" = /* ]] || pattern="$HOME/$pattern"
+  runtime+=("$pattern")
+  shift
+done
+shift
+volatile=()
+for pattern in "$@"; do
+  [[ "$pattern" = /* ]] || pattern="$HOME/$pattern"
+  volatile+=("$pattern")
+done
+# Bootstrap preview runs before Python is installed: use only base-image tools.
+listing_dir=$(mktemp -d)
+trap 'rm -rf -- "$listing_dir"' EXIT
+matches() {
+  local path=$1 pattern
+  shift
+  for pattern in "$@"; do
+    [[ "$path" == $pattern ]] && return 0
+  done
+  return 1
+}
+snapshot() {
+  local path=$1 metadata kind listing entry
+  local -a entries
+  # Claude's history lock is a directory created/removed during normal work.
+  # Filter its name before stat or descent; find may inspect it before -path.
+  if matches "$path" "${volatile[@]}"; then
+    return
+  fi
+  operation=entry-metadata
+  metadata=$(stat -c '%a %f' -- "$path")
+  printf 'mode|%s|%s\n' "${metadata%% *}" "$path"
+  if matches "$path" "${runtime[@]}"; then
+    return
+  fi
+  # One checked, non-dereferencing lookup supplies both mode and file type.
+  kind=$((16#${metadata#* } & 0170000))
+  case "$kind" in
+    16384)
+      operation=directory-entries
+      listing=$(mktemp "$listing_dir/entries.XXXXXX")
+      # Unsorted, literal names require no child metadata. A checked file,
+      # unlike process substitution or globbing, preserves listing failures.
+      ls -A -U -1 --zero --color=never --quoting-style=literal --indicator-style=none -- "$path" > "$listing"
+      mapfile -d '' -t entries < "$listing"
+      rm -- "$listing"
+      for entry in "${entries[@]}"; do
+        snapshot "$path/$entry"
+      done
+      ;;
+    32768)
+      operation=file-digest
+      sha256sum -- "$path"
+      ;;
+  esac
+}
 for path in "$HOME/.config/taxiway" "$HOME/.codex" "$HOME/.claude" /lab/work; do
-  if [ -d "$path" ]; then
-    # Keep runtime directory presence while hashing persistent configuration and workspace files.
-    operation=directory-modes
-    find "$path" \( "${runtime[@]}" \) -printf 'mode|%m|%p\n' -prune -o "${volatile[@]}" -printf 'mode|%m|%p\n'
-    operation=file-digests
-    find "$path" \( "${runtime[@]}" \) -prune -o -type f ! -path /lab/work/gt/.runtime/doctor-fix.log "${volatile[@]}" -exec sha256sum {} +
+  # Uninstalled roots may be absent; errors after enumeration remain fatal.
+  if [[ -d "$path" ]]; then
+    snapshot "$path"
   fi
 done
-if [[ "$1" != frozen ]] && command -v tmux >/dev/null 2>&1; then
+if [[ "$mode" != frozen ]] && command -v tmux >/dev/null 2>&1; then
   tmux list-sessions -F 'session|#{session_name}|#{session_id}' 2>/dev/null || true
-fi`, "capture-preview", map[bool]string{true: "frozen", false: "active"}[frozenTmux], ref.Orch},
+fi`, "capture-preview"}
+		args = append(args, e2eDryRunSnapshotExclusionArgs(t, state.RepoDir, ref.Orch, frozenTmux)...)
+		result, err := d.Exec(context.Background(), id, driver.ExecRequest{
+			Argv:   args,
 			Stdout: &output,
 			Stderr: &diagnostic,
 		})
@@ -1244,6 +1296,77 @@ fi`, "capture-preview", map[bool]string{true: "frozen", false: "active"}[frozenT
 		}
 	}
 	return snapshot
+}
+
+type e2eDryRunExclusions struct {
+	runtime  []string // Preserve these paths' modes, but omit their contents.
+	volatile []string // Omit these independently created or removed files entirely.
+}
+
+// Relative patterns are rooted at the guest home; absolute patterns stay absolute.
+var e2eAgentDryRunExclusions = map[string]e2eDryRunExclusions{
+	"claude-code": {
+		runtime: []string{
+			".claude/projects",        // Native conversation transcripts grow during a session.
+			".claude/sessions",        // Native session metadata follows running processes.
+			".claude/session-env",     // Native sessions create and clean up per-session hook environments.
+			".claude/todos",           // Native task lists change during agent work.
+			".claude/shell-snapshots", // Native shell state is captured independently of previews.
+			".claude/file-history",    // Native edit history changes during agent work.
+			".claude/statsig",         // Native telemetry is refreshed in the background.
+		},
+		volatile: []string{
+			".claude/backups/.claude.json.backup.+([0-9])", // Native config saves rotate derived timestamped backups.
+			".claude/history.jsonl",                        // Native prompt history grows during sessions.
+			".claude/history.jsonl.lock",                   // The prompt-history writer creates/removes this lock directory.
+			".claude/policy-limits*.stamp.json",            // Native policy-limit cache stamps are refreshed.
+			".claude/remote-settings.json.synced-at",       // Background policy sync updates its timestamp.
+			".claude/.last-cleanup",                        // Native cleanup updates its own timestamp.
+		},
+	},
+	"codex": {
+		runtime: []string{".codex/.tmp"}, // Native scratch work changes independently of previews.
+		volatile: []string{
+			".codex/logs_*.sqlite*", // Native logging updates its database and journals.
+			".codex/*.sqlite-wal",   // Native databases write SQLite transaction journals.
+			".codex/*.sqlite-shm",   // Native databases update SQLite shared-memory state.
+		},
+	},
+}
+
+var e2eOrchestratorDryRunExclusions = map[string]e2eDryRunExclusions{
+	"gastown": {
+		runtime: []string{
+			"/lab/work/gt/.dolt-data",              // The native database continues serving agent work.
+			"/lab/work/gt/daemon",                  // Native daemons update their logs independently.
+			"/lab/work/gt/.runtime/doctor-fix.log", // Retain the synchronous startup doctor log's mode, as in the base snapshot.
+		},
+		volatile: []string{
+			"/lab/work/gt/.beads/last-touched", // Native bd show/update commands record their latest issue.
+		},
+	},
+	"gascity": {runtime: []string{
+		"/lab/work/gc/.gc",   // Native controller state follows patrols and orders.
+		"/lab/work/*/.beads", // Native bead stores follow agent work.
+	}},
+}
+
+func e2eDryRunSnapshotExclusionArgs(t *testing.T, repoDir, orch string, frozenTmux bool) []string {
+	t.Helper()
+	exclusions := e2eOrchestratorDryRunExclusions[orch]
+	// Clone before appending so shared declarations remain unchanged across labs.
+	runtime := slices.Clone(exclusions.runtime)
+	volatile := slices.Clone(exclusions.volatile)
+	for _, agent := range e2eAgents(t, repoDir, orch) {
+		runtime = append(runtime, e2eAgentDryRunExclusions[agent].runtime...)
+		volatile = append(volatile, e2eAgentDryRunExclusions[agent].volatile...)
+	}
+	sort.Strings(runtime)
+	sort.Strings(volatile)
+	args := []string{map[bool]string{true: "frozen", false: "active"}[frozenTmux]}
+	args = append(args, slices.Compact(runtime)...)
+	args = append(args, "--")
+	return append(args, slices.Compact(volatile)...)
 }
 
 func runE2EScriptDryRunStep(
