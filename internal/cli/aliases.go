@@ -292,6 +292,15 @@ func newWorkspaceCmd(state *RootState) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			pending := ref
+			if repo != "" {
+				pending.Workspace = &config.Workspace{Repo: repo, Ref: repoRef, Path: repoPath}
+			}
+			if !state.Flags.DryRun && workspaceConfigured(pending) {
+				if err := validateWorkspaceCloneWorkingDirectory(state, pending); err != nil {
+					return err
+				}
+			}
 			if _, err := applySettingsFromFlags(ctx, state, id, &ref, setValues, clearSet); err != nil {
 				return err
 			}
