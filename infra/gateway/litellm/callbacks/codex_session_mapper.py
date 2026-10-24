@@ -1,10 +1,17 @@
+"""Map Codex sessions and preserve Responses parameters in LiteLLM 1.106.3.
+
+The ChatGPT request transform still filters parallel_tool_calls, and the
+CustomLogger pre-call, logging, success and stream hooks retain the signatures
+used below. Recheck both integration points on every gateway version bump.
+"""
+
 import json
 
 from litellm.integrations.custom_logger import CustomLogger
 from litellm.llms.chatgpt.responses.transformation import ChatGPTResponsesAPIConfig
 
 
-# LiteLLM 1.103.2 filters this supported Responses parameter out of ChatGPT
+# LiteLLM 1.106.3 filters this supported Responses parameter out of ChatGPT
 # requests. Codex Responses Lite requires the client's explicit false value.
 # Remove this shim once the shipped image passes the protocol test without it.
 _original_transform = getattr(ChatGPTResponsesAPIConfig, "transform_responses_api_request", None)

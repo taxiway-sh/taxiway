@@ -15,7 +15,7 @@ func TestPinnedVersionRejectsNonFinalOrAmbiguousImages(t *testing.T) {
 	if _, err := pinnedVersion([]byte("image: litellm/litellm:1.2.3\nimage: litellm/litellm:1.2.4\n")); err == nil {
 		t.Fatal("ambiguous pin accepted")
 	}
-	if pin, err := pinnedVersion([]byte("    image: litellm/litellm:1.103.2\n")); err != nil || pin != "1.103.2" {
+	if pin, err := pinnedVersion([]byte("    image: litellm/litellm:1.106.3\n")); err != nil || pin != "1.106.3" {
 		t.Fatalf("%s %v", pin, err)
 	}
 }

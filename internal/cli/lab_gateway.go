@@ -383,7 +383,7 @@ func prepareLabLiteLLMSidecarFiles(state *RootState, labStateDir, authDir string
           - %[8]s
 
   %[2]s:
-    image: litellm/litellm:1.103.2
+    image: litellm/litellm:1.106.3
     extra_hosts:
       - host.docker.internal:host-gateway
     depends_on:
