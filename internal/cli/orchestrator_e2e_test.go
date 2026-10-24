@@ -2870,6 +2870,41 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 				runE2EAssert(t, "assert:recovery-recording-cast-started", func(t *testing.T) {
 					assertE2EAsciicastFile(t, session.CastPathHost)
 				})
+				if stoppedLab && remove {
+					var out bytes.Buffer
+					result, err := state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{
+						Argv: []string{"bash", "-c", `set -eu
+sudo mv /usr/bin/codex /usr/bin/codex-taxiway231-original
+sudo tee /usr/bin/codex >/dev/null <<'SH'
+#!/bin/bash
+set -eu
+if [[ "$1" != --version && ! -e /tmp/taxiway231-startup-open ]]; then
+  touch /tmp/taxiway231-startup-entered
+  while [[ ! -e /tmp/taxiway231-startup-open ]]; do sleep 0.05; done
+fi
+exec /usr/bin/codex-taxiway231-original "$@"
+SH
+sudo chmod 755 /usr/bin/codex
+# Validate the injected executable before stopping the owned container.
+test "$(command -v codex)" = /usr/bin/codex
+test -L /usr/bin/codex-taxiway231-original
+readlink -e /usr/bin/codex-taxiway231-original >/dev/null
+test -x /usr/bin/codex-taxiway231-original
+test -f /usr/bin/codex && test -x /usr/bin/codex
+test "$(stat -c %a /usr/bin/codex)" = 755
+bash -n /usr/bin/codex
+grep -qF 'exec /usr/bin/codex-taxiway231-original "$@"' /usr/bin/codex
+original_version=$(timeout 5 /usr/bin/codex-taxiway231-original --version)
+wrapped_version=$(timeout 5 /usr/bin/codex --version)
+test "$wrapped_version" = "$original_version"
+test ! -e /tmp/taxiway231-startup-entered
+test ! -e /tmp/taxiway231-startup-open
+printf 'diagnostic wrapper validated: %s, mode=755, version bypass did not enter barrier\n' "$wrapped_version"`}, Stdout: &out, Stderr: &out,
+					})
+					require.NoError(t, err)
+					require.Zero(t, result.ExitCode, "%s", out.String())
+					t.Logf("%s", out.String())
+				}
 				if stoppedLab {
 					runE2ECommand(t, root, tb, "down", lab)
 				} else {
@@ -2898,25 +2933,7 @@ func runE2ERecordScenario(t *testing.T, root *cobra.Command, tb *dockerTestBuf, 
 					})
 					runE2ECommand(t, root, tb, "record", "rm", lab, "--name", name)
 				}
-				if stoppedLab && remove {
-					var out bytes.Buffer
-					result, err := state.Driver.Exec(context.Background(), idName(lab), driver.ExecRequest{
-						Argv: []string{"bash", "-c", `set -eu
-sudo mv /usr/bin/codex /usr/bin/codex-taxiway231-original
-sudo tee /usr/bin/codex >/dev/null <<'SH'
-#!/bin/bash
-set -eu
-if [[ "$1" != --version && ! -e /tmp/taxiway231-startup-open ]]; then
-  touch /tmp/taxiway231-startup-entered
-  while [[ ! -e /tmp/taxiway231-startup-open ]]; do sleep 0.05; done
-fi
-exec /usr/bin/codex-taxiway231-original "$@"
-SH
-sudo chmod 755 /usr/bin/codex`}, Stdout: &out, Stderr: &out,
-					})
-					require.NoError(t, err)
-					require.Zero(t, result.ExitCode, "%s", out.String())
-				}
+
 				if stoppedLab {
 					runE2ECommand(t, root, tb, "up", lab, "--skip-auth-check")
 					runE2EAssert(t, "assert:shell-target-ready-after-recording-recovery", func(t *testing.T) {
