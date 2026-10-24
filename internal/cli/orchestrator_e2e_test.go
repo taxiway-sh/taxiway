@@ -1205,7 +1205,7 @@ func captureE2EDryRunRuntime(t *testing.T, state *RootState, frozenTmux bool) ma
 			continue
 		}
 		var output, diagnostic bytes.Buffer
-		args := []string{"bash", "-c", `set -euo pipefail
+		args := []string{"bash", "-c", `set -Eeuo pipefail
 operation=initialization
 trap 'printf "snapshot operation=%s exit=%s\n" "$operation" "$?" >&2' ERR
 mode=$1
@@ -1346,7 +1346,7 @@ var e2eOrchestratorDryRunExclusions = map[string]e2eDryRunExclusions{
 		runtime: []string{
 			"/lab/work/gt/.dolt-data",              // The native database continues serving agent work.
 			"/lab/work/gt/daemon",                  // Native daemons update their logs independently.
-			"/lab/work/gt/.runtime/doctor-fix.log", // Native startup doctor output grows independently.
+			"/lab/work/gt/.runtime/doctor-fix.log", // Retain the synchronous startup doctor log's mode, as in the base snapshot.
 		},
 		volatile: []string{
 			"/lab/work/gt/.beads/last-touched", // Native bd show/update commands record their latest issue.
