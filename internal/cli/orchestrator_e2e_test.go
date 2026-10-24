@@ -1318,6 +1318,7 @@ var e2eAgentDryRunExclusions = map[string]e2eDryRunExclusions{
 		runtime: []string{
 			".claude/projects",        // Native conversation transcripts grow during a session.
 			".claude/sessions",        // Native session metadata follows running processes.
+			".claude/session-env",     // Native sessions create and clean up per-session hook environments.
 			".claude/todos",           // Native task lists change during agent work.
 			".claude/shell-snapshots", // Native shell state is captured independently of previews.
 			".claude/file-history",    // Native edit history changes during agent work.
