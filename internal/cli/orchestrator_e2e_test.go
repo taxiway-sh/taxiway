@@ -1004,7 +1004,7 @@ func quiesceE2EDryRunAgent(owner, t *testing.T, state *RootState, id, orch strin
 		return false, func(*testing.T) {}
 	}
 	// A restarted native client writes and removes temporary/session files
-	// asynchronously, including after reset while rm preview takes its snapshot.
+	// asynchronously.
 	// Freeze only this fixture's pane process tree while checking that preview
 	// preserves every file, then resume even if the assertion fails.
 	var stopped bytes.Buffer
