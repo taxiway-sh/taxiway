@@ -1200,29 +1200,57 @@ func captureE2EDryRunRuntime(t *testing.T, state *RootState, frozenTmux bool) ma
 operation=initialization
 trap 'printf "snapshot operation=%s exit=%s\n" "$operation" "$?" >&2' ERR
 mode=$1
-shift
-runtime=(-false)
-while [[ "$1" != -- ]]; do
-  pattern=$1
-  [[ "$pattern" = /* ]] || pattern="$HOME/$pattern"
-  runtime+=(-o -path "$pattern")
-  shift
-done
-shift
-volatile=()
-for pattern in "$@"; do
-  [[ "$pattern" = /* ]] || pattern="$HOME/$pattern"
-  volatile+=(! -path "$pattern")
-done
-for path in "$HOME/.config/taxiway" "$HOME/.codex" "$HOME/.claude" /lab/work; do
-  if [ -d "$path" ]; then
-    # Keep runtime directory presence while hashing persistent configuration and workspace files.
-    operation=directory-modes
-    find "$path" \( "${runtime[@]}" \) -printf 'mode|%m|%p\n' -prune -o "${volatile[@]}" -printf 'mode|%m|%p\n'
-    operation=file-digests
-    find "$path" \( "${runtime[@]}" \) -prune -o "${volatile[@]}" -type f -exec sha256sum {} +
-  fi
-done
+operation=filesystem-snapshot
+python3 - "$@" <<'PY'
+import fnmatch
+import hashlib
+import os
+import stat
+import sys
+
+separator = sys.argv.index("--", 2)
+def patterns(values):
+    return [p if p.startswith("/") else os.path.join(os.environ["HOME"], p) for p in values]
+
+runtime = patterns(sys.argv[2:separator])
+volatile = patterns(sys.argv[separator + 1:])
+def matches(path, patterns):
+    return any(fnmatch.fnmatchcase(path, pattern) for pattern in patterns)
+
+def snapshot(path):
+    # Claude's history lock is a directory created/removed during normal work.
+    # Filter its name before even lstat: find may inspect it before -path/prune.
+    if matches(path, volatile):
+        return
+    info = os.lstat(path)
+    print("mode|%o|%s" % (stat.S_IMODE(info.st_mode), path))
+    if matches(path, runtime):
+        return
+    if stat.S_ISDIR(info.st_mode):
+        with os.scandir(path) as entries:
+            for entry in entries:
+                snapshot(entry.path)
+    elif stat.S_ISREG(info.st_mode):
+        digest = hashlib.sha256()
+        with open(path, "rb") as source:
+            for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                digest.update(chunk)
+        # Match sha256sum's filename escaping and two-space digest separator.
+        escaped = "\\" in path or "\n" in path
+        name = path.replace("\\", "\\\\").replace("\n", "\\n")
+        print(("\\" if escaped else "") + digest.hexdigest() + "  " + name)
+
+for root in (os.path.join(os.environ["HOME"], ".config/taxiway"),
+             os.path.join(os.environ["HOME"], ".codex"),
+             os.path.join(os.environ["HOME"], ".claude"), "/lab/work"):
+    # Uninstalled roots may be absent; errors after enumeration remain fatal.
+    try:
+        root_info = os.stat(root)
+    except FileNotFoundError:
+        continue
+    if stat.S_ISDIR(root_info.st_mode):
+        snapshot(root)
+PY
 if [[ "$mode" != frozen ]] && command -v tmux >/dev/null 2>&1; then
   tmux list-sessions -F 'session|#{session_name}|#{session_id}' 2>/dev/null || true
 fi`, "capture-preview"}
@@ -1273,7 +1301,7 @@ var e2eAgentDryRunExclusions = map[string]e2eDryRunExclusions{
 		},
 		volatile: []string{
 			".claude/history.jsonl",                  // Native prompt history grows during sessions.
-			".claude/history.jsonl.lock",             // The prompt-history writer creates/removes this lock.
+			".claude/history.jsonl.lock",             // The prompt-history writer creates/removes this lock directory.
 			".claude/policy-limits*.stamp.json",      // Native policy-limit cache stamps are refreshed.
 			".claude/remote-settings.json.synced-at", // Background policy sync updates its timestamp.
 			".claude/.last-cleanup",                  // Native cleanup updates its own timestamp.
