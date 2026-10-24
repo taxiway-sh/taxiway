@@ -452,7 +452,7 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		output := runE2ECommand(t, root, tb, "init")
 		runE2EAssert(t, "assert:untraced-gateway-warning", func(t *testing.T) {
 			require.Contains(t, output, fmt.Sprintf("lab %q gateway is not configured to send Langfuse traces", lab))
-			require.Contains(t, output, "taxiway gateway '"+lab+"'")
+			require.Contains(t, output, "taxiway --state-dir "+shellQuote(state.Flags.StateDir)+" gateway '"+lab+"'")
 		})
 		runE2EAssert(t, "assert:runtime-initialized", func(t *testing.T) {
 			assertE2EObservabilityRunning(t, state)

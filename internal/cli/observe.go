@@ -1017,17 +1017,22 @@ func initializeTaxiwayRuntime(state *RootState, w io.Writer, printAccess bool) (
 	} else {
 		fmt.Fprintf(w, "\nWarning: Langfuse may still be starting. Check with: taxiway status\n")
 	}
-	warnUntracedLabGateways(w, labStateDir)
+	warnUntracedLabGateways(w, state)
 
 	return taxiwayRuntimeInitResult{Observability: runtime, Proxy: proxy, EnvPath: envPath}, nil
 }
 
 // Inspect the rendered sidecar configuration: ingestion keys in gateway/env
 // alone do not mean an existing sidecar was configured to use them.
-func warnUntracedLabGateways(w io.Writer, stateDir string) {
+func warnUntracedLabGateways(w io.Writer, state *RootState) {
+	stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
+	command := "taxiway"
+	if state.Flags.StateDir != "" {
+		command += " --state-dir " + shellQuote(state.Flags.StateDir)
+	}
 	sidecars, err := readLabLiteLLMSidecarStatuses(stateDir)
 	if err != nil {
-		fmt.Fprintln(w, "Warning: could not check lab gateway tracing. Check with: taxiway status")
+		fmt.Fprintf(w, "Warning: could not check lab gateway tracing. Check with: %s status\n", command)
 		return
 	}
 	for _, sidecar := range sidecars {
@@ -1039,12 +1044,12 @@ func warnUntracedLabGateways(w io.Writer, stateDir string) {
 		data, err := os.ReadFile(sidecar.ComposePath)
 		if err != nil || yaml.Unmarshal(data, &compose) != nil {
 			// Do not print parser errors: the source includes gateway secrets.
-			fmt.Fprintf(w, "Warning: could not check Langfuse tracing for lab %q. Run: taxiway gateway %s\n", sidecar.Lab, shellQuote(sidecar.Lab))
+			fmt.Fprintf(w, "Warning: could not check Langfuse tracing for lab %q. Run: %s gateway %s\n", sidecar.Lab, command, shellQuote(sidecar.Lab))
 			continue
 		}
 		env := compose.Services["litellm"].Environment
 		if env[labLangfuseProjectPublicKeyEnv] == "" || env[labLangfuseProjectSecretKeyEnv] == "" || env["LANGFUSE_OTEL_HOST"] == "" {
-			fmt.Fprintf(w, "Warning: lab %q gateway is not configured to send Langfuse traces. Run: taxiway gateway %s\n", sidecar.Lab, shellQuote(sidecar.Lab))
+			fmt.Fprintf(w, "Warning: lab %q gateway is not configured to send Langfuse traces. Run: %s gateway %s\n", sidecar.Lab, command, shellQuote(sidecar.Lab))
 		}
 	}
 }
