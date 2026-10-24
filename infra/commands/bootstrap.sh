@@ -48,17 +48,10 @@ install_node() {
   curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
   # A successful setup script is insufficient: key downloads have failed while
   # the script returned success, leaving apt to select Ubuntu's Node.js package.
-  local source configured=false candidate
-  if sudo test -s /usr/share/keyrings/nodesource.gpg; then
-    for source in /etc/apt/sources.list.d/nodesource.sources /etc/apt/sources.list.d/nodesource.list; do
-      if sudo grep -Fq 'https://deb.nodesource.com/node_22.x' "$source" 2>/dev/null &&
-          sudo grep -Fq '/usr/share/keyrings/nodesource.gpg' "$source" 2>/dev/null; then
-        configured=true
-        break
-      fi
-    done
-  fi
-  if [[ "$configured" != true ]]; then
+  local candidate
+  if ! sudo test -s /usr/share/keyrings/nodesource.gpg ||
+      ! sudo grep -Fq 'https://deb.nodesource.com/node_22.x' /etc/apt/sources.list.d/nodesource.sources ||
+      ! sudo grep -Fq '/usr/share/keyrings/nodesource.gpg' /etc/apt/sources.list.d/nodesource.sources; then
     log "NodeSource setup did not configure its Node.js 22 repository and signing key; rerun bootstrap after fixing repository access."
     return 1
   fi
