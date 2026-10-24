@@ -140,7 +140,15 @@ The lab `gateway` phase is responsible for:
   initialized.
 
 `taxiway observe up` only starts Langfuse. It does not create lab gateway keys
-and does not start LiteLLM sidecars.
+and does not start LiteLLM sidecars. Both `taxiway init` and `taxiway observe up`
+warn for each existing gateway whose rendered configuration lacks Langfuse
+ingestion settings, naming the lab and the `taxiway gateway <lab>` command to
+run. This includes gateways created before observability was started.
+
+Run the suggested command to create the lab's Langfuse project and ingestion
+keys and refresh its sidecar. Until then, its model calls remain untraced;
+earlier calls cannot be recovered as traces. Starting observability leaves
+existing gateways running rather than restarting them automatically.
 
 Taxiway writes its own lab lifecycle events (`LAB_AGENT_EVENT` records) to the
 lab's local `events.jsonl` file. They are not sent to Langfuse. Langfuse is

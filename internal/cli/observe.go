@@ -1017,8 +1017,36 @@ func initializeTaxiwayRuntime(state *RootState, w io.Writer, printAccess bool) (
 	} else {
 		fmt.Fprintf(w, "\nWarning: Langfuse may still be starting. Check with: taxiway status\n")
 	}
+	warnUntracedLabGateways(w, labStateDir)
 
 	return taxiwayRuntimeInitResult{Observability: runtime, Proxy: proxy, EnvPath: envPath}, nil
+}
+
+// Inspect the rendered sidecar configuration: ingestion keys in gateway/env
+// alone do not mean an existing sidecar was configured to use them.
+func warnUntracedLabGateways(w io.Writer, stateDir string) {
+	sidecars, err := readLabLiteLLMSidecarStatuses(stateDir)
+	if err != nil {
+		fmt.Fprintln(w, "Warning: could not check lab gateway tracing. Check with: taxiway status")
+		return
+	}
+	for _, sidecar := range sidecars {
+		var compose struct {
+			Services map[string]struct {
+				Environment map[string]string `yaml:"environment"`
+			} `yaml:"services"`
+		}
+		data, err := os.ReadFile(sidecar.ComposePath)
+		if err != nil || yaml.Unmarshal(data, &compose) != nil {
+			// Do not print parser errors: the source includes gateway secrets.
+			fmt.Fprintf(w, "Warning: could not check Langfuse tracing for lab %q. Run: taxiway gateway %s\n", sidecar.Lab, shellQuote(sidecar.Lab))
+			continue
+		}
+		env := compose.Services["litellm"].Environment
+		if env[labLangfuseProjectPublicKeyEnv] == "" || env[labLangfuseProjectSecretKeyEnv] == "" || env["LANGFUSE_OTEL_HOST"] == "" {
+			fmt.Fprintf(w, "Warning: lab %q gateway is not configured to send Langfuse traces. Run: taxiway gateway %s\n", sidecar.Lab, shellQuote(sidecar.Lab))
+		}
+	}
 }
 
 func newObserveUpCmd(state *RootState) *cobra.Command {
