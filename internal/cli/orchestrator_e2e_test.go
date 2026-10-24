@@ -2878,7 +2878,12 @@ sudo mv /usr/bin/codex /usr/bin/codex-taxiway231-original
 sudo tee /usr/bin/codex >/dev/null <<'SH'
 #!/bin/bash
 set -eu
-if [[ "$1" != --version && ! -e /tmp/taxiway231-startup-open ]]; then
+interactive=false
+case "$#" in
+  1) [[ "$1" != --dangerously-bypass-approvals-and-sandbox ]] || interactive=true ;;
+  3) if [[ "$1" == resume && "$2" == --last && "$3" == --dangerously-bypass-approvals-and-sandbox ]]; then interactive=true; fi ;;
+esac
+if [[ "$interactive" == true && ! -e /tmp/taxiway231-startup-open ]]; then
   touch /tmp/taxiway231-startup-entered
   while [[ ! -e /tmp/taxiway231-startup-open ]]; do sleep 0.05; done
 fi
@@ -2897,6 +2902,19 @@ grep -qF 'exec /usr/bin/codex-taxiway231-original "$@"' /usr/bin/codex
 original_version=$(timeout 5 /usr/bin/codex-taxiway231-original --version)
 wrapped_version=$(timeout 5 /usr/bin/codex --version)
 test "$wrapped_version" = "$original_version"
+diagnostic_metadata_dir=$(mktemp -d)
+trap 'rm -rf "$diagnostic_metadata_dir"' EXIT
+# Complete start/env/verify preparation contract: version, bundled catalog, help.
+for metadata in bundled-models help; do
+  metadata_args=(debug models --bundled)
+  [[ "$metadata" != help ]] || metadata_args=(--help)
+  timeout 10 /usr/bin/codex-taxiway231-original "${metadata_args[@]}" > "$diagnostic_metadata_dir/original"
+  timeout 10 /usr/bin/codex "${metadata_args[@]}" > "$diagnostic_metadata_dir/wrapped"
+  cmp "$diagnostic_metadata_dir/original" "$diagnostic_metadata_dir/wrapped"
+  test ! -e /tmp/taxiway231-startup-entered
+  test ! -e /tmp/taxiway231-startup-open
+  printf 'diagnostic metadata %s: original/wrapper identical, no barrier marker\n' "$metadata"
+done
 test ! -e /tmp/taxiway231-startup-entered
 test ! -e /tmp/taxiway231-startup-open
 printf 'diagnostic wrapper validated: %s, mode=755, version bypass did not enter barrier\n' "$wrapped_version"`}, Stdout: &out, Stderr: &out,
