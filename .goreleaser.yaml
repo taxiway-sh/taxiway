@@ -30,12 +30,32 @@ archives:
       - taxiway
     formats:
       - tar.gz
+    builds_info:
+      owner: root
+      group: root
     name_template: >-
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
     files:
+      - src: README.md
+        info:
+          owner: root
+          group: root
+      - src: LICENSE
+        info:
+          owner: root
+          group: root
       - src: infra/*
+        info:
+          owner: root
+          group: root
       - src: agents/*
+        info:
+          owner: root
+          group: root
       - src: orchestrators/*
+        info:
+          owner: root
+          group: root
 
 checksum:
   name_template: checksums.txt

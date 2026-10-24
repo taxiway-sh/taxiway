@@ -115,7 +115,8 @@ if [ "$actual" != "$expected" ]; then
   exit 1
 fi
 
-tar -xzf "$tmpdir/$archive" -C "$tmpdir"
+# Release ownership belongs to the builder; extraction belongs to this user.
+tar -xozf "$tmpdir/$archive" -C "$tmpdir"
 
 if [ ! -f "$tmpdir/$BIN_NAME" ]; then
   echo "error: release archive does not contain $BIN_NAME" >&2
