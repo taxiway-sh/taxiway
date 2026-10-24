@@ -365,6 +365,7 @@ func renderLiteLLMConfig(state *RootState, includeCodexModels bool, enableCodexS
 		}
 	}
 	matchedSelected := map[string]bool{}
+	var excluded []string
 	addForwardHeader := func(name string) {
 		if name == "" {
 			return
@@ -378,6 +379,7 @@ func renderLiteLLMConfig(state *RootState, includeCodexModels bool, enableCodexS
 	}
 	for _, model := range catalog.Models {
 		if len(selected) > 0 && !selected[model.Name] {
+			excluded = append(excluded, model.Name+": not selected")
 			continue
 		}
 		if selected[model.Name] {
@@ -386,9 +388,11 @@ func renderLiteLLMConfig(state *RootState, includeCodexModels bool, enableCodexS
 			}
 			matchedSelected[model.Name] = true
 		} else if model.StatusAt(modelNow()) != "active" {
+			excluded = append(excluded, model.Name+": "+model.StatusAt(modelNow()))
 			continue
 		}
 		if model.Provider == "chatgpt" && !includeCodexModels && len(selected) == 0 {
+			excluded = append(excluded, model.Name+": missing ChatGPT auth (run taxiway credentials codex)")
 			continue
 		}
 		entry := liteLLMGeneratedModelEntry{
@@ -413,6 +417,9 @@ func renderLiteLLMConfig(state *RootState, includeCodexModels bool, enableCodexS
 		if !matchedSelected[name] {
 			return nil, fmt.Errorf("unknown LiteLLM model %q", name)
 		}
+	}
+	if len(models) == 0 {
+		return nil, noUsableLiteLLMModels(excluded)
 	}
 
 	callbacks := []string{"langfuse_otel"}
@@ -450,6 +457,13 @@ func renderLiteLLMConfig(state *RootState, includeCodexModels bool, enableCodexS
 		return nil, fmt.Errorf("rendering LiteLLM config: %w", err)
 	}
 	return out, nil
+}
+
+func noUsableLiteLLMModels(excluded []string) error {
+	if len(excluded) == 0 {
+		excluded = []string{"the catalog has no models"}
+	}
+	return fmt.Errorf("no usable LiteLLM models: %s; select an available model with --set model=... or update infra/gateway/litellm/models.yaml", strings.Join(excluded, "; "))
 }
 
 func parseLiteLLMModelCatalog(data []byte) (modelcatalog.Catalog, error) {
