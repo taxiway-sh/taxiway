@@ -62,7 +62,7 @@ install_node() {
   fi
   # Select the repository's version explicitly, including when a different
   # major is already installed and apt would otherwise keep the newer package.
-  sudo apt-get install -y --allow-downgrades "nodejs=$candidate"
+  sudo apt-get install -y --allow-downgrades --reinstall "nodejs=$candidate"
   if ! node_toolchain_ready; then
     log "Node.js 22 and a working npm are required; the installation is incomplete. Rerun bootstrap to repair it."
     return 1

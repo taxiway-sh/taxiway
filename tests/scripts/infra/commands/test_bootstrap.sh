@@ -32,11 +32,16 @@ if name == 'sudo':
         assert '--allow-downgrades' in args
         assert args[-1] == 'nodejs=' + state.get('candidate', '22.21.0-1nodesource1')
         (root / 'install-node').touch()
+        # apt keeps an already-current package unchanged unless reinstallation
+        # is requested, even if files such as npm have disappeared.
+        if state.get('package_version') == args[-1].split('=', 1)[1] and '--reinstall' not in args:
+            sys.exit(0)
         for tool in ('node', 'npm'):
             path = root / 'bin' / tool
             if not path.exists(): path.symlink_to('fixture-tool')
         state['node'] = state.get('installed_node', 'v22.21.0')
         state['npm'] = True
+        state['npm_broken'] = state.get('installed_npm_broken', False)
         (root / 'state.json').write_text(json.dumps(state))
 elif name == 'curl':
     if state.get('setup_download_failure'): sys.exit(22)
@@ -66,7 +71,8 @@ cases = [
     ('distribution-candidate', {'candidate': '18.19.1+dfsg-6ubuntu5'}, False, False),
     ('setup-download-fails', {'setup_download_failure': True}, False, False),
     ('wrong-installed-version', {'installed_node': 'v18.19.1'}, False, True),
-    ('broken-npm', {'node': 'v22.21.0', 'npm': True, 'npm_broken': True}, False, True),
+    ('broken-npm', {'node': 'v22.21.0', 'npm': True, 'npm_broken': True}, True, True),
+    ('installed-npm-broken', {'installed_npm_broken': True}, False, True),
     ('missing-required-tool', {'node': 'v22.21.0', 'npm': True, 'missing': 'git'}, False, False),
     ('broken-required-tool', {'node': 'v22.21.0', 'npm': True, 'broken_tool': 'java'}, False, False),
 ]
@@ -77,6 +83,8 @@ for name, state, success, installs in cases:
         bin_dir.mkdir()
         home = root / 'home'
         home.mkdir()
+        if state.get('node') == 'v22.21.0':
+            state['package_version'] = '22.21.0-1nodesource1'
         (root / 'state.json').write_text(json.dumps(state))
         tool = bin_dir / 'fixture-tool'
         tool.write_text('#!' + sys.executable + '\n' + dispatch)
