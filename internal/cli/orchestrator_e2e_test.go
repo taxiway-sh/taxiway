@@ -326,13 +326,6 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 	runE2EInvalidModelSelections(t, root, tb, state, id, lab, orch)
 	dryRunLabels := e2eSemanticDryRunLabels(orch)
 
-	runE2EStep(t, "taxiway:init", func(t *testing.T) {
-		ensureE2ERuntimeInitialized(t, root, tb)
-		runE2EAssert(t, "assert:runtime-initialized", func(t *testing.T) {
-			assertE2EObservabilityRunning(t, state)
-		})
-	})
-
 	runE2EStep(t, fmt.Sprintf("taxiway:create[--type=%s,--dry-run]", orch), func(t *testing.T) {
 		existedBefore, err := state.Driver.Exists(context.Background(), id)
 		require.NoError(t, err)
@@ -447,6 +440,44 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 		})
 	})
 
+	// Exercise late observability startup with the real gateway created above.
+	// No fixture edits its keys or Compose configuration.
+	ref := config.LabRef{Lab: lab, Orch: orch, Driver: state.Driver.Name()}
+	runE2EStep(t, "taxiway:init[after-gateway]", func(t *testing.T) {
+		generation := func() []byte {
+			out, err := exec.Command("docker", "inspect", "--format", "{{.Id}} {{.State.StartedAt}}", e2eLabLiteLLMContainer(state, ref)).CombinedOutput()
+			require.NoError(t, err, string(out))
+			return out
+		}
+		before := generation()
+		output := runE2ECommand(t, root, tb, "init")
+		runE2EAssert(t, "assert:untraced-gateway-warning", func(t *testing.T) {
+			require.Contains(t, output, fmt.Sprintf("lab %q gateway is not configured to send Langfuse traces", lab))
+			require.Contains(t, output, "taxiway --state-dir "+shellQuote(state.Flags.StateDir)+" gateway -- '"+lab+"'")
+		})
+		runE2EAssert(t, "assert:runtime-initialized", func(t *testing.T) {
+			assertE2EObservabilityRunning(t, state)
+		})
+		runE2EAssert(t, "assert:gateway-runtime-preserved", func(t *testing.T) {
+			assertE2EGatewayRuntimeRunning(t, state, lab, orch)
+			require.Equal(t, before, generation(), "init must neither replace nor restart the gateway")
+			values, err := readLabGatewayEnv(stateDir, ref)
+			require.NoError(t, err)
+			require.Empty(t, values[labLangfuseProjectPublicKeyEnv], "startup must not silently reconcile the gateway")
+		})
+	})
+
+	runE2EStep(t, "taxiway:gateway[enable-tracing]", func(t *testing.T) {
+		runE2ECommand(t, root, tb, "gateway", lab)
+		runE2EAssert(t, "assert:tracing-configured", func(t *testing.T) {
+			values, err := readLabGatewayEnv(stateDir, ref)
+			require.NoError(t, err)
+			require.NotEmpty(t, values[labLangfuseProjectPublicKeyEnv])
+			require.NotEmpty(t, values[labLangfuseProjectSecretKeyEnv])
+			assertE2EGatewayRuntimeRunning(t, state, lab, orch)
+		})
+	})
+
 	runE2EScriptDryRunStep(t, "taxiway:workspace[--dry-run]", root, tb, state, stateDir, id, false, dryRunLabels.Workspace, "workspace", lab)
 	runE2EStep(t, "taxiway:workspace", func(t *testing.T) {
 		runE2ECommand(t, root, tb, "workspace", lab)
@@ -517,7 +548,11 @@ func testE2EOrchestratorPhaseByPhase(t *testing.T, orch string) {
 	})
 
 	runE2EStep(t, "taxiway:observe[up]", func(t *testing.T) {
-		runE2ECommand(t, root, tb, "observe", "up")
+		output := runE2ECommand(t, root, tb, "observe", "up")
+		runE2EAssert(t, "assert:configured-gateway-needs-no-warning", func(t *testing.T) {
+			require.NotContains(t, output, "gateway is not configured to send Langfuse traces")
+			require.NotContains(t, output, "could not check")
+		})
 		runE2EAssert(t, "assert:observability-started", func(t *testing.T) {
 			assertE2EObservabilityRunning(t, state)
 			assertE2EGatewayRuntimeRunning(t, state, lab, orch)

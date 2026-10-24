@@ -21,6 +21,7 @@ import (
 
 	"github.com/taxiway-sh/taxiway/internal/config"
 	"github.com/taxiway-sh/taxiway/internal/driver"
+	"github.com/taxiway-sh/taxiway/internal/phases"
 )
 
 // buildObserveTestRoot creates a minimal cobra root with the observe command
@@ -82,6 +83,59 @@ func TestObserveEnsureEnvFile_CreatesFile(t *testing.T) {
 		require.Len(t, parts, 2, "expected KEY=VALUE format for line: %q", line)
 		assert.NotEmpty(t, parts[1], "secret value must not be empty for key %s", parts[0])
 	}
+}
+
+func TestWarnUntracedLabGateways(t *testing.T) {
+	for _, tc := range []struct {
+		name, env, warning string
+	}{
+		{"no-ingestion-settings", "      LITELLM_MASTER_KEY: fixture-secret\n", "is not configured to send Langfuse traces"},
+		{"missing-public-key", "      LANGFUSE_SECRET_KEY: fixture-secret\n      LANGFUSE_OTEL_HOST: http://langfuse.internal\n", "is not configured to send Langfuse traces"},
+		{"missing-secret-key", "      LANGFUSE_PUBLIC_KEY: fixture-public\n      LANGFUSE_OTEL_HOST: http://langfuse.internal\n", "is not configured to send Langfuse traces"},
+		{"missing-host", "      LANGFUSE_PUBLIC_KEY: fixture-public\n      LANGFUSE_SECRET_KEY: fixture-secret\n", "is not configured to send Langfuse traces"},
+		{"configured", "      LANGFUSE_PUBLIC_KEY: fixture-public\n      LANGFUSE_SECRET_KEY: fixture-secret\n      LANGFUSE_OTEL_HOST: http://langfuse.internal\n", ""},
+		{"malformed", "      LANGFUSE_SECRET_KEY: [fixture-secret\n", "could not check Langfuse tracing"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stateDir := t.TempDir()
+			gatewayDir := filepath.Join(stateDir, "mylab", "gateway")
+			require.NoError(t, os.MkdirAll(gatewayDir, 0o700))
+			path := filepath.Join(gatewayDir, "litellm.compose.yml")
+			before := []byte("services:\n  litellm:\n    environment:\n" + tc.env)
+			require.NoError(t, os.WriteFile(path, before, 0o600))
+			var out bytes.Buffer
+			warnUntracedLabGateways(&out, &RootState{Flags: GlobalFlags{StateDir: stateDir}})
+			if tc.warning == "" {
+				assert.Empty(t, out.String())
+			} else {
+				assert.Contains(t, out.String(), tc.warning)
+				assert.Contains(t, out.String(), `lab "mylab"`)
+				assert.Contains(t, out.String(), "gateway -- 'mylab'")
+			}
+			assert.NotContains(t, out.String(), "fixture-secret")
+			assert.NotContains(t, out.String(), "fixture-public")
+			after, err := os.ReadFile(path)
+			require.NoError(t, err)
+			assert.Equal(t, before, after)
+		})
+	}
+	t.Run("no-gateways", func(t *testing.T) {
+		stateDir := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(stateDir, "newlab"), 0o700))
+		var out bytes.Buffer
+		warnUntracedLabGateways(&out, &RootState{Flags: GlobalFlags{StateDir: stateDir}})
+		assert.Empty(t, out.String())
+		warnUntracedLabGateways(&out, &RootState{Flags: GlobalFlags{StateDir: filepath.Join(stateDir, "absent")}})
+		assert.Empty(t, out.String())
+	})
+	t.Run("unreadable-state", func(t *testing.T) {
+		stateDir := filepath.Join(t.TempDir(), "file")
+		require.NoError(t, os.WriteFile(stateDir, nil, 0o600))
+		var out bytes.Buffer
+		warnUntracedLabGateways(&out, &RootState{Flags: GlobalFlags{StateDir: stateDir}})
+		assert.Contains(t, out.String(), "could not check lab gateway tracing")
+		assert.Contains(t, out.String(), "--state-dir "+shellQuote(stateDir)+" status")
+	})
 }
 
 // TestObserveEnsureEnvFile_Idempotent verifies that calling ensureEnvFile a
@@ -1146,31 +1200,34 @@ exit 0
 	assert.Empty(t, stderr.String())
 }
 
-func TestInitStartsRuntimeWithoutPrintingProxyURL(t *testing.T) {
-	tmp := t.TempDir()
-	observabilityDir := filepath.Join(tmp, ".observability")
-	proxyDir := filepath.Join(tmp, ".proxy")
-	labStateDir := filepath.Join(tmp, ".lab-state")
-	logPath := filepath.Join(tmp, "docker.log")
-	t.Setenv("TAXIWAY_CONTEXT", "dev")
-	t.Setenv("TAXIWAY_CONTEXT_ID", "a1b2c3d4")
-	t.Setenv("TAXIWAY_OBSERVABILITY_DIR", observabilityDir)
-	t.Setenv("TAXIWAY_PROXY_DIR", proxyDir)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/public/health" {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		http.NotFound(w, r)
-	}))
-	defer server.Close()
-	serverURL, err := url.Parse(server.URL)
-	require.NoError(t, err)
-	_, port, err := net.SplitHostPort(serverURL.Host)
-	require.NoError(t, err)
-	require.NoError(t, os.MkdirAll(proxyDir, 0o700))
-	require.NoError(t, os.WriteFile(proxyRuntimeStatePath(proxyDir), []byte(fmt.Sprintf(`{"port":%s}`+"\n", port)), 0o600))
-	writeFakeDocker(t, fmt.Sprintf(`#!/bin/sh
+func TestObservabilityStartupWarnsAboutUntracedGateways(t *testing.T) {
+	for _, args := range [][]string{{"init"}, {"observe", "up"}} {
+		t.Run(strings.Join(args, "-"), func(t *testing.T) {
+			tmp := t.TempDir()
+			observabilityDir := filepath.Join(tmp, ".observability")
+			proxyDir := filepath.Join(tmp, ".proxy")
+			labStateDir := filepath.Join(tmp, "selected state 'directory")
+			t.Setenv("TAXIWAY_LAB_STATE_DIR", filepath.Join(tmp, "other-state"))
+			logPath := filepath.Join(tmp, "docker.log")
+			t.Setenv("TAXIWAY_CONTEXT", "dev")
+			t.Setenv("TAXIWAY_CONTEXT_ID", "a1b2c3d4")
+			t.Setenv("TAXIWAY_OBSERVABILITY_DIR", observabilityDir)
+			t.Setenv("TAXIWAY_PROXY_DIR", proxyDir)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/api/public/health" {
+					w.WriteHeader(http.StatusOK)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+			defer server.Close()
+			serverURL, err := url.Parse(server.URL)
+			require.NoError(t, err)
+			_, port, err := net.SplitHostPort(serverURL.Host)
+			require.NoError(t, err)
+			require.NoError(t, os.MkdirAll(proxyDir, 0o700))
+			require.NoError(t, os.WriteFile(proxyRuntimeStatePath(proxyDir), []byte(fmt.Sprintf(`{"port":%s}`+"\n", port)), 0o600))
+			writeFakeDocker(t, fmt.Sprintf(`#!/bin/sh
 printf '%%s\n' "$*" >> %q
 if [ "$1" = "version" ]; then exit 0; fi
 if [ "$1" = "port" ]; then echo '127.0.0.1:%s'; exit 0; fi
@@ -1184,36 +1241,89 @@ if [ "$1" = "run" ]; then exit 0; fi
 if [ "$1" = "exec" ]; then exit 0; fi
 exit 0
 `, logPath, port))
-	require.NoError(t, os.MkdirAll(filepath.Join(tmp, "infra", "observability"), 0o755))
+			require.NoError(t, os.MkdirAll(filepath.Join(tmp, "infra", "observability"), 0o755))
 
-	root, state, stdout, stderr := buildObserveTestRoot(t, tmp)
-	state.Flags.StateDir = labStateDir
-	root.SetArgs([]string{"init"})
+			root, state, stdout, stderr := buildObserveTestRoot(t, tmp)
+			state.Flags.StateDir = labStateDir
+			// The rendered configuration is the sidecar's input. Keys that were
+			// written to gateway/env later must not hide an unconfigured sidecar.
+			for _, lab := range []string{"-untraced", "traced"} {
+				ref := config.LabRef{Lab: lab, Orch: "codex", Driver: "docker"}
+				require.NoError(t, writeLabGatewayEnv(labStateDir, ref, map[string]string{
+					labLangfuseProjectPublicKeyEnv: "pk-fixture",
+					labLangfuseProjectSecretKeyEnv: "sk-fixture",
+				}))
+				compose := "services:\n  litellm:\n    environment:\n      LITELLM_MASTER_KEY: fixture-gateway-key\n"
+				if lab == "traced" {
+					compose += "      LANGFUSE_PUBLIC_KEY: pk-fixture\n      LANGFUSE_SECRET_KEY: sk-fixture\n      LANGFUSE_OTEL_HOST: http://langfuse.internal\n"
+				}
+				require.NoError(t, os.WriteFile(filepath.Join(labGatewayDir(labStateDir, ref), "litellm.compose.yml"), []byte(compose), 0o600))
+			}
+			root.SetArgs(args)
 
-	err = root.Execute()
+			err = root.Execute()
 
-	require.NoError(t, err)
-	assert.Contains(t, stdout.String(), "Taxiway runtime initialized.")
-	assert.Contains(t, stdout.String(), "✓ Proxy started")
-	assert.Contains(t, stdout.String(), "Create your first lab with `taxiway up mylab --type codex`")
-	assert.Empty(t, stderr.String())
-	caddy, err := os.ReadFile(proxyConfigStatePath(proxyDir))
-	require.NoError(t, err)
-	assert.Contains(t, string(caddy), "<h1>Taxiway proxy</h1>")
-	assert.Contains(t, string(caddy), `Cache-Control "no-store"`)
-	assert.Contains(t, string(caddy), "This endpoint only serves Taxiway runtime routes.")
-	assert.Contains(t, string(caddy), "@observability_langfuse")
-	dockerLog, err := os.ReadFile(logPath)
-	require.NoError(t, err)
-	log := string(dockerLog)
-	assert.Contains(t, log, "run -d")
-	proxyRunIndex := strings.Index(log, "run -d")
-	observabilityUpIndex := strings.Index(log, "compose --project-directory")
-	require.NotEqual(t, -1, proxyRunIndex)
-	require.NotEqual(t, -1, observabilityUpIndex)
-	assert.Less(t, proxyRunIndex, observabilityUpIndex)
-	require.FileExists(t, proxyRuntimeStatePath(proxyDir))
-	require.FileExists(t, observabilityRuntimeStatePath(observabilityDir))
+			require.NoError(t, err)
+			if args[0] == "init" {
+				assert.Contains(t, stdout.String(), "Taxiway runtime initialized.")
+				assert.Contains(t, stdout.String(), "Create your first lab with `taxiway up mylab --type codex`")
+			}
+			assert.Contains(t, stdout.String(), `lab "-untraced" gateway is not configured to send Langfuse traces. Run: taxiway --state-dir `+shellQuote(labStateDir)+` gateway -- '-untraced'`)
+			assert.NotContains(t, stdout.String(), `lab "traced" gateway is not configured`)
+			assert.NotContains(t, stdout.String(), "fixture-gateway-key")
+			assert.NotContains(t, stdout.String(), "pk-fixture")
+			assert.NotContains(t, stdout.String(), "sk-fixture")
+			// The warning must leave existing gateways untouched.
+			assert.FileExists(t, filepath.Join(labStateDir, "-untraced", "gateway", "litellm.compose.yml"))
+			assert.Contains(t, stdout.String(), "✓ Proxy started")
+			assert.Empty(t, stderr.String())
+			caddy, err := os.ReadFile(proxyConfigStatePath(proxyDir))
+			require.NoError(t, err)
+			assert.Contains(t, string(caddy), "<h1>Taxiway proxy</h1>")
+			assert.Contains(t, string(caddy), `Cache-Control "no-store"`)
+			assert.Contains(t, string(caddy), "This endpoint only serves Taxiway runtime routes.")
+			assert.Contains(t, string(caddy), "@observability_langfuse")
+			dockerLog, err := os.ReadFile(logPath)
+			require.NoError(t, err)
+			log := string(dockerLog)
+			assert.Contains(t, log, "run -d")
+			proxyRunIndex := strings.Index(log, "run -d")
+			observabilityUpIndex := strings.Index(log, "compose --project-directory")
+			require.NotEqual(t, -1, proxyRunIndex)
+			require.NotEqual(t, -1, observabilityUpIndex)
+			assert.Less(t, proxyRunIndex, observabilityUpIndex)
+			require.FileExists(t, proxyRuntimeStatePath(proxyDir))
+			require.FileExists(t, observabilityRuntimeStatePath(observabilityDir))
+
+			// Execute the printed shell command through the gateway handler in
+			// a fresh root. Its default state has no such lab.
+			var hint string
+			for _, line := range strings.Split(stdout.String(), "\n") {
+				if strings.Contains(line, `lab "-untraced"`) {
+					_, hint, _ = strings.Cut(line, "Run: ")
+				}
+			}
+			require.NotEmpty(t, hint)
+			argv, err := exec.Command("/bin/sh", "-c", "taxiway() { printf '%s\\000' \"$@\"; }; "+hint).Output()
+			require.NoError(t, err)
+			hintArgs := strings.Split(strings.TrimSuffix(string(argv), "\x00"), "\x00")
+			gatewayRoot, gatewayState, _, _, _ := buildUpTestRoot(t)
+			targetDriver := driver.NewMockDriver(labStateDir)
+			require.NoError(t, targetDriver.Create(testCtx(t), idName("-untraced"), driver.CreateOptions{}))
+			require.NoError(t, targetDriver.WriteLabRef(testCtx(t), idName("-untraced"), config.LabRef{Lab: "-untraced", Orch: "gastown", Driver: "mock"}))
+			gatewayRoot.PersistentFlags().StringVar(&gatewayState.Flags.StateDir, "state-dir", "", "state override")
+			gatewayRoot.PersistentPreRunE = func(_ *cobra.Command, _ []string) error {
+				selected := driver.NewMockDriver(config.StateDir(gatewayState.Flags.StateDir, gatewayState.RepoDir))
+				selected.RepoDir = gatewayState.RepoDir
+				gatewayState.Driver = selected
+				return nil
+			}
+			gatewayRoot.SetArgs(hintArgs)
+			require.NoError(t, gatewayRoot.Execute())
+			require.True(t, phases.Done(labStateDir, idName("-untraced"), phases.PhaseGateway))
+			require.NoDirExists(t, filepath.Join(config.StateDir("", gatewayState.RepoDir), "-untraced"))
+		})
+	}
 }
 
 func TestDestroyRemovesRuntimeStateAndProxy(t *testing.T) {
