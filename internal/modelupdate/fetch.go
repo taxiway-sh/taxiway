@@ -157,7 +157,7 @@ func Load(ctx context.Context, client *http.Client, fixtureDir string) (Sources,
 		if err != nil {
 			return Sources{}, fmt.Errorf("litellm %s: %w", tag, err)
 		}
-		var prices map[string]json.RawMessage
+		var prices map[string]modelMetadata
 		if err := json.Unmarshal(data, &prices); err != nil || len(prices) == 0 {
 			return Sources{}, fmt.Errorf("litellm %s: invalid pricing schema", tag)
 		}

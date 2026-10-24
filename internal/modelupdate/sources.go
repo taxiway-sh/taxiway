@@ -204,10 +204,7 @@ func Discover(s Sources) (Discovery, error) {
 	if !strings.Contains(string(s.ChatGPT), "# Models") {
 		return d, fmt.Errorf("chatgpt: missing Models heading")
 	}
-	var prices map[string]struct {
-		Mode     string `json:"mode"`
-		Provider string `json:"litellm_provider"`
-	}
+	var prices map[string]modelMetadata
 	if err := json.Unmarshal(s.LiteLLM, &prices); err != nil || len(prices) == 0 {
 		return d, fmt.Errorf("litellm: invalid pricing schema")
 	}

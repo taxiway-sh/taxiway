@@ -45,11 +45,13 @@ func sortedFinalReleases(metadata map[string][]byte) []string {
 	return tags
 }
 
+type modelMetadata struct {
+	Mode     string `json:"mode"`
+	Provider string `json:"litellm_provider"`
+}
+
 func matchingMetadata(data []byte, id, provider string) bool {
-	var prices map[string]struct {
-		Mode     string `json:"mode"`
-		Provider string `json:"litellm_provider"`
-	}
+	var prices map[string]modelMetadata
 	if json.Unmarshal(data, &prices) != nil {
 		return false
 	}
