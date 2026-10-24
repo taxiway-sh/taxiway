@@ -31,7 +31,7 @@ releases.txt
 gateway.txt
 ```
 
-JSON sources retain their public JSON schema; documentation sources use their Markdown endpoint (`.md`). `gateway.txt` contains the gateway image declaration, for example `image: litellm/litellm:1.103.2`; `litellm.txt` contains that final release's metadata. When candidates are missing from it, also supply `litellm-v<version>.txt` for each newer final release in `releases.txt`, in ascending version order until every skipped candidate has matching metadata or the inventory is exhausted. Development, release-candidate, draft and prerelease entries need no metadata fixture.
+JSON sources retain their public JSON schema; documentation sources use their Markdown endpoint (`.md`). `gateway.txt` contains the gateway image declaration, for example `image: litellm/litellm:1.106.3`; `litellm.txt` contains that final release's metadata. When candidates are missing from it, also supply `litellm-v<version>.txt` for each newer final release in `releases.txt`, in ascending version order until every skipped candidate has matching metadata or the inventory is exhausted. Development, release-candidate, draft and prerelease entries need no metadata fixture.
 
 All fixture files use the same strict parsers as online data. Pass `-fixtures /path/to/sources -as-of 2026-10-02` to reproduce retirement calculations at a chosen UTC date. Reports identify the canonical sources and hash the supplied data; fixtures do not prove current public availability. Do not commit downloaded snapshots, local reports, or generated lab state.
 

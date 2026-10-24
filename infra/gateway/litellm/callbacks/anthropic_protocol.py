@@ -1,8 +1,11 @@
-"""Compatibility for signed, omitted thinking in LiteLLM 1.103.2.
+"""Preserve signed, omitted thinking; source compatibility checked on LiteLLM 1.106.3.
 
 Opus/Sonnet 5.5 and Fable return empty thinking text with an opaque signature.
 Anthropic requires replaying those blocks unchanged across tool turns:
 https://platform.claude.com/docs/en/models/opus-5-5/migration-guide
+Upstream now preserves these blocks with is_empty_unsigned_thinking_block.
+This compatible wrapper stays until the shipped image's protocol test proves
+the same behavior without it; the source check alone is not runtime validation.
 Remove this shim once the shipped image passes the protocol test without it.
 """
 

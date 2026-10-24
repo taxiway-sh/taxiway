@@ -81,7 +81,7 @@ func TestPrepareLabLiteLLMSidecarFilesWritesComposeAndRoute(t *testing.T) {
 	require.NoError(t, yaml.Unmarshal(compose, &composeFile))
 	require.Contains(t, composeFile.Services, "postgres")
 	require.Contains(t, composeFile.Services, "litellm")
-	assert.Equal(t, "litellm/litellm:1.103.2", composeFile.Services["litellm"].Image)
+	assert.Equal(t, "litellm/litellm:1.106.3", composeFile.Services["litellm"].Image)
 	assert.Equal(t, "unless-stopped", composeFile.Services["postgres"].Restart)
 	assert.Empty(t, composeFile.Services["litellm"].Restart)
 	assert.Contains(t, composeText, "LITELLM_MASTER_KEY: sk-litellm-lab")

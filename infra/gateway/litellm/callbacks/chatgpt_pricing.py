@@ -1,10 +1,10 @@
-"""Price ChatGPT subscription routes as their OpenAI API models in LiteLLM 1.103.2.
+"""Price ChatGPT subscription routes as their OpenAI API models in LiteLLM 1.106.3.
 
-LiteLLM prices chatgpt/<model> calls from cost map entries without per-token
-prices, and ignores model_info.base_model for that provider, so every call is
-recorded with cost 0. Register the OpenAI API prices from the cost map loaded at
+The bundled chatgpt/<model> cost map entries still omit per-token prices.
+The 1.106.3 register_model API and runtime registration replay preserve these
+overrides across cost map reloads. Register the OpenAI API prices loaded at
 startup for those entries: the cost estimates API usage, not the subscription.
-Registered prices survive cost map reloads and reset LiteLLM's lookup caches.
+Registration also resets LiteLLM's lookup caches.
 Remove this shim once the shipped image passes assert:generation-cost-provided
 for ChatGPT routes without it.
 """
