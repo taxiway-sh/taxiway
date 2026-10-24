@@ -1333,11 +1333,16 @@ var e2eAgentDryRunExclusions = map[string]e2eDryRunExclusions{
 }
 
 var e2eOrchestratorDryRunExclusions = map[string]e2eDryRunExclusions{
-	"gastown": {runtime: []string{
-		"/lab/work/gt/.dolt-data",              // The native database continues serving agent work.
-		"/lab/work/gt/daemon",                  // Native daemons update their logs independently.
-		"/lab/work/gt/.runtime/doctor-fix.log", // Native startup doctor output grows independently.
-	}},
+	"gastown": {
+		runtime: []string{
+			"/lab/work/gt/.dolt-data",              // The native database continues serving agent work.
+			"/lab/work/gt/daemon",                  // Native daemons update their logs independently.
+			"/lab/work/gt/.runtime/doctor-fix.log", // Native startup doctor output grows independently.
+		},
+		volatile: []string{
+			"/lab/work/gt/.beads/last-touched", // Native bd show/update commands record their latest issue.
+		},
+	},
 	"gascity": {runtime: []string{
 		"/lab/work/gc/.gc",   // Native controller state follows patrols and orders.
 		"/lab/work/*/.beads", // Native bead stores follow agent work.
