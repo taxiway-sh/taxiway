@@ -28,7 +28,9 @@ if name == 'sudo':
         sys.exit(0 if state.get('key', True) else 1)
     elif args[0] == 'grep':
         sys.exit(0 if state.get('repo', True) else 1)
-    elif args[0] == 'apt-get' and args[-1] == 'nodejs':
+    elif args[0] == 'apt-get' and args[-1].startswith('nodejs='):
+        assert '--allow-downgrades' in args
+        assert args[-1] == 'nodejs=' + state.get('candidate', '22.21.0-1nodesource1')
         (root / 'install-node').touch()
         for tool in ('node', 'npm'):
             path = root / 'bin' / tool
@@ -40,7 +42,9 @@ elif name == 'curl':
     if state.get('setup_download_failure'): sys.exit(22)
     print('# controlled setup payload')
 elif name == 'apt-cache':
-    print('nodejs:\n  Candidate: ' + state.get('candidate', '22.21.0-1nodesource1'))
+    assert args == ['madison', 'nodejs']
+    print('nodejs | ' + state.get('candidate', '22.21.0-1nodesource1') +
+          ' | https://deb.nodesource.com/node_22.x nodistro/main amd64 Packages')
 elif name == 'node':
     print(state['node'])
 elif name == 'npm':
@@ -56,6 +60,7 @@ cases = [
     ('healthy', {'node': 'v22.21.0', 'npm': True}, True, False),
     ('missing-npm', {'node': 'v22.21.0'}, True, True),
     ('wrong-version', {'node': 'v18.19.1', 'npm': True}, True, True),
+    ('newer-major', {'node': 'v24.1.0', 'npm': True}, True, True),
     ('missing-key', {'key': False}, False, False),
     ('missing-repository', {'repo': False}, False, False),
     ('distribution-candidate', {'candidate': '18.19.1+dfsg-6ubuntu5'}, False, False),

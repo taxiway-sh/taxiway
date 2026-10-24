@@ -62,12 +62,14 @@ install_node() {
     log "NodeSource setup did not configure its Node.js 22 repository and signing key; rerun bootstrap after fixing repository access."
     return 1
   fi
-  candidate="$(LC_ALL=C apt-cache policy nodejs | awk '/Candidate:/ && !found {print $2; found=1}')"
-  if [[ ! "$candidate" =~ ^([0-9]+:)?22\. ]]; then
+  candidate="$(LC_ALL=C apt-cache madison nodejs | awk '$3 ~ /^([0-9]+:)?22\./ && /https:\/\/deb\.nodesource\.com\/node_22\.x/ && !found {print $3; found=1}')"
+  if [[ -z "$candidate" ]]; then
     log "NodeSource did not provide a Node.js 22 installation candidate; rerun bootstrap after fixing repository access."
     return 1
   fi
-  sudo apt-get install -y nodejs
+  # Select the repository's version explicitly, including when a different
+  # major is already installed and apt would otherwise keep the newer package.
+  sudo apt-get install -y --allow-downgrades "nodejs=$candidate"
   if ! node_toolchain_ready; then
     log "Node.js 22 and a working npm are required; the installation is incomplete. Rerun bootstrap to repair it."
     return 1
