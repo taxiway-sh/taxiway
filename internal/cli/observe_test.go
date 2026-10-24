@@ -110,7 +110,7 @@ func TestWarnUntracedLabGateways(t *testing.T) {
 			} else {
 				assert.Contains(t, out.String(), tc.warning)
 				assert.Contains(t, out.String(), `lab "mylab"`)
-				assert.Contains(t, out.String(), "gateway 'mylab'")
+				assert.Contains(t, out.String(), "gateway -- 'mylab'")
 			}
 			assert.NotContains(t, out.String(), "fixture-secret")
 			assert.NotContains(t, out.String(), "fixture-public")
@@ -1247,7 +1247,7 @@ exit 0
 			state.Flags.StateDir = labStateDir
 			// The rendered configuration is the sidecar's input. Keys that were
 			// written to gateway/env later must not hide an unconfigured sidecar.
-			for _, lab := range []string{"untraced", "traced"} {
+			for _, lab := range []string{"-untraced", "traced"} {
 				ref := config.LabRef{Lab: lab, Orch: "codex", Driver: "docker"}
 				require.NoError(t, writeLabGatewayEnv(labStateDir, ref, map[string]string{
 					labLangfuseProjectPublicKeyEnv: "pk-fixture",
@@ -1268,13 +1268,13 @@ exit 0
 				assert.Contains(t, stdout.String(), "Taxiway runtime initialized.")
 				assert.Contains(t, stdout.String(), "Create your first lab with `taxiway up mylab --type codex`")
 			}
-			assert.Contains(t, stdout.String(), `lab "untraced" gateway is not configured to send Langfuse traces. Run: taxiway --state-dir `+shellQuote(labStateDir)+` gateway 'untraced'`)
+			assert.Contains(t, stdout.String(), `lab "-untraced" gateway is not configured to send Langfuse traces. Run: taxiway --state-dir `+shellQuote(labStateDir)+` gateway -- '-untraced'`)
 			assert.NotContains(t, stdout.String(), `lab "traced" gateway is not configured`)
 			assert.NotContains(t, stdout.String(), "fixture-gateway-key")
 			assert.NotContains(t, stdout.String(), "pk-fixture")
 			assert.NotContains(t, stdout.String(), "sk-fixture")
 			// The warning must leave existing gateways untouched.
-			assert.FileExists(t, filepath.Join(labStateDir, "untraced", "gateway", "litellm.compose.yml"))
+			assert.FileExists(t, filepath.Join(labStateDir, "-untraced", "gateway", "litellm.compose.yml"))
 			assert.Contains(t, stdout.String(), "✓ Proxy started")
 			assert.Empty(t, stderr.String())
 			caddy, err := os.ReadFile(proxyConfigStatePath(proxyDir))
@@ -1299,7 +1299,7 @@ exit 0
 			// a fresh root. Its default state has no such lab.
 			var hint string
 			for _, line := range strings.Split(stdout.String(), "\n") {
-				if strings.Contains(line, `lab "untraced"`) {
+				if strings.Contains(line, `lab "-untraced"`) {
 					_, hint, _ = strings.Cut(line, "Run: ")
 				}
 			}
@@ -1309,8 +1309,8 @@ exit 0
 			hintArgs := strings.Split(strings.TrimSuffix(string(argv), "\x00"), "\x00")
 			gatewayRoot, gatewayState, _, _, _ := buildUpTestRoot(t)
 			targetDriver := driver.NewMockDriver(labStateDir)
-			require.NoError(t, targetDriver.Create(testCtx(t), idName("untraced"), driver.CreateOptions{}))
-			require.NoError(t, targetDriver.WriteLabRef(testCtx(t), idName("untraced"), config.LabRef{Lab: "untraced", Orch: "gastown", Driver: "mock"}))
+			require.NoError(t, targetDriver.Create(testCtx(t), idName("-untraced"), driver.CreateOptions{}))
+			require.NoError(t, targetDriver.WriteLabRef(testCtx(t), idName("-untraced"), config.LabRef{Lab: "-untraced", Orch: "gastown", Driver: "mock"}))
 			gatewayRoot.PersistentFlags().StringVar(&gatewayState.Flags.StateDir, "state-dir", "", "state override")
 			gatewayRoot.PersistentPreRunE = func(_ *cobra.Command, _ []string) error {
 				selected := driver.NewMockDriver(config.StateDir(gatewayState.Flags.StateDir, gatewayState.RepoDir))
@@ -1320,8 +1320,8 @@ exit 0
 			}
 			gatewayRoot.SetArgs(hintArgs)
 			require.NoError(t, gatewayRoot.Execute())
-			require.True(t, phases.Done(labStateDir, idName("untraced"), phases.PhaseGateway))
-			require.NoDirExists(t, filepath.Join(config.StateDir("", gatewayState.RepoDir), "untraced"))
+			require.True(t, phases.Done(labStateDir, idName("-untraced"), phases.PhaseGateway))
+			require.NoDirExists(t, filepath.Join(config.StateDir("", gatewayState.RepoDir), "-untraced"))
 		})
 	}
 }

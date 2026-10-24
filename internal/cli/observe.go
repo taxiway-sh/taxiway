@@ -1044,12 +1044,12 @@ func warnUntracedLabGateways(w io.Writer, state *RootState) {
 		data, err := os.ReadFile(sidecar.ComposePath)
 		if err != nil || yaml.Unmarshal(data, &compose) != nil {
 			// Do not print parser errors: the source includes gateway secrets.
-			fmt.Fprintf(w, "Warning: could not check Langfuse tracing for lab %q. Run: %s gateway %s\n", sidecar.Lab, command, shellQuote(sidecar.Lab))
+			fmt.Fprintf(w, "Warning: could not check Langfuse tracing for lab %q. Run: %s gateway -- %s\n", sidecar.Lab, command, shellQuote(sidecar.Lab))
 			continue
 		}
 		env := compose.Services["litellm"].Environment
 		if env[labLangfuseProjectPublicKeyEnv] == "" || env[labLangfuseProjectSecretKeyEnv] == "" || env["LANGFUSE_OTEL_HOST"] == "" {
-			fmt.Fprintf(w, "Warning: lab %q gateway is not configured to send Langfuse traces. Run: %s gateway %s\n", sidecar.Lab, command, shellQuote(sidecar.Lab))
+			fmt.Fprintf(w, "Warning: lab %q gateway is not configured to send Langfuse traces. Run: %s gateway -- %s\n", sidecar.Lab, command, shellQuote(sidecar.Lab))
 		}
 	}
 }
