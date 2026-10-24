@@ -13,7 +13,7 @@ Without `-write`, the command reports its proposal. With `-write`, it updates `i
 
 ## Sources and review
 
-The updater requires all six public sources: the [Codex structured catalog](https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json), [ChatGPT models](https://learn.chatgpt.com/docs/models), [Anthropic overview](https://platform.claude.com/docs/en/models/overview), [Anthropic deprecations](https://platform.claude.com/docs/en/about-claude/model-deprecations), [LiteLLM model metadata](https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json), and [LiteLLM releases](https://github.com/BerriAI/litellm/releases). Fetch, parse, schema, and incomplete-source errors produce no catalog update or PR. Source hashes and links appear in the review report.
+The updater requires all six public sources: the [Codex structured catalog](https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json), [ChatGPT models](https://learn.chatgpt.com/docs/models), [Anthropic overview](https://platform.claude.com/docs/en/models/overview), [Anthropic deprecations](https://platform.claude.com/docs/en/about-claude/model-deprecations), model metadata bundled with the gateway's pinned final [LiteLLM release](https://github.com/BerriAI/litellm/releases), and the LiteLLM release inventory. The pin is read from `internal/cli/lab_gateway.go`; metadata from newer final releases is fetched to explain skipped candidates. Fetch, parse, schema, and incomplete-source errors produce no catalog update or PR. Source hashes and links appear in the review report.
 
 Candidate selection, lifecycle rules and the review of the draft PR are owned by the [model catalog review](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-upstream/references/model-catalog.md) of the [`taxiway-upstream`](https://github.com/taxiway-sh/taxiway/blob/main/.agents/skills/taxiway-upstream/SKILL.md) skill.
 
@@ -28,9 +28,12 @@ anthropic.txt
 deprecations.txt
 litellm.txt
 releases.txt
+gateway.txt
 ```
 
-JSON sources retain their public JSON schema; documentation sources use their Markdown endpoint (`.md`). All fixture files use the same strict parsers as online data. Pass `-fixtures /path/to/sources -as-of 2026-10-02` to reproduce retirement calculations at a chosen UTC date. Reports identify the canonical sources and hash the supplied data; fixtures do not prove current public availability. Do not commit downloaded snapshots, local reports, or generated lab state.
+JSON sources retain their public JSON schema; documentation sources use their Markdown endpoint (`.md`). `gateway.txt` contains the gateway image declaration, for example `image: litellm/litellm:1.103.2`; `litellm.txt` contains that final release's metadata. When candidates are missing from it, also supply `litellm-v<version>.txt` for each newer final release in `releases.txt`, in ascending version order until every skipped candidate has matching metadata or the inventory is exhausted. Development, release-candidate, draft and prerelease entries need no metadata fixture.
+
+All fixture files use the same strict parsers as online data. Pass `-fixtures /path/to/sources -as-of 2026-10-02` to reproduce retirement calculations at a chosen UTC date. Reports identify the canonical sources and hash the supplied data; fixtures do not prove current public availability. Do not commit downloaded snapshots, local reports, or generated lab state.
 
 ```sh
 go test ./internal/modelupdate ./cmd/model-catalog-update

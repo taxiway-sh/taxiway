@@ -209,7 +209,14 @@ func Prepare(original []byte, s Sources, now time.Time) ([]byte, string, bool, e
 		case "releases":
 			data = s.Releases
 		}
-		fmt.Fprintf(&report, "- [%s](%s), SHA-256 `%x`\n", name, SourceURLs[name], sha256.Sum256(data))
+		url := SourceURLs[name]
+		if name == "litellm" {
+			url = fmt.Sprintf(LiteLLMURL, "v"+s.PinnedVersion)
+		}
+		fmt.Fprintf(&report, "- [%s](%s), SHA-256 `%x`\n", name, url, sha256.Sum256(data))
+	}
+	for _, tag := range sortedFinalReleases(s.ReleaseMetadata) {
+		fmt.Fprintf(&report, "- [litellm %s](%s), SHA-256 `%x`\n", tag, fmt.Sprintf(LiteLLMURL, tag), sha256.Sum256(s.ReleaseMetadata[tag]))
 	}
 	report.WriteString("\n### Uncertainty and review\n\n- Account access, rollout, public snapshots, and catalog absence do not prove general availability or retirement.\n- Existing supported models and defaults are preserved. Validate routing and protocol behavior before merge.\n- OpenAI API lifecycle is separate from ChatGPT subscription lifecycle; this updater creates no API-key routes.\n")
 	for _, n := range d.Notes {

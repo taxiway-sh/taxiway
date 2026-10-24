@@ -16,13 +16,17 @@ const (
 	ChatGPTURL      = "https://learn.chatgpt.com/docs/models.md"
 	AnthropicURL    = "https://platform.claude.com/docs/en/models/overview.md"
 	DeprecationsURL = "https://platform.claude.com/docs/en/about-claude/model-deprecations.md"
-	LiteLLMURL      = "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
-	ReleasesURL     = "https://api.github.com/repos/BerriAI/litellm/releases?per_page=10"
+	LiteLLMURL      = "https://raw.githubusercontent.com/BerriAI/litellm/%s/model_prices_and_context_window.json"
+	ReleasesURL     = "https://api.github.com/repos/BerriAI/litellm/releases?per_page=100"
 )
 
 var SourceURLs = map[string]string{"codex": CodexURL, "chatgpt": ChatGPTURL, "anthropic": AnthropicURL, "deprecations": DeprecationsURL, "litellm": LiteLLMURL, "releases": ReleasesURL}
 
-type Sources struct{ Codex, ChatGPT, Anthropic, Deprecations, LiteLLM, Releases []byte }
+type Sources struct {
+	Codex, ChatGPT, Anthropic, Deprecations, LiteLLM, Releases []byte
+	PinnedVersion                                              string
+	ReleaseMetadata                                            map[string][]byte
+}
 
 func (s *Sources) Set(name string, data []byte) error {
 	switch name {
@@ -48,6 +52,7 @@ type Candidate struct{ Name, Provider, Source string }
 type Retirement struct{ Status, Date, Replacement, Scope, Source string }
 type Discovery struct {
 	Candidates  []Candidate
+	Waiting     []Candidate
 	Retirements map[string]Retirement
 	Notes       []string
 }
@@ -177,6 +182,9 @@ func date(s string) (string, error) {
 // Discover requires every source; missing models never imply retirement.
 func Discover(s Sources) (Discovery, error) {
 	d := Discovery{Retirements: map[string]Retirement{}}
+	if !finalVersion.MatchString(s.PinnedVersion) {
+		return d, fmt.Errorf("litellm: pin must be a final release version")
+	}
 	for name, data := range map[string][]byte{"codex": s.Codex, "chatgpt": s.ChatGPT, "anthropic": s.Anthropic, "deprecations": s.Deprecations, "litellm": s.LiteLLM, "releases": s.Releases} {
 		if len(data) == 0 {
 			return d, fmt.Errorf("%s: empty source", name)
@@ -221,14 +229,14 @@ func Discover(s Sources) (Discovery, error) {
 		if _, err := time.Parse(time.RFC3339, r.Published); err != nil {
 			return d, err
 		}
-		if !r.Draft && !r.Prerelease && stable == "" {
+		if !r.Draft && !r.Prerelease && finalVersion.MatchString(strings.TrimPrefix(r.Tag, "v")) && stable == "" {
 			stable = r.Tag + " (" + r.URL + ")"
 		}
 	}
 	if stable == "" {
 		return d, fmt.Errorf("litellm releases: no stable release")
 	}
-	d.Notes = append(d.Notes, "Latest public LiteLLM release: "+stable+". Public metadata is not proof that the lab's pinned LiteLLM version supports a model.")
+	d.Notes = append(d.Notes, "Latest public LiteLLM release: "+stable+". Candidate metadata is checked against pinned LiteLLM v"+s.PinnedVersion+".")
 	add := func(id, provider, source string) {
 		p, ok := prices[id]
 		if !ok {
@@ -239,7 +247,20 @@ func Discover(s Sources) (Discovery, error) {
 			expected = "openai"
 		}
 		if !ok || p.Mode != "chat" || p.Provider != expected {
-			d.Notes = append(d.Notes, "Skipped "+id+": no matching LiteLLM text/chat metadata; manual compatibility review required.")
+			d.Waiting = append(d.Waiting, Candidate{id, provider, source})
+			note := "Skipped " + id + ": waiting on a LiteLLM release; no matching text/chat metadata in pinned v" + s.PinnedVersion + "."
+			found := false
+			for _, release := range sortedFinalReleases(s.ReleaseMetadata) {
+				if matchingMetadata(s.ReleaseMetadata[release], id, provider) {
+					note += " Earliest final release carrying matching metadata: " + release + " (https://github.com/BerriAI/litellm/releases/tag/" + release + "); bump the gateway first."
+					found = true
+					break
+				}
+			}
+			if !found {
+				note += " No newer final release carrying matching metadata was found in the inspected inventory."
+			}
+			d.Notes = append(d.Notes, note)
 			return
 		}
 		d.Candidates = append(d.Candidates, Candidate{id, provider, source})

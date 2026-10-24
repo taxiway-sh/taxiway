@@ -7,12 +7,13 @@ import (
 
 func fixtureSources() Sources {
 	return Sources{
-		Codex:        []byte(`{"models":[{"slug":"gpt-6-sol","visibility":"list","input_modalities":["text"],"model_specialty":null},{"slug":"gpt-secret","visibility":"hide","input_modalities":["text"],"model_specialty":null}]}`),
-		ChatGPT:      []byte("# Models\n## GPT-5.5 retirement\nOn October 14, 2026, GPT-5.5 will retire from ChatGPT, ChatGPT Work, and Codex.\nThis retirement does not apply to the OpenAI API.\n## Recommended models\nReplace `gpt-5.5`\nchoose `gpt-6-sol` when available.\n"),
-		Anthropic:    []byte("# Models overview\n| Claude API ID | `claude-opus-5-5` | `claude-mythos-preview` |\n"),
-		Deprecations: []byte("# Model deprecations\n| API model name | Current state | Deprecated | Tentative retirement date |\n| claude-opus-5-5 | Active | N/A | Not sooner than September 22, 2027 |\n| claude-sonnet-4-5-20250929 | Deprecated | September 30, 2026 | November 30, 2026 |\n| Retirement date | Deprecated model | Recommended replacement |\n| November 30, 2026 | `claude-sonnet-4-5-20250929` | `claude-sonnet-5-5` |\n"),
-		LiteLLM:      []byte(`{"gpt-6-sol":{"mode":"chat","litellm_provider":"openai"},"claude-opus-5-5":{"mode":"chat","litellm_provider":"anthropic"}}`),
-		Releases:     []byte(`[{"tag_name":"v1.80.0","published_at":"2026-10-01T00:00:00Z","html_url":"https://github.com/BerriAI/litellm/releases/tag/v1.80.0","draft":false,"prerelease":false}]`),
+		PinnedVersion: "1.79.0",
+		Codex:         []byte(`{"models":[{"slug":"gpt-6-sol","visibility":"list","input_modalities":["text"],"model_specialty":null},{"slug":"gpt-secret","visibility":"hide","input_modalities":["text"],"model_specialty":null}]}`),
+		ChatGPT:       []byte("# Models\n## GPT-5.5 retirement\nOn October 14, 2026, GPT-5.5 will retire from ChatGPT, ChatGPT Work, and Codex.\nThis retirement does not apply to the OpenAI API.\n## Recommended models\nReplace `gpt-5.5`\nchoose `gpt-6-sol` when available.\n"),
+		Anthropic:     []byte("# Models overview\n| Claude API ID | `claude-opus-5-5` | `claude-mythos-preview` |\n"),
+		Deprecations:  []byte("# Model deprecations\n| API model name | Current state | Deprecated | Tentative retirement date |\n| claude-opus-5-5 | Active | N/A | Not sooner than September 22, 2027 |\n| claude-sonnet-4-5-20250929 | Deprecated | September 30, 2026 | November 30, 2026 |\n| Retirement date | Deprecated model | Recommended replacement |\n| November 30, 2026 | `claude-sonnet-4-5-20250929` | `claude-sonnet-5-5` |\n"),
+		LiteLLM:       []byte(`{"gpt-6-sol":{"mode":"chat","litellm_provider":"openai"},"claude-opus-5-5":{"mode":"chat","litellm_provider":"anthropic"}}`),
+		Releases:      []byte(`[{"tag_name":"v1.80.0","published_at":"2026-10-01T00:00:00Z","html_url":"https://github.com/BerriAI/litellm/releases/tag/v1.80.0","draft":false,"prerelease":false}]`),
 	}
 }
 
