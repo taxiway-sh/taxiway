@@ -577,7 +577,10 @@ or simulating it:
    its next start;
 5. records the check as `waiting: machine`, with the item's link, where it
    records pending checks ([`steward`](../steward/SKILL.md#ci)), and keeps
-   other work moving.
+   other work moving. A check it cannot queue yet is recorded as
+   `not queued`, with the reason (such as no maintainer approval yet); a
+   fork PR's check is `never queued`, since contributor code runs only in
+   fork CI.
 
 When the item is `done`, `failed`, `expired` or `rejected`, the requester, or
 the PR's steward, copies its summary and report link into the PR's Validation
