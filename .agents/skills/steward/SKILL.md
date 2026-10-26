@@ -72,6 +72,15 @@ After each push, update the PR's Validation and Limitations sections
 ([template](../../../.github/pull_request_template.md)) to the current head:
 new checks and their results, checks that are now stale, pending ones.
 
+## PR comments
+
+Comments speak only of this PR's diff. Post a comment only
+for a new result, a review round, a decision, a reply to a review comment or a
+[conflict](#conflicts) flag, in a few lines: no draft or merge-authorization
+notices beyond the PR's state, no progress or session narrative, no results of
+other PRs. Context shared by several PRs goes in their common issue, or in a
+comment on it that each PR links.
+
 ## Never
 
 - Merge: only the maintainer's explicit request does, through
