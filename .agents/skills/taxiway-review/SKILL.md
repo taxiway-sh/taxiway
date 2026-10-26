@@ -52,7 +52,9 @@ is done. Read [`AGENTS.md`](../../../AGENTS.md) first.
 Review adversarially: look for what is wrong, not for confirmation.
 
 - **Acceptance.** The change meets the issue's acceptance criteria and the PR
-  text matches what the diff does.
+  text matches what the diff does, its issue links included, as
+  [Pull request labels](../../../docs/contributing/issues.md#pull-request-labels)
+  says.
 - **Behavior delta.** List existing behavior the diff changes or removes and
   probe at least one old-versus-new. List the callers of each changed function
   and check the change from each of them. An unannounced change in usage,

@@ -103,7 +103,11 @@ Follow [`steward`](../steward/SKILL.md) until the PR is merged or closed.
 ## 8. Merge
 
 Merge only under the [invariants](../../../AGENTS.md#invariants) and the
-[E2E scenario rule](../taxiway-testing/SKILL.md#e2e-scenarios).
+[E2E scenario rule](../taxiway-testing/SKILL.md#e2e-scenarios). Before
+merging, reread the acceptance criteria of each issue the PR closes and fix
+its link as
+[Pull request labels](../../../docs/contributing/issues.md#pull-request-labels)
+says.
 
 ## Post-merge cleanup
 
@@ -130,8 +134,9 @@ worktree and feature branch; no separate confirmation is needed.
    point with their agents so ongoing edits and tests are preserved, as in
    [Conflicts](../steward/SKILL.md#conflicts), and rerun affected checks.
 6. For each issue the PR, or a stacked PR merged into its branch, links with
-   `Refs` or `Part of`, and each issue they link with `Fixes` or `Closes` that
-   is still open, reread its acceptance criteria. When its criteria are met,
+   `Refs` or `Part of`, and each issue they link with `Fixes` or `Closes`,
+   including one the merge closed, reread its acceptance criteria; one closed
+   with criteria unmet is proposed for reopening. When its criteria are met,
    propose closing it as completed, with a comment that names the PRs that
    delivered it; otherwise propose ticking the criteria now met, or a comment
    on an external contributor's issue. These wait for approval under the

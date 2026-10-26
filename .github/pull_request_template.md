@@ -21,6 +21,6 @@ branch: name the base PR and the merge order.
 Fixes #<issue>
 
 <!--
-Use Refs #<issue> instead when acceptance criteria of the issue remain open.
+Fixes or Refs: see Pull request labels in docs/contributing/issues.md.
 Optional: Related: #...
 -->
