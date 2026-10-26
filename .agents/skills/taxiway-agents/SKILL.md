@@ -278,7 +278,9 @@ declaration-only PR.
 
 [`/taxiway-install-agents`](../taxiway-install-agents/SKILL.md) runs this section. It covers
 every declaration, or the one `id` requested; machine declarations only get a
-[pointer](#plan). It runs in one of three modes:
+[pointer](#plan). It needs a Claude Code cloud session, whose session and
+scheduled-task tools it uses; any other client, Codex included, stops and
+says so. It runs in one of three modes:
 
 - **install or update** (the default): create what is missing, rename, and
   update what differs from the declarations. Running it again changes nothing
@@ -427,8 +429,11 @@ archive, machine setup).
 
 ## Check
 
-[`/taxiway-check-agents`](../taxiway-check-agents/SKILL.md) runs this section. For each cloud
-declaration, or the one `id` requested, find the agent's session and scheduled
+[`/taxiway-check-agents`](../taxiway-check-agents/SKILL.md) runs this section. It needs a
+Claude Code cloud session; another client, Codex included, reports only what
+`deployed.json` and `status/` show, and says that sessions and scheduled
+tasks were not checked. For each cloud declaration, or the one `id`
+requested, find the agent's session and scheduled
 task as in [Install](#steps) step 1, which stops for that agent and reports it
 when it has more than one session or scheduled task, then report:
 
