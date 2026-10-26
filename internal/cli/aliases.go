@@ -223,7 +223,11 @@ func newStartCmd(state *RootState) *cobra.Command {
 				return err
 			}
 			stateDir := config.StateDir(state.Flags.StateDir, state.RepoDir)
-			return markPhase(state, stateDir, id, phases.PhaseStart)
+			if err := markPhase(state, stateDir, id, phases.PhaseStart); err != nil {
+				return err
+			}
+			printShellAttachHint(cmd.OutOrStdout(), ref.Lab)
+			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "reinitialize even if already initialized")
