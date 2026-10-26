@@ -50,9 +50,12 @@ or in the current conversation is asked of the maintainer, then recorded as
 ## Coordinator
 
 [`/taxiway-coordinator`](../taxiway-coordinator/SKILL.md) runs this section in
-a new cloud session on `taxiway`; it needs nothing from earlier sessions. Text
-given with the command is the maintainer's first message: it sets the
-conversation language, and a subject or request in it answers the opening
+a new Claude Code cloud session on `taxiway`; it needs nothing from earlier
+sessions. Another client, Codex included, does steps 1, 3 and 5 only, reading
+the state repository from the read-only clone that step 2 describes, without
+the Install Plan, session archiving or relayed answers, which need a Claude
+Code cloud session. Text given with the command is the maintainer's first
+message: it sets the conversation language, and a subject or request in it answers the opening
 question. Without it, the coordinator writes in English until the maintainer's
 first reply. It renames its session `Taxiway – coordinator` when it is not
 named so, or asks the maintainer to.

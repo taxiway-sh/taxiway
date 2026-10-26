@@ -122,7 +122,9 @@ fragility, near-term · **p2** cleanliness or later.
 
 - A PR is linked to the issues it fixes (`Fixes #n`, `Closes #n`) and to the
   issues it is part of (`Refs #n`, or the equivalent `Part of #n`). A
-  `Related:` line is not a link.
+  `Related:` line is not a link. `Fixes` or `Closes` only when the PR meets
+  every acceptance criterion of that issue; otherwise `Refs`, and the PR's
+  Limitations says which criteria remain.
 - A PR's type is the type of the issue it primarily fixes (its first `Fixes`
   or `Closes`), otherwise of its first `Refs` or `Part of`. A PR with no
   linked issue gets a type chosen for the change, as for an issue.

@@ -278,7 +278,9 @@ declaration-only PR.
 
 [`/taxiway-install-agents`](../taxiway-install-agents/SKILL.md) runs this section. It covers
 every declaration, or the one `id` requested; machine declarations only get a
-[pointer](#plan). It runs in one of three modes:
+[pointer](#plan). It needs a Claude Code cloud session, whose session and
+scheduled-task tools it uses; any other client, Codex included, stops and
+says so. It runs in one of three modes:
 
 - **install or update** (the default): create what is missing, rename, and
   update what differs from the declarations. Running it again changes nothing
@@ -427,8 +429,11 @@ archive, machine setup).
 
 ## Check
 
-[`/taxiway-check-agents`](../taxiway-check-agents/SKILL.md) runs this section. For each cloud
-declaration, or the one `id` requested, find the agent's session and scheduled
+[`/taxiway-check-agents`](../taxiway-check-agents/SKILL.md) runs this section. It needs a
+Claude Code cloud session; another client, Codex included, reports only what
+`deployed.json` and `status/` show, and says that sessions and scheduled
+tasks were not checked. For each cloud declaration, or the one `id`
+requested, find the agent's session and scheduled
 task as in [Install](#steps) step 1, which stops for that agent and reports it
 when it has more than one session or scheduled task, then report:
 
@@ -577,7 +582,10 @@ or simulating it:
    its next start;
 5. records the check as `waiting: machine`, with the item's link, where it
    records pending checks ([`steward`](../steward/SKILL.md#ci)), and keeps
-   other work moving.
+   other work moving. A check it cannot queue yet is recorded as
+   `not queued`, with the reason (such as no maintainer approval yet); a
+   fork PR's check is `never queued`, since contributor code runs only in
+   fork CI.
 
 When the item is `done`, `failed`, `expired` or `rejected`, the requester, or
 the PR's steward, copies its summary and report link into the PR's Validation
