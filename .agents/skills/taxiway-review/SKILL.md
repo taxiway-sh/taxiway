@@ -16,6 +16,8 @@ is done. Read [`AGENTS.md`](../../../AGENTS.md) first.
 - It reviews the exact commit range or diff (`git diff <base>...<head>`, with
   both SHAs), plus the issue and its acceptance criteria. It writes nothing:
   no edits, pushes or GitHub writes.
+- Its prompt gives the range, the issue and this skill, never an expected
+  verdict or claims to confirm. A reviewer reviews a single PR.
 
 ### Running the reviewer
 
@@ -52,8 +54,9 @@ Review adversarially: look for what is wrong, not for confirmation.
 - **Acceptance.** The change meets the issue's acceptance criteria and the PR
   text matches what the diff does.
 - **Behavior delta.** List existing behavior the diff changes or removes and
-  probe at least one old-versus-new. An unannounced change in usage, output or
-  defaults is a finding even if the fix is right.
+  probe at least one old-versus-new. List the callers of each changed function
+  and check the change from each of them. An unannounced change in usage,
+  output or defaults is a finding even if the fix is right.
 - **Rule preservation.** Every rule removed, moved or merged still exists in
   its owner, or its removal is stated and justified.
 - **Single owner.** No rule restated outside its owner; other files link to it.
@@ -68,6 +71,14 @@ Review adversarially: look for what is wrong, not for confirmation.
   Each new assertion can fail and is mapped to the test that ran it (no early
   returns, no absence-only checks without a positive counterpart); E2E
   assertions follow [Writing E2E scenarios](../../../docs/contributing/testing.md#writing-e2e-scenarios).
+  A regression test fails on the base: the reviewer runs it in a temporary
+  worktree of the base, outside the reviewed tree and removed afterwards, as
+  the unprivileged user CI uses
+  ([root user](../taxiway-testing/references/cloud-environment.md#root-user)),
+  or lists it under the validations it could not run. A test that is
+  reordered or narrowed to pass skips no state where the product is broken;
+  such a state is an issue proposal through
+  [`taxiway-intake`](../taxiway-intake/SKILL.md).
 - **Workarounds.** A workaround and any upstream claim follow
   [`taxiway-upstream`](../taxiway-upstream/SKILL.md#workaround-and-tracking-issue).
 - **Leftovers.** After a removal or rename, no stale hint, help text or doc
@@ -118,6 +129,9 @@ comment on the PR; the reviewer itself stays read-only, as
 - the findings by severity, as [Findings](#findings) lists them;
 - for each finding, the commit that fixes it, added by editing the comment
   once that commit is pushed, or why it is not fixed.
+
+The comment covers this PR only; out-of-scope follow-ups go to intake, as
+[Findings](#findings) says.
 
 Rounds run before the PR is opened are posted as soon as it is. An
 implementer that handed its range back leaves the comments to the agent that
